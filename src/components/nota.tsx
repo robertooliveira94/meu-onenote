@@ -6,12 +6,14 @@ import {
   Check,
   Eye,
   History,
+  Link2,
   Loader2,
   Pencil,
   Star,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 
@@ -62,11 +64,17 @@ export function PaginaNota({
   etiquetas,
   editandoInicial,
   iconeDoCaderno,
+  mapaDeLinks,
+  backlinks,
 }: {
   nota: Nota;
   etiquetas: Etiqueta[];
   editandoInicial: boolean;
   iconeDoCaderno: string;
+  /** Título normalizado → caminho resolvido dos `[[links]]` desta nota, calculado no servidor. */
+  mapaDeLinks: Record<string, string | null>;
+  /** Notas que citam `[[EstaNota]]`. */
+  backlinks: { caminho: string; titulo: string }[];
 }) {
   const roteador = useRouter();
   const ehMarkdown = nota.formato === "md";
@@ -346,7 +354,11 @@ export function PaginaNota({
                     className="min-w-0 flex-1 overflow-y-auto border-l border-linha bg-superficie px-8 py-5"
                     ref={zoom.refRolagem}
                   >
-                    <VisualizadorMarkdown conteudo={conteudoPreVisualizado} pastaBase={pastaDaNota} />
+                    <VisualizadorMarkdown
+                      conteudo={conteudoPreVisualizado}
+                      pastaBase={pastaDaNota}
+                      mapaDeLinks={mapaDeLinks}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -371,7 +383,30 @@ export function PaginaNota({
                   conteudo={conteudo}
                   pastaBase={pastaDaNota}
                   aoAlternarTarefa={aoAlternarTarefa}
+                  mapaDeLinks={mapaDeLinks}
                 />
+
+                {backlinks.length > 0 ? (
+                  <div className="mt-10 border-t border-linha pt-4">
+                    <h2 className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+                      Notas que apontam para esta
+                    </h2>
+                    <ul className="mt-2 space-y-1.5">
+                      {backlinks.map((link) => (
+                        <li key={link.caminho}>
+                          <Link
+                            href={urlDaNota(link.caminho)}
+                            title={link.caminho}
+                            className="flex items-center gap-1.5 text-[13px] text-[var(--realce)] hover:underline underline-offset-2"
+                          >
+                            <Link2 size={13} className="shrink-0 text-tinta-3" />
+                            <span className="truncate">{link.titulo}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </article>
             </div>
           )}

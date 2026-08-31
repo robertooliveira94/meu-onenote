@@ -1,17 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { memo, useMemo, useRef } from "react";
-import Markdown, { type Components } from "react-markdown";
+import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 import { juntar } from "@/lib/caminho-texto";
-import { urlDaMidia } from "@/lib/rotas";
+import { converterWikilinks } from "@/lib/remark-wikilinks";
+import { urlDaMidia, urlDaNota } from "@/lib/rotas";
 
 // Fora do componente de propósito: um array literal novo a cada render faria
 // o react-markdown achar que os plugins mudaram e reprocessar tudo à toa.
 const PLUGINS_REMARK = [remarkGfm];
 const PLUGINS_REHYPE = [rehypeHighlight];
+
+/** "Pessoal/Financeiro/orçamento.md" → "Pessoal › Financeiro › orçamento" */
+function trilhaDoCaminho(caminho: string): string {
+  const partes = caminho.split("/");
+  const ultima = partes.pop() ?? "";
+  const semExtensao = ultima.slice(0, ultima.lastIndexOf(".")) || ultima;
+  return [...partes, semExtensao].join(" › ");
+}
 
 /**
  * Renderização do markdown. O GFM entra por causa das listas de tarefas e das
@@ -30,12 +40,15 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   conteudo,
   pastaBase,
   aoAlternarTarefa,
+  mapaDeLinks,
 }: {
   conteudo: string;
   /** Pasta da nota, para resolver o caminho relativo de imagens coladas. */
   pastaBase?: string;
   /** Presente só em leitura — clicar na caixinha grava a mudança no arquivo. */
   aoAlternarTarefa?: (indiceDaTarefa: number) => void;
+  /** Título normalizado → caminho resolvido (ou null) de cada `[[link]]` do texto. */
+  mapaDeLinks?: Record<string, string | null>;
 }) {
   // Conta "a N-ésima tarefa do documento" enquanto o markdown é montado.
   // Em desenvolvimento, o React invoca cada componente de checkbox duas
@@ -51,6 +64,35 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
 
   const componentes = useMemo<Components>(
     () => ({
+      a({ href, children }) {
+        if (!href?.startsWith("wikilink:")) {
+          // Link comum do markdown — mesmo comportamento de sempre.
+          return (
+            <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer">
+              {children}
+            </a>
+          );
+        }
+        const titulo = decodeURIComponent(href.slice("wikilink:".length));
+        const caminho = mapaDeLinks?.[titulo.trim().toLowerCase()];
+        if (!caminho) {
+          // Sem página com esse título: ainda assim visível, mas sem fingir
+          // que é clicável — nada pior que um link que não leva a lugar nenhum.
+          return (
+            <span
+              className="cursor-default border-b border-dashed border-tinta-3 text-tinta-3"
+              title={`Nenhuma página chamada "${titulo}"`}
+            >
+              {children}
+            </span>
+          );
+        }
+        return (
+          <Link href={urlDaNota(caminho)} title={trilhaDoCaminho(caminho)}>
+            {children}
+          </Link>
+        );
+      },
       img({ src, alt }) {
         // O tipo do react-markdown admite Blob por causa do HTML padrão, mas
         // o markdown nunca produz isso — só um caminho de string mesmo.
@@ -92,7 +134,7 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
         );
       },
     }),
-    [pastaBase, aoAlternarTarefa],
+    [pastaBase, aoAlternarTarefa, mapaDeLinks],
   );
 
   if (!conteudo.trim()) {
@@ -101,8 +143,17 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
 
   return (
     <div className="prosa">
-      <Markdown remarkPlugins={PLUGINS_REMARK} rehypePlugins={PLUGINS_REHYPE} components={componentes}>
-        {conteudo}
+      <Markdown
+        remarkPlugins={PLUGINS_REMARK}
+        rehypePlugins={PLUGINS_REHYPE}
+        components={componentes}
+        // O sanitizador padrão do react-markdown descarta qualquer href cujo
+        // esquema não esteja na lista dele (http, mailto, etc.) — "wikilink:"
+        // não está nela, então virava um href vazio antes mesmo de chegar
+        // no componente `a` acima. Deixa esse esquema passar como está.
+        urlTransform={(url) => (url.startsWith("wikilink:") ? url : defaultUrlTransform(url))}
+      >
+        {converterWikilinks(conteudo)}
       </Markdown>
     </div>
   );

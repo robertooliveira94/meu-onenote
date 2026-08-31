@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import {
   CalendarDays,
+  GitBranch,
   House,
   LayoutTemplate,
   Moon,
@@ -199,6 +200,13 @@ function CascaInterna({
             ativo={caminhoAtual.startsWith("/etiquetas")}
           >
             Etiquetas
+          </Atalho>
+          <Atalho
+            href="/grafo"
+            icone={<GitBranch size={14} />}
+            ativo={caminhoAtual.startsWith("/grafo")}
+          >
+            Grafo
           </Atalho>
           <Atalho
             href="/modelos"

@@ -382,6 +382,33 @@ desenhar um cartão inteiro ao redor.
 - **Mobile:** não há tratamento mobile — o app assume uso em desktop, como
   serviço local sempre aberto numa janela de navegador.
 
+### Wikilinks e Backlinks
+- **Link resolvido (`[[Nome]]` com página correspondente):** link comum do
+  `next/link`, sem estilo extra — o texto já deixa claro que é um link; a
+  única diferença de um `<a>` de markdown normal é o `title` com a trilha
+  completa (`Caderno › Seção › Página`) que aparece ao passar o mouse, para
+  dar contexto sem precisar clicar.
+- **Link não resolvido (`[[Nome]]` sem página correspondente):** texto na
+  cor `tinta-3` com sublinhado tracejado (`border-b border-dashed`),
+  `cursor: default`. Nunca herda a cor de link nem o cursor de ponteiro —
+  clicável sem levar a lugar nenhum é pior que não clicável.
+- **Painel "Notas que apontam para esta":** só aparece em modo leitura, e só
+  quando há pelo menos um backlink — sem cabeçalho vazio prometendo algo que
+  não existe. Ícone `Link2` + lista de links simples, mesmo tratamento
+  visual de uma lista de resultados.
+
+### Grafo
+- **Nós:** um círculo por página, preenchido na cor do caderno dela — a
+  mesma "lombada" que aparece na árvore lateral e na margem de leitura.
+  Raio maior (8px) só no nó sob o mouse; os demais ficam em 6px.
+- **Arestas:** `linha-forte` em repouso; ao passar o mouse num nó, as
+  arestas conectadas a ele ganham a cor de destaque ativa e as
+  desconectadas caem para 0.15 de opacidade — o grafo "explica" as
+  conexões de uma nota sem precisar de painel lateral separado.
+- **Notas órfãs:** grade abaixo do SVG, só renderizada quando existe pelo
+  menos uma; cada item é um cartão simples com o título e o caminho
+  completo como `title`.
+
 ### O Carimbo de Cor do Cartão (componente de assinatura)
 A combinação de `inset 0 3px 0 var(--realce)` mais a sombra de hover
 permanente é o único lugar do sistema onde uma cor sólida entra dentro de

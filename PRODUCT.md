@@ -80,6 +80,15 @@ limpas e abríveis em qualquer editor.
   fazendo sentido se a pasta for aberta em outro editor de markdown.
 - Em modo leitura, clicar numa caixinha de tarefa (`- [ ]`) já grava a
   mudança no arquivo, sem precisar entrar em edição.
+- Links entre páginas com `[[Nome da Página]]`: em modo leitura viram um
+  link de verdade (com dica ao passar o mouse mostrando "Caderno › Seção ›
+  Página" completo) quando o título casa com exatamente uma página; se não
+  casar com nenhuma, aparece sublinhado tracejado e sem clique, deixando
+  claro que a página ainda não existe. Cada página lê, no rodapé, "Notas que
+  apontam para esta" — os backlinks de quem cita ela. Uma tela `/grafo`
+  mostra o vault inteiro como uma rede (arraste do mouse destaca as conexões
+  de uma nota, clique abre), com uma lista à parte das "notas órfãs" — as
+  que nenhuma outra ainda referencia.
 - Busca global (`Ctrl+K`) no título e no corpo de todas as notas.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
