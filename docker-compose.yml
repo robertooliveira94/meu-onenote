@@ -19,3 +19,9 @@ services:
     # ./dados, ao lado deste arquivo.
     volumes:
       - ${DADOS_HOST_PATH:-./dados}:/app/dados
+
+    # Fuso horário das datas mostradas na interface (criada em, nota do dia).
+    # O Dockerfile já embute America/Sao_Paulo; só precisa mexer aqui se a
+    # máquina que roda o container estiver em outro fuso. TZ vem do .env.
+    environment:
+      - TZ=${TZ:-America/Sao_Paulo}

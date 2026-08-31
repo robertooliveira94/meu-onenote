@@ -29,6 +29,13 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Alpine não vem com fuso horário nenhum instalado — sem isto, toda data
+# mostrada na interface (criada em, alterada em, nota do dia) sai em UTC,
+# horas adiantada do horário de quem está usando o app. TZ tem um padrão
+# aqui, mas dá para trocar pelo `.env` do docker-compose (ver TZ ali).
+RUN apk add --no-cache tzdata
+ENV TZ=America/Sao_Paulo
+
 # Roda como usuário sem privilégio — não precisa de root pra servir HTTP.
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 meuonenote

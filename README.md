@@ -204,6 +204,7 @@ notepad .env
 # .env
 DADOS_HOST_PATH=C:\Users\SeuUsuario\Documents\MeuOneNote\dados
 PORTA_HOST=3100
+TZ=America/Sao_Paulo
 ```
 
 Se a pasta ainda não existir, o Docker cria sozinho na primeira subida. Sem
@@ -211,6 +212,28 @@ um `.env`, o padrão é `./dados`, do lado do `docker-compose.yml` — funciona
 igual, só não fica num lugar escolhido por você. O `.env` é específico desta
 máquina e fica de fora do Git (`.gitignore` já cuida disso); quem só quer
 copiar o código para configurar do zero usa o `.env.example` como modelo.
+
+**Rodando de dentro do WSL, com as notas fora dele** (testado e funciona):
+se `docker compose` roda de dentro de uma distro WSL (Ubuntu, por exemplo) em
+vez do PowerShell, o Docker Desktop com integração WSL2 compartilha o mesmo
+daemon — o comando é idêntico. A única diferença é o formato do caminho em
+`DADOS_HOST_PATH`: o WSL já monta o disco do Windows sozinho em `/mnt/c/...`,
+então `C:\Users\SeuUsuario\Documents\MeuOneNote\dados` vira
+`/mnt/c/Users/SeuUsuario/Documents/MeuOneNote/dados`. O volume grava direto
+nesse caminho — sem cópia, sem sincronia, o arquivo aparece no Explorador do
+Windows no instante em que é salvo.
+
+```bash
+# de dentro do WSL
+cd /mnt/c/DEV/meu-onenote
+docker compose up -d --build
+```
+
+O `TZ` no `.env` importa mais ainda aqui: um container Linux não herda o
+fuso horário do Windows sozinho — sem ele, as datas na interface (criada em,
+nota do dia) apareceriam em UTC, horas adiantadas da hora local. O
+`docker-compose.yml` já usa `America/Sao_Paulo` como padrão mesmo sem essa
+variável definida.
 
 ### Subindo o container
 
