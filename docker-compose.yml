@@ -1,0 +1,21 @@
+services:
+  meu-onenote:
+    build: .
+    container_name: meu-onenote
+    restart: unless-stopped
+
+    # Só a própria máquina alcança a porta — o container escuta em todas as
+    # interfaces por dentro (ver Dockerfile), mas o Docker só publica a porta
+    # pro endereço de loopback do host. Mesma proteção que o serviço do
+    # Windows tem com `-H 127.0.0.1`. PORTA_HOST vem do .env; sem ele, cai em
+    # 3100.
+    ports:
+      - "127.0.0.1:${PORTA_HOST:-3100}:3100"
+
+    # As anotações moram nesta pasta, no host, fora da imagem: reconstruir
+    # ou atualizar a imagem (`docker compose build`) nunca toca aqui.
+    # DADOS_HOST_PATH vem do .env — copie .env.example para .env e aponte
+    # para onde quiser (ex.: dentro de Documentos). Sem um .env, cai em
+    # ./dados, ao lado deste arquivo.
+    volumes:
+      - ${DADOS_HOST_PATH:-./dados}:/app/dados

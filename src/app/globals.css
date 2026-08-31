@@ -1,0 +1,493 @@
+@import "tailwindcss";
+
+/*
+  Identidade: painel branco com cores cheias.
+  Superfícies brancas, bordas visíveis em tudo que é cartão ou painel, e cor
+  usada como sinal — cada caderno tem a sua, que entra pela variável --realce e
+  atravessa a interface até a margem da página aberta.
+*/
+
+:root {
+  /*
+    Pilhas de fonte montadas aqui, e não só no @theme: `@theme inline` embute o
+    valor nas utilidades do Tailwind mas não cria a variável, então CSS escrito
+    à mão (body, .prosa) precisa de uma variável própria para consultar.
+  */
+  --pilha-ui: var(--fonte-ui), ui-sans-serif, system-ui, sans-serif;
+  --pilha-leitura: var(--fonte-leitura), ui-sans-serif, system-ui, sans-serif;
+  --pilha-mono: var(--fonte-mono), ui-monospace, "Cascadia Mono", monospace;
+
+  /* Fundo levemente frio para o branco dos cartões aparecer como cartão. */
+  --papel: #f3f5f9;
+  --superficie: #ffffff;
+  --superficie-alta: #ffffff;
+  --tinta: #16202e;
+  --tinta-2: #5b6a7f;
+  /* #5e6d85 passa 4.5:1 no papel e na superfície — o #909cad de antes media
+     só ~2.6-2.8:1, abaixo do mínimo de AA para texto (nome de caderno,
+     timestamp de cartão de nota etc. usam este tom). */
+  --tinta-3: #5e6d85;
+  --linha: #e4e9f0;
+  --linha-forte: #c9d2df;
+  --realce: #0ea47c;
+  --realce-fraco: #0ea47c14;
+  --realce-medio: #0ea47c26;
+  --perigo: #e5484d;
+  --sombra: 0 2px 4px #16202e0d, 0 16px 40px #16202e1a;
+  --sombra-cartao: 0 1px 2px #16202e0a;
+  --sombra-cartao-alta: 0 2px 4px #16202e0d, 0 8px 20px #16202e14;
+
+  /* Zoom do texto de uma página (leitura, prévia, editor) — preferência da
+     pessoa, não da nota; ver src/lib/zoom.ts. */
+  --escala-texto: 1;
+}
+
+[data-tema="escuro"] {
+  --papel: #0e1420;
+  --superficie: #151d2b;
+  --superficie-alta: #1b2434;
+  --tinta: #e9eef6;
+  --tinta-2: #9fadc0;
+  /* #7a8ba1 passa 4.5:1 sobre o papel/superfície escuros; o #71809a de antes
+     ficava perto de 4.2:1, um pouco abaixo do mínimo de AA. */
+  --tinta-3: #7a8ba1;
+  --linha: #243044;
+  --linha-forte: #35455e;
+  --realce-fraco: #0ea47c26;
+  --realce-medio: #0ea47c3d;
+  --perigo: #ff6369;
+  --sombra: 0 2px 4px #00000059, 0 16px 40px #00000073;
+  --sombra-cartao: 0 1px 2px #00000040;
+  --sombra-cartao-alta: 0 2px 4px #0000004d, 0 8px 20px #00000059;
+}
+
+@theme inline {
+  --color-papel: var(--papel);
+  --color-superficie: var(--superficie);
+  --color-superficie-alta: var(--superficie-alta);
+  --color-tinta: var(--tinta);
+  --color-tinta-2: var(--tinta-2);
+  --color-tinta-3: var(--tinta-3);
+  --color-linha: var(--linha);
+  --color-linha-forte: var(--linha-forte);
+  --color-realce: var(--realce);
+  --color-realce-fraco: var(--realce-fraco);
+  --color-realce-medio: var(--realce-medio);
+  --color-perigo: var(--perigo);
+
+  --font-sans: var(--pilha-ui);
+  --font-serif: var(--pilha-leitura);
+  --font-mono: var(--pilha-mono);
+}
+
+* {
+  min-width: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--pilha-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--realce) 26%, transparent);
+}
+
+/*
+  Anel de foco para navegação por teclado. Campos de texto ficam de fora: eles
+  já mostram o cursor e têm o próprio destaque de borda — um contorno por cima
+  parecia um retângulo solto no meio do painel de busca.
+*/
+:focus-visible:not(input):not(textarea) {
+  outline: 2px solid var(--realce);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+/* Barras de rolagem discretas, para não competir com o conteúdo. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--linha-forte) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--linha-forte);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------- área de leitura */
+
+/*
+  A prosa renderizada do markdown. Mesma família da interface, em corpo maior e
+  entrelinha folgada: a página é para ler, não para configurar.
+*/
+.prosa {
+  font-family: var(--pilha-leitura);
+  font-size: calc(15.5px * var(--escala-texto));
+  line-height: 1.72;
+  color: var(--tinta);
+}
+
+.prosa > * + * {
+  margin-top: 0.9em;
+}
+
+.prosa h1,
+.prosa h2,
+.prosa h3,
+.prosa h4 {
+  font-family: var(--pilha-leitura);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.prosa h1 {
+  font-size: 1.66em;
+  margin-top: 1.5em;
+}
+.prosa h2 {
+  font-size: 1.32em;
+  margin-top: 1.7em;
+}
+.prosa h3 {
+  font-size: 1.12em;
+  margin-top: 1.5em;
+}
+.prosa h4 {
+  font-size: 1em;
+  margin-top: 1.4em;
+}
+.prosa > :first-child {
+  margin-top: 0;
+}
+
+.prosa a {
+  color: var(--realce);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.prosa strong {
+  font-weight: 650;
+}
+
+.prosa ul,
+.prosa ol {
+  padding-left: 1.35em;
+}
+.prosa ul {
+  list-style: disc;
+}
+.prosa ol {
+  list-style: decimal;
+}
+.prosa li + li {
+  margin-top: 0.3em;
+}
+.prosa li::marker {
+  color: var(--tinta-3);
+}
+
+/* Lista de tarefas do GitHub: a caixa fica alinhada com a primeira linha. */
+.prosa li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -1.35em;
+  display: flex;
+  gap: 0.6em;
+  align-items: baseline;
+}
+.prosa input[type="checkbox"] {
+  appearance: none;
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  translate: 0 0.16em;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: 4px;
+  background: var(--superficie-alta);
+}
+.prosa input[type="checkbox"]:checked {
+  background: var(--realce);
+  border-color: var(--realce);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 8.5l3 3 6-6'/></svg>");
+  background-size: 100%;
+}
+.prosa li:has(> input[type="checkbox"]:checked) {
+  color: var(--tinta-2);
+  text-decoration: line-through;
+  text-decoration-color: var(--tinta-3);
+}
+
+.prosa blockquote {
+  border-left: 3px solid var(--realce);
+  border-radius: 0 8px 8px 0;
+  background: var(--realce-fraco);
+  padding: 0.7em 1em;
+  color: var(--tinta-2);
+}
+
+.prosa hr {
+  border: 0;
+  border-top: 1px solid var(--linha);
+  margin: 2em 0;
+}
+
+.prosa code {
+  font-family: var(--pilha-mono);
+  font-size: 0.84em;
+  background: var(--realce-fraco);
+  border: 1px solid var(--linha);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+.prosa pre {
+  background: var(--superficie-alta);
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  padding: 0.9em 1em;
+  overflow-x: auto;
+}
+.prosa pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+
+.prosa table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--pilha-ui);
+  font-size: 0.86em;
+  display: block;
+  overflow-x: auto;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+}
+.prosa th,
+.prosa td {
+  border-bottom: 1px solid var(--linha);
+  padding: 0.55em 0.8em;
+  text-align: left;
+}
+.prosa th + th,
+.prosa td + td {
+  border-left: 1px solid var(--linha);
+}
+.prosa tr:last-child td {
+  border-bottom: 0;
+}
+.prosa th {
+  background: var(--papel);
+  font-weight: 600;
+}
+
+.prosa img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* Realce de sintaxe: sóbrio, só o suficiente para separar as partes. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--tinta-3);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: #7a4a8c;
+}
+.hljs-string,
+.hljs-attr {
+  color: #2f6b4f;
+}
+.hljs-number,
+.hljs-built_in {
+  color: #a3612a;
+}
+.hljs-title,
+.hljs-name,
+.hljs-function {
+  color: #2f5480;
+}
+[data-tema="escuro"] .hljs-keyword,
+[data-tema="escuro"] .hljs-selector-tag,
+[data-tema="escuro"] .hljs-literal {
+  color: #c99ad8;
+}
+[data-tema="escuro"] .hljs-string,
+[data-tema="escuro"] .hljs-attr {
+  color: #8fc9a6;
+}
+[data-tema="escuro"] .hljs-number,
+[data-tema="escuro"] .hljs-built_in {
+  color: #e0a86a;
+}
+[data-tema="escuro"] .hljs-title,
+[data-tema="escuro"] .hljs-name,
+[data-tema="escuro"] .hljs-function {
+  color: #8fb4e0;
+}
+
+/* ------------------------------------------------------------- utilitários */
+
+/* O editor de markdown usa a mesma métrica da prévia, para o olho não brigar. */
+.editor-texto {
+  font-family: var(--pilha-mono);
+  font-size: calc(13.5px * var(--escala-texto));
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+/* Texto puro se lê melhor na fonte da interface, com medida um pouco maior. */
+.editor-simples {
+  font-family: var(--pilha-ui);
+  font-size: calc(14.5px * var(--escala-texto));
+  line-height: 1.75;
+  tab-size: 4;
+}
+
+/* Cartão padrão: branco, borda visível e cantos generosos. */
+.cartao {
+  background: var(--superficie-alta);
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  box-shadow: var(--sombra-cartao);
+  transition:
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
+}
+.cartao:hover {
+  border-color: color-mix(in srgb, var(--realce) 45%, var(--linha));
+  box-shadow: var(--sombra-cartao-alta);
+  transform: translateY(-1px);
+}
+
+/* Painel com borda, para blocos que não são clicáveis. */
+.painel {
+  background: var(--superficie-alta);
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+}
+
+/* Pastilha de etiqueta: fundo cheio na cor da etiqueta, texto forte. */
+.pastilha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  padding: 2.5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.marca-busca {
+  background: color-mix(in srgb, var(--realce) 22%, transparent);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.surgir {
+  animation: surgir 0.18s ease-out;
+}
+
+/*
+  O momento autoral do app: a lombada colorida se desenha de cima para baixo
+  ao abrir uma página em leitura — o mesmo gesto de puxar um caderno de
+  verdade da estante e ver a lombada aparecer. Rápida o bastante (320ms) para
+  não parecer uma espera de carregamento numa ferramenta que se usa dezenas
+  de vezes por dia; feita só de opacidade e escala, então é barata mesmo no
+  build WASM mais lento.
+*/
+@keyframes lombada-desenha {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.spinha-lombada {
+  animation: lombada-desenha 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A barra que marca "você está aqui" na árvore entra com o mesmo gesto,
+   numa escala menor — ela aparece e some ao trocar de seção, e sem isso
+   pisca em vez de assentar. */
+@keyframes lombada-barra {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.barra-ativa {
+  animation: lombada-barra 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+  Elementos que trocam de cor com o caderno (não que aparecem/somem) usam
+  esta transição em vez de `transition-all`: a cor em si merece o tempo de
+  uma mudança de contexto (280ms, chegada confiante, sem bounce), mas o
+  feedback de hover/clique (filtro de brilho) continua rápido — não faz
+  sentido a resposta ao clique esperar o mesmo tanto que a troca de caderno.
+*/
+.transicao-realce {
+  transition:
+    background-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.15s ease,
+    transform 0.15s ease;
+}

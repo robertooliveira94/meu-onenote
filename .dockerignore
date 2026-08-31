@@ -1,0 +1,25 @@
+# nunca deixe as anotações entrarem na imagem — nem por engano.
+dados
+
+node_modules
+.next
+out
+build
+logs
+
+.git
+.gitignore
+
+npm-debug.log*
+.DS_Store
+*.tsbuildinfo
+
+# só usado pelo docker compose no host, para substituir DADOS_HOST_PATH e
+# PORTA_HOST — o container não precisa dele, e nunca deveria estar em uma
+# imagem publicada.
+.env
+.env.example
+
+# scripts do serviço do Windows não fazem sentido dentro do container
+scripts
+*.bat

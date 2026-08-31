@@ -1,0 +1,31 @@
+# dependências
+/node_modules
+
+# next.js
+/.next/
+/out/
+/build
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# sistema
+.DS_Store
+npm-debug.log*
+
+# suas anotações são pessoais e nunca devem ir para um repositório git,
+# nem mesmo privado (ex.: ao levar o código para outra máquina) — a pasta
+# inteira fica de fora, não só os metadados internos.
+/dados/
+
+# configuração específica de cada máquina (caminho do volume, porta) —
+# .env.example fica versionado como modelo, o .env de verdade não.
+/.env
+
+# logs do serviço do Windows (NSSM) — crescem sem parar, não são código.
+/logs/
+
+# estado local de ferramentas de desenvolvimento (histórico de critique,
+# tokens de design, servidor do modo live) — não é parte do app.
+/.impeccable/
