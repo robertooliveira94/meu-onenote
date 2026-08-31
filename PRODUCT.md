@@ -90,6 +90,18 @@ limpas e abríveis em qualquer editor.
   de uma nota, clique abre), com uma lista à parte das "notas órfãs" — as
   que nenhuma outra ainda referencia.
 - Busca global (`Ctrl+K`) no título e no corpo de todas as notas.
+- Painel `/tarefas` junta toda `- [ ]`/`- [x]` do vault inteiro, agrupada por
+  página; clicar na caixinha ali grava direto no arquivo de origem, sem abrir
+  a nota. Um filtro "Mostrar concluídas" some com o que já foi feito por
+  padrão.
+- Contagem de palavras e tempo de leitura estimado no cabeçalho de cada nota,
+  atualizando ao vivo enquanto se escreve.
+- "Exportar tudo" (barra lateral) baixa o vault inteiro — todo caderno, seção
+  e página — num único markdown, mesma lógica de exportar uma seção só.
+- Web clipper (`/clipper`): um bookmarklet para a barra de favoritos do
+  navegador que recorta a página aberta (título, endereço e o texto
+  selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
+  nenhuma para instalar.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app

@@ -3,14 +3,17 @@
 import clsx from "clsx";
 import {
   CalendarDays,
+  Download,
   GitBranch,
   House,
   LayoutTemplate,
+  ListChecks,
   Moon,
   NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  PocketKnife,
   Search,
   Sun,
   Tag,
@@ -21,7 +24,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { acaoAbrirNotaDoDia, acaoCapturaRapida, acaoCriarCaderno } from "@/app/acoes";
+import { acaoAbrirNotaDoDia, acaoCapturaRapida, acaoCriarCaderno, acaoExportarTudo } from "@/app/acoes";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import type { Etiqueta, Modelo, NoArvore } from "@/lib/tipos";
@@ -30,6 +33,17 @@ import { Arvore } from "./arvore";
 import { DialogoNome } from "./dialogos";
 import { PaletaBusca } from "./paleta-busca";
 import { AlcaRedimensionar, BotaoIcone } from "./ui";
+
+/** Monta o vault inteiro num único arquivo no servidor e entrega ao navegador como download. */
+async function baixarTudo(): Promise<void> {
+  const { nome, conteudo } = await acaoExportarTudo();
+  const endereco = URL.createObjectURL(new Blob([conteudo], { type: "text/markdown" }));
+  const link = document.createElement("a");
+  link.href = endereco;
+  link.download = nome;
+  link.click();
+  URL.revokeObjectURL(endereco);
+}
 
 /**
  * Moldura fixa do aplicativo: o trilho lateral e o conteúdo.
@@ -68,6 +82,7 @@ function CascaInterna({
   const [criandoCaderno, definirCriandoCaderno] = useState(false);
   const [capturando, iniciarCaptura] = useTransition();
   const [indoParaHoje, iniciarIdaParaHoje] = useTransition();
+  const [exportando, iniciarExportacao] = useTransition();
   const barraLateral = useLarguraRedimensionavel("largura-barra-lateral", {
     padrao: 248,
     minima: 190,
@@ -209,11 +224,25 @@ function CascaInterna({
             Grafo
           </Atalho>
           <Atalho
+            href="/tarefas"
+            icone={<ListChecks size={14} />}
+            ativo={caminhoAtual.startsWith("/tarefas")}
+          >
+            Tarefas
+          </Atalho>
+          <Atalho
             href="/modelos"
             icone={<LayoutTemplate size={14} />}
             ativo={caminhoAtual.startsWith("/modelos")}
           >
             Modelos
+          </Atalho>
+          <Atalho
+            href="/clipper"
+            icone={<PocketKnife size={14} />}
+            ativo={caminhoAtual.startsWith("/clipper")}
+          >
+            Web Clipper
           </Atalho>
           <AtalhoBotao
             icone={<CalendarDays size={14} />}
@@ -225,6 +254,9 @@ function CascaInterna({
             }
           >
             Hoje
+          </AtalhoBotao>
+          <AtalhoBotao icone={<Download size={14} />} disabled={exportando} onClick={() => iniciarExportacao(baixarTudo)}>
+            Exportar tudo
           </AtalhoBotao>
           <Atalho
             href="/lixeira"

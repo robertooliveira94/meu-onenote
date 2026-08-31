@@ -1,9 +1,11 @@
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 
 import { formatarDataHora } from "./rotas";
 import { listarNotas } from "./arquivos";
 import {
   PASTA_SISTEMA,
+  RAIZ,
   ehArquivoDeNota,
   ehPastaInterna,
   juntar,
@@ -96,6 +98,36 @@ export async function exportarSecao(
 
   return {
     nome: `${nomeDe(caminho)}.md`,
+    conteudo: partes.join("\n\n").replace(/\n{3,}/g, "\n\n"),
+  };
+}
+
+/**
+ * O vault inteiro — todo caderno, seção e página — num único arquivo.
+ * Mesma lógica de `exportarSecao`, só que partindo da raiz e passando por
+ * cada caderno de primeira linha, em vez de uma pasta escolhida.
+ */
+export async function exportarTudo(): Promise<{ nome: string; conteudo: string }> {
+  const partes: string[] = [];
+
+  let entradas: Dirent[];
+  try {
+    entradas = await fs.readdir(RAIZ, { withFileTypes: true });
+  } catch {
+    entradas = [];
+  }
+  const cadernos = entradas
+    .filter((entrada) => entrada.isDirectory() && !ehPastaInterna(entrada.name))
+    .map((entrada) => entrada.name)
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  for (const caderno of cadernos) {
+    await juntarPasta(caderno, 1, partes);
+  }
+  partes.push("---", `_Exportado de Meu bloco de anotações em ${formatarDataHora(new Date().toISOString())}._`);
+
+  return {
+    nome: "Meu bloco de anotações.md",
     conteudo: partes.join("\n\n").replace(/\n{3,}/g, "\n\n"),
   };
 }

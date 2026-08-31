@@ -15,10 +15,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { acaoAlternarFavorita, acaoColarImagem, acaoConverterFormato, acaoSalvarNota } from "@/app/acoes";
 import { pastaDe } from "@/lib/caminho-texto";
+import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { formatarDataHora, urlDaNota } from "@/lib/rotas";
 import type { Etiqueta, Nota } from "@/lib/tipos";
@@ -222,6 +223,9 @@ export function PaginaNota({
     });
   }
 
+  const palavras = useMemo(() => contarPalavras(conteudo), [conteudo]);
+  const minutosDeLeitura = tempoDeLeituraEmMinutos(palavras);
+
   const secoes = nota.caminho.split("/").slice(0, -1);
 
   return (
@@ -286,7 +290,12 @@ export function PaginaNota({
             etiquetasDaNota={nota.etiquetas}
             todasEtiquetas={etiquetas}
           />
-          <span className="ml-auto shrink-0 font-mono text-[10px] tracking-wide text-tinta-3 uppercase">
+          <span className="ml-auto shrink-0 text-[11px] text-tinta-3">
+            {palavras === 0
+              ? "página em branco"
+              : `${palavras} ${palavras === 1 ? "palavra" : "palavras"} · ${minutosDeLeitura} min de leitura`}
+          </span>
+          <span className="shrink-0 font-mono text-[10px] tracking-wide text-tinta-3 uppercase">
             {nota.formato}
           </span>
         </div>

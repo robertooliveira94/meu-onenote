@@ -145,7 +145,7 @@ export function inserirBloco(selecao: Selecao, bloco: string): Selecao {
 export const TABELA_EXEMPLO = ["| Coluna | Coluna |", "| --- | --- |", "|  |  |"].join("\n");
 export const SEPARADOR_TEXTO = "─".repeat(40);
 
-const PADRAO_TAREFA = /^(\s*[-*+]\s+)\[([ xX])\]/;
+const PADRAO_TAREFA = /^(\s*[-*+]\s+)\[([ xX])\](\s?)(.*)$/;
 
 /**
  * Vira (ou desmarca) a N-ésima tarefa `- [ ]` do texto — usado quando a
@@ -154,7 +154,9 @@ const PADRAO_TAREFA = /^(\s*[-*+]\s+)\[([ xX])\]/;
  * `<input>` que o remark-gfm gera para a caixinha não corresponde a um
  * trecho real do markdown (é sintetizado a partir do estado marcado/
  * desmarcado), então a posição dele no código-fonte não é confiável — mas
- * "a terceira tarefa do documento" sempre é.
+ * "a terceira tarefa do documento" sempre é. O painel de tarefas agregadas
+ * (que mexe na caixinha de fora da nota, vinda de outra tela) usa essa
+ * mesma contagem por ordem de aparição — ver `extrairTarefas` logo abaixo.
  */
 export function alternarTarefa(texto: string, indiceDaTarefa: number): string {
   const linhas = texto.split("\n");
@@ -165,10 +167,29 @@ export function alternarTarefa(texto: string, indiceDaTarefa: number): string {
     if (!casada) continue;
     if (contador === indiceDaTarefa) {
       const novoEstado = casada[2] === " " ? "x" : " ";
-      linhas[i] = linhas[i].replace(PADRAO_TAREFA, `$1[${novoEstado}]`);
+      linhas[i] = linhas[i].replace(PADRAO_TAREFA, `$1[${novoEstado}]$3$4`);
       return linhas.join("\n");
     }
     contador += 1;
   }
   return texto;
+}
+
+export type TarefaExtraida = { indice: number; texto: string; concluida: boolean };
+
+/**
+ * Todas as tarefas `- [ ]`/`- [x]` de um texto, na ordem em que aparecem —
+ * mesma ordem que `alternarTarefa` espera no índice. Base do painel de
+ * tarefas agregadas (`/tarefas`), que junta as de todas as notas.
+ */
+export function extrairTarefas(texto: string): TarefaExtraida[] {
+  const tarefas: TarefaExtraida[] = [];
+  let indice = 0;
+  for (const linha of texto.split("\n")) {
+    const casada = linha.match(PADRAO_TAREFA);
+    if (!casada) continue;
+    tarefas.push({ indice, texto: casada[4].trim(), concluida: casada[2].toLowerCase() === "x" });
+    indice += 1;
+  }
+  return tarefas;
 }

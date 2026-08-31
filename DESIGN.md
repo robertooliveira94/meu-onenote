@@ -409,6 +409,16 @@ desenhar um cartão inteiro ao redor.
   menos uma; cada item é um cartão simples com o título e o caminho
   completo como `title`.
 
+### Painel de Tarefas
+- **Lista por nota:** cartão de cantos 12px (`superficie-alta`, borda `linha`),
+  um item por linha com borda inferior entre eles — mesmo vocabulário visual
+  de um cartão de página, aplicado a uma lista em vez de uma grade.
+- **Tarefa concluída:** texto em `tinta-3` com risco (`line-through`) — sem
+  cor de sucesso separada; risco + esmaecido já é o sinal reconhecido de
+  "feito" em qualquer lista de tarefas.
+- **Filtro "Mostrar concluídas":** desligado por padrão — a tela abre já
+  mostrando só o que falta, que é o que a pessoa veio ver.
+
 ### O Carimbo de Cor do Cartão (componente de assinatura)
 A combinação de `inset 0 3px 0 var(--realce)` mais a sombra de hover
 permanente é o único lugar do sistema onde uma cor sólida entra dentro de

@@ -20,7 +20,8 @@ import {
 } from "@/lib/arquivos";
 import { PASTA_ENTRADA, juntar, limparNome, pastaDe } from "@/lib/caminhos";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
-import { exportarSecao } from "@/lib/exportar";
+import { exportarSecao, exportarTudo } from "@/lib/exportar";
+import { alternarTarefa } from "@/lib/formatacao";
 import { lerVersao, listarVersoes, registrarVersao } from "@/lib/historico";
 import { atualizarIndice, entradaDaNota, entradaDaPasta } from "@/lib/indice";
 import { apagarDeVez, enviarParaLixeira, esvaziarLixeira, restaurar } from "@/lib/lixeira";
@@ -262,6 +263,19 @@ export async function acaoAlternarFavorita(caminho: string): Promise<Resposta> {
   return resposta;
 }
 
+/** Vira (ou desmarca) a N-ésima tarefa de uma nota — usado pelo painel de tarefas agregadas. */
+export async function acaoAlternarTarefaEm(caminho: string, indiceDaTarefa: number): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const indice = z.number().int().min(0).parse(indiceDaTarefa);
+    const nota = await lerNota(validado);
+    if (!nota) throw new Error("Página não encontrada");
+    await escreverNota(validado, alternarTarefa(nota.conteudo, indice));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
 export async function acaoDefinirEtiquetasDaNota(
   caminho: string,
   etiquetas: string[],
@@ -421,6 +435,11 @@ export async function acaoExportarSecao(
   caminho: string,
 ): Promise<{ nome: string; conteudo: string }> {
   return exportarSecao(caminhoValido.parse(caminho));
+}
+
+/** O vault inteiro, todo caderno, numa única exportação. */
+export async function acaoExportarTudo(): Promise<{ nome: string; conteudo: string }> {
+  return exportarTudo();
 }
 
 // ------------------------------------------------------------------- busca
