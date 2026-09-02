@@ -11,6 +11,7 @@ import {
   nomeDe,
   nomeValido,
   pastaDe,
+  profundidade,
   segmentos,
   tituloDe,
 } from "./caminho-texto";
@@ -42,6 +43,15 @@ export const PASTA_SISTEMA = "_sistema";
  * soltas.
  */
 export const PASTA_ENTRADA = "Entrada";
+/**
+ * Seção padrão criada em cada caderno para receber páginas que, por
+ * qualquer motivo, apareçam soltas direto na raiz dele (migração de uma
+ * versão anterior do app, ou um arquivo copiado ali por fora) — a
+ * captura rápida e a nota do dia também caem aqui dentro do caderno
+ * Entrada. Uma página nunca fica solta num caderno: a hierarquia é
+ * sempre caderno → seção → página.
+ */
+export const PASTA_GERAL = "Geral";
 
 export {
   CaminhoInvalido,
@@ -54,6 +64,7 @@ export {
   nomeDe,
   nomeValido,
   pastaDe,
+  profundidade,
   segmentos,
   tituloDe,
 };

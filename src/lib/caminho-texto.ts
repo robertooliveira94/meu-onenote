@@ -61,6 +61,16 @@ export function juntar(...partes: string[]): string {
   return partes.filter((parte) => parte.length > 0).join("/");
 }
 
+/**
+ * Quantos níveis de pasta o caminho tem. Cadernos ficam na raiz (1 nível);
+ * seções moram dentro de um caderno (2 níveis). A hierarquia é fixa nesses
+ * dois — nunca existe uma pasta de 3 níveis (isso seria uma seção dentro de
+ * outra seção, que este app não permite).
+ */
+export function profundidade(relativo: string): number {
+  return segmentos(relativo).length;
+}
+
 export function pastaDe(relativo: string): string {
   const partes = relativo.split("/");
   partes.pop();

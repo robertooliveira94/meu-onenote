@@ -18,7 +18,7 @@ import {
   reordenarPasta,
   salvarAnexo,
 } from "@/lib/arquivos";
-import { PASTA_ENTRADA, juntar, limparNome, pastaDe } from "@/lib/caminhos";
+import { PASTA_ENTRADA, PASTA_GERAL, juntar, limparNome, pastaDe } from "@/lib/caminhos";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
 import { exportarSecao, exportarTudo } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
@@ -104,7 +104,9 @@ export async function acaoCapturaRapida(): Promise<void> {
     })
     .replace(/[/:]/g, "-")
     .replace(", ", " ");
-  const caminho = await criarNota(PASTA_ENTRADA, `Ideia ${carimbo}`, "md");
+  // Página sempre dentro de uma seção — "Geral" é a seção padrão do caderno
+  // de entrada, criada sozinha desde o primeiro uso do app.
+  const caminho = await criarNota(juntar(PASTA_ENTRADA, PASTA_GERAL), `Ideia ${carimbo}`, "md");
   atualizarTudo();
   redirect(`${urlDaNota(caminho)}?editando=1`);
 }
@@ -121,14 +123,15 @@ export async function acaoAbrirNotaDoDia(): Promise<void> {
     year: "numeric",
   });
   const nomeDoArquivo = `${limparNome(titulo)}.md`;
-  const caminhoEsperado = juntar(PASTA_ENTRADA, nomeDoArquivo);
+  const pastaDoDia = juntar(PASTA_ENTRADA, PASTA_GERAL);
+  const caminhoEsperado = juntar(pastaDoDia, nomeDoArquivo);
 
   const existente = await lerNota(caminhoEsperado);
   if (existente) {
     redirect(urlDaNota(caminhoEsperado));
   }
 
-  const caminhoCriado = await criarNota(PASTA_ENTRADA, titulo, "md");
+  const caminhoCriado = await criarNota(pastaDoDia, titulo, "md");
   atualizarTudo();
   redirect(`${urlDaNota(caminhoCriado)}?editando=1`);
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, CornerDownRight, Folder } from "lucide-react";
+import { Check, Folder, Notebook } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { NoArvore } from "@/lib/tipos";
+import { pastaDe } from "@/lib/caminho-texto";
+import type { Caderno } from "@/lib/tipos";
 
 import { Aviso, Botao, Campo, Dialogo, Rotulo } from "./ui";
 
@@ -124,23 +125,24 @@ export function DialogoConfirmar({
   );
 }
 
-/** Lista achatada de pastas, para escolher um destino. */
-function achatar(nos: NoArvore[], nivel = 0): { caminho: string; nome: string; nivel: number }[] {
-  return nos.flatMap((no) => [
-    { caminho: no.caminho, nome: no.nome, nivel },
-    ...achatar(no.filhos, nivel + 1),
-  ]);
-}
-
+/**
+ * Para onde um item pode ir: uma página só troca de seção (nunca cai direto
+ * num caderno), uma seção só troca de caderno (nunca vira caderno ela
+ * mesma) — a hierarquia é sempre caderno → seção → página, nada de nível
+ * "solto" no meio.
+ */
 export function DialogoMover({
   aberto,
+  tipo,
   cadernos,
   caminhoAtual,
   aoConfirmar,
   aoFechar,
 }: {
   aberto: boolean;
-  cadernos: NoArvore[];
+  /** "pagina": lista seções. "secao": lista cadernos. */
+  tipo: "pagina" | "secao";
+  cadernos: Caderno[];
   caminhoAtual: string;
   aoConfirmar: (destino: string) => Promise<string | null>;
   aoFechar: () => void;
@@ -148,10 +150,17 @@ export function DialogoMover({
   const [erro, definirErro] = useState<string | null>(null);
   const [ocupado, definirOcupado] = useState(false);
 
-  // Não dá para mover um item para dentro de si mesmo.
-  const destinos = achatar(cadernos).filter(
-    (pasta) => pasta.caminho !== caminhoAtual && !pasta.caminho.startsWith(`${caminhoAtual}/`),
-  );
+  const paiAtual = pastaDe(caminhoAtual);
+  const destinos =
+    tipo === "secao"
+      ? cadernos
+          .filter((caderno) => caderno.caminho !== paiAtual)
+          .map((caderno) => ({ caminho: caderno.caminho, rotulo: caderno.nome }))
+      : cadernos.flatMap((caderno) =>
+          caderno.secoes
+            .filter((secao) => secao.caminho !== paiAtual)
+            .map((secao) => ({ caminho: secao.caminho, rotulo: `${caderno.nome} › ${secao.nome}` })),
+        );
 
   async function escolher(destino: string) {
     definirOcupado(true);
@@ -164,37 +173,33 @@ export function DialogoMover({
   return (
     <Dialogo
       titulo="Mover para"
-      descricao="Escolha a seção que vai receber este item."
+      descricao={tipo === "secao" ? "Escolha o caderno que vai receber esta seção." : "Escolha a seção que vai receber esta página."}
       aberto={aberto}
       aoFechar={aoFechar}
     >
       <div className="max-h-[46vh] overflow-y-auto rounded-lg border border-linha bg-superficie-alta p-1">
-        <button
-          type="button"
-          disabled={ocupado}
-          onClick={() => escolher("")}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
-        >
-          <Folder size={14} className="text-tinta-3" />
-          Nível principal (vira um caderno)
-        </button>
-        {destinos.map((pasta) => (
-          <button
-            key={pasta.caminho}
-            type="button"
-            disabled={ocupado}
-            onClick={() => escolher(pasta.caminho)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
-            style={{ paddingLeft: `${8 + pasta.nivel * 14}px` }}
-          >
-            {pasta.nivel > 0 ? (
-              <CornerDownRight size={13} className="text-tinta-3" />
-            ) : (
-              <Folder size={14} className="text-tinta-3" />
-            )}
-            <span className="truncate">{pasta.nome}</span>
-          </button>
-        ))}
+        {destinos.length === 0 ? (
+          <p className="px-2 py-3 text-[12.5px] text-tinta-3 italic">
+            {tipo === "secao" ? "Não há outro caderno para onde mover." : "Não há outra seção para onde mover."}
+          </p>
+        ) : (
+          destinos.map((destino) => (
+            <button
+              key={destino.caminho}
+              type="button"
+              disabled={ocupado}
+              onClick={() => escolher(destino.caminho)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
+            >
+              {tipo === "secao" ? (
+                <Notebook size={14} className="text-tinta-3" />
+              ) : (
+                <Folder size={14} className="text-tinta-3" />
+              )}
+              <span className="truncate">{destino.rotulo}</span>
+            </button>
+          ))
+        )}
       </div>
       <Aviso>{erro}</Aviso>
     </Dialogo>

@@ -1,8 +1,9 @@
 # Meu bloco de anotações
 
 Bloco de anotações pessoal, no estilo do OneNote, rodando só na sua máquina.
-Cadernos, seções e subseções são pastas de verdade; cada página é um arquivo
-`.md` ou `.txt` dentro delas.
+Hierarquia fixa de 3 níveis, igual ao OneNote de verdade: caderno → seção →
+página. Caderno e seção são pastas de verdade; cada página é um arquivo
+`.md` ou `.txt` dentro de uma seção.
 
 O projeto fica em `C:\DEV\meu-onenote` e roda como **serviço do Windows**:
 inicia sozinho quando o computador liga, reinicia sozinho se cair, e fica
@@ -29,17 +30,22 @@ projeto (`C:\DEV\meu-onenote`); código e anotações vivem separados.
 ```
 notas/
   Pessoal/                      <- caderno
-    Financeiro/                 <- seção
-      Metas 2026/                <- subseção
-        Orçamento 2026.md        <- página em markdown
-        Lembretes.txt            <- página em texto simples
-  _Entrada/                     <- caixa de entrada da captura rápida
+    Financeiro/                  <- seção
+      Orçamento 2026.md           <- página em markdown
+      Lembretes.txt                <- página em texto simples
+  Entrada/                      <- caderno da captura rápida e da nota do dia
+    Geral/                        <- seção padrão, criada sozinha
   _sistema/                     <- uso interno do aplicativo
     indice.json                  <- etiquetas, favoritos, datas, ordem
     etiquetas.json                <- cadastro de etiquetas
     historico/                    <- versões anteriores de cada página
     lixeira/                      <- itens excluídos, com o caminho de origem
 ```
+
+Uma página nunca fica solta direto num caderno — sempre mora dentro de uma
+seção. Se algum arquivo aparecer solto (copiado direto pelo Explorador, ou
+sobrando de uma versão anterior deste app), ele é movido sozinho para uma
+seção "Geral" na próxima vez que o app abre, sem precisar de nada manual.
 
 Os arquivos são texto comum: dá para abrir qualquer um no Bloco de Notas, copiar
 para um pendrive ou mandar por e-mail. Se você criar um `.txt` direto pelo
@@ -91,9 +97,10 @@ uma — o texto atual vira uma versão antes da troca.
 Lixeira: excluir manda para a lixeira com etiquetas e favoritos preservados.
 Só "Esvaziar lixeira" apaga de verdade.
 
-Exportar: no menu de uma seção, "Exportar em markdown" baixa a seção inteira
-(com as subseções) num único arquivo. Para PDF, abra a página em modo leitura e
-use Ctrl + P → Salvar como PDF.
+Exportar: no menu de um caderno ou de uma seção, "Exportar em markdown" baixa
+tudo que está dentro num único arquivo. Para PDF, abra a página em modo
+leitura e use Ctrl + P → Salvar como PDF. "Exportar tudo" na barra lateral
+baixa o vault inteiro, todo caderno, num único arquivo.
 
 ## Como o serviço funciona
 

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   PASTA_ENTRADA,
+  PASTA_GERAL,
   PASTA_SISTEMA,
   RAIZ,
   ehArquivoDeNota,
@@ -14,6 +15,7 @@ import {
   limparNome,
   nomeDe,
   pastaDe,
+  profundidade,
   resolverCaminho,
   tituloDe,
 } from "./caminhos";
@@ -27,7 +29,7 @@ import {
   lerIndice,
   reapontar,
 } from "./indice";
-import type { Formato, Indice, Nota, NoArvore, ResultadoBusca, ResumoNota } from "./tipos";
+import type { Caderno, Formato, Indice, Nota, ResultadoBusca, ResumoNota, Secao } from "./tipos";
 
 /**
  * Acesso ao conteúdo em `dados/`. A hierarquia do aplicativo é a hierarquia de
@@ -37,7 +39,10 @@ import type { Formato, Indice, Nota, NoArvore, ResultadoBusca, ResumoNota } from
 
 export async function garantirEstrutura(): Promise<void> {
   await fs.mkdir(path.join(RAIZ, PASTA_SISTEMA), { recursive: true });
-  await fs.mkdir(path.join(RAIZ, PASTA_ENTRADA), { recursive: true });
+  // Uma página nunca fica solta direto no caderno — por isso já nasce com a
+  // seção "Geral" pronta, que é para onde a captura rápida e a nota do dia
+  // escrevem.
+  await fs.mkdir(path.join(RAIZ, PASTA_ENTRADA, PASTA_GERAL), { recursive: true });
 }
 
 async function existe(absoluto: string): Promise<boolean> {
@@ -71,6 +76,61 @@ async function percorrer(relativo: string, notas: string[], pastas: string[]): P
 }
 
 /**
+ * Uma página solta direto num caderno (de uma versão anterior do app, ou
+ * copiada ali por fora) não é permitida na hierarquia fixa de 3 níveis —
+ * vai para dentro de uma seção "Geral", criada na hora se não existir.
+ * Se o caderno também tiver uma pasta `_anexos` solta na raiz, ela viaja
+ * junto para dentro de "Geral" antes das páginas, para as imagens coladas
+ * (`![](_anexos/arquivo.png)`, caminho relativo à página) continuarem
+ * resolvendo depois da mudança.
+ */
+async function migrarPaginasSoltas(): Promise<void> {
+  let entradasRaiz;
+  try {
+    entradasRaiz = await fs.readdir(RAIZ, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entradaCaderno of entradasRaiz) {
+    if (!entradaCaderno.isDirectory() || ehPastaInterna(entradaCaderno.name)) continue;
+    const caderno = entradaCaderno.name;
+
+    let entradasCaderno;
+    try {
+      entradasCaderno = await fs.readdir(resolverCaminho(caderno), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    const soltas = entradasCaderno.filter(
+      (entrada) => entrada.isFile() && ehArquivoDeNota(entrada.name),
+    );
+    if (soltas.length === 0) continue;
+
+    const pastaGeral = juntar(caderno, PASTA_GERAL);
+    await fs.mkdir(resolverCaminho(pastaGeral), { recursive: true });
+
+    const anexosSoltos = juntar(caderno, "_anexos");
+    if (await existe(resolverCaminho(anexosSoltos))) {
+      const anexosNoDestino = juntar(pastaGeral, "_anexos");
+      if (!(await existe(resolverCaminho(anexosNoDestino)))) {
+        await fs.rename(resolverCaminho(anexosSoltos), resolverCaminho(anexosNoDestino));
+      }
+    }
+
+    for (const solta of soltas) {
+      try {
+        await moverItem(juntar(caderno, solta.name), pastaGeral);
+      } catch {
+        // Já existe um arquivo com esse nome dentro de "Geral": deixa essa
+        // página onde está por ora, em vez de travar a migração inteira
+        // por causa de uma única colisão de nome.
+      }
+    }
+  }
+}
+
+/**
  * Reconcilia o índice com o disco: adota arquivos que apareceram por fora
  * (você copiou um .txt para a pasta pelo Explorador) e descarta metadados de
  * quem sumiu. Roda a cada leitura da árvore, então mexer nos arquivos na mão
@@ -78,6 +138,7 @@ async function percorrer(relativo: string, notas: string[], pastas: string[]): P
  */
 export async function sincronizarIndice(): Promise<void> {
   await garantirEstrutura();
+  await migrarPaginasSoltas();
   const notas: string[] = [];
   const pastas: string[] = [];
   await percorrer("", notas, pastas);
@@ -192,55 +253,52 @@ async function montarResumo(
   };
 }
 
-async function montarNo(
+async function montarSecao(relativo: string): Promise<Secao> {
+  const entradas = await fs.readdir(resolverCaminho(relativo), { withFileTypes: true });
+  const quantidadePaginas = entradas.filter(
+    (entrada) => entrada.isFile() && ehArquivoDeNota(entrada.name),
+  ).length;
+  return { nome: nomeDe(relativo), caminho: relativo, quantidadePaginas };
+}
+
+async function montarCaderno(
   relativo: string,
   indice: Indice,
-  corDoCaderno: string,
-  iconeDoCaderno: string,
-): Promise<NoArvore> {
+  cor: string,
+  icone: string,
+): Promise<Caderno> {
   const entradas = await fs.readdir(resolverCaminho(relativo), { withFileTypes: true });
-  const filhos: NoArvore[] = [];
-  let quantidadePaginas = 0;
+  const secoes: Secao[] = [];
 
   for (const entrada of entradas) {
-    if (entrada.isDirectory()) {
-      if (ehPastaInterna(entrada.name)) continue;
-      filhos.push(
-        await montarNo(juntar(relativo, entrada.name), indice, corDoCaderno, iconeDoCaderno),
-      );
-    } else if (entrada.isFile() && ehArquivoDeNota(entrada.name)) {
-      quantidadePaginas += 1;
-    }
+    // Uma página nunca fica solta direto no caderno — `migrarPaginasSoltas`
+    // (chamada por `sincronizarIndice`, sempre antes disto) já garante que
+    // só sobram subpastas aqui, nunca arquivo de nota.
+    if (!entrada.isDirectory() || ehPastaInterna(entrada.name)) continue;
+    secoes.push(await montarSecao(juntar(relativo, entrada.name)));
   }
 
-  filhos.sort(
+  secoes.sort(
     (a, b) =>
       (indice.pastas[a.caminho]?.ordem ?? 0) - (indice.pastas[b.caminho]?.ordem ?? 0) ||
       a.nome.localeCompare(b.nome, "pt-BR"),
   );
 
-  return {
-    nome: nomeDe(relativo),
-    caminho: relativo,
-    cor: corDoCaderno,
-    icone: iconeDoCaderno,
-    filhos,
-    quantidadePaginas,
-  };
+  return { nome: nomeDe(relativo), caminho: relativo, cor, icone, secoes };
 }
 
-/** Todos os cadernos, com suas seções e subseções aninhadas. */
-export async function lerArvore(): Promise<NoArvore[]> {
+/** Todos os cadernos, com as seções de cada um (nunca mais fundo que isso). */
+export async function lerArvore(): Promise<Caderno[]> {
   await sincronizarIndice();
   const indice = await lerIndice();
   const entradas = await fs.readdir(RAIZ, { withFileTypes: true });
 
-  const cadernos: NoArvore[] = [];
+  const cadernos: Caderno[] = [];
   for (const entrada of entradas) {
     if (!entrada.isDirectory() || ehPastaInterna(entrada.name)) continue;
     const cor = indice.pastas[entrada.name]?.cor || CORES_CADERNO[0];
     const icone = indice.pastas[entrada.name]?.icone || ICONES_CADERNO[0];
-    cadernos.push(await montarNo(entrada.name, indice, cor, icone));
+    cadernos.push(await montarCaderno(entrada.name, indice, cor, icone));
   }
 
   cadernos.sort(
@@ -346,6 +404,11 @@ export async function criarNota(
   conteudoInicial = "",
 ): Promise<string> {
   garantirForaDoSistema(juntar(pasta, "x"));
+  // Página sempre dentro de uma seção — nunca solta direto num caderno, nem
+  // na raiz. A hierarquia é fixa: caderno → seção → página.
+  if (profundidade(pasta) !== 2) {
+    throw new Error("Uma página só pode ser criada dentro de uma seção");
+  }
   const base = limparNome(titulo) || "Sem título";
   const nome = await nomeDisponivel(pasta, base, formato);
   const caminho = juntar(pasta, nome);
@@ -367,6 +430,11 @@ export async function criarNota(
 }
 
 export async function criarPasta(pai: string, nome: string): Promise<string> {
+  // pai === "" cria um caderno (1º nível); pai sendo um caderno cria uma
+  // seção dentro dele (2º nível). Uma seção nunca ganha outra seção dentro.
+  if (profundidade(pai) >= 2) {
+    throw new Error("Uma seção não pode ter outra seção dentro");
+  }
   const limpo = limparNome(nome) || "Nova seção";
   garantirForaDoSistema(juntar(pai, limpo));
   const disponivel = await nomeDisponivel(pai, limpo, "");
@@ -432,6 +500,16 @@ export async function moverItem(caminho: string, novaPasta: string): Promise<str
   const absoluto = resolverCaminho(caminho);
   const info = await fs.stat(absoluto);
   const ehPasta = info.isDirectory();
+
+  // Hierarquia fixa: só uma seção pode ser movida (nunca um caderno, que já
+  // está no topo), e só para dentro de outro caderno. Só uma página pode
+  // trocar de seção — nunca ir direto para um caderno.
+  if (ehPasta) {
+    if (profundidade(caminho) !== 2) throw new Error("Um caderno não tem para onde se mover");
+    if (profundidade(novaPasta) !== 1) throw new Error("Uma seção só pode ir para dentro de um caderno");
+  } else if (profundidade(novaPasta) !== 2) {
+    throw new Error("Uma página só pode ir para dentro de uma seção");
+  }
 
   const alvo = juntar(novaPasta, nomeDe(caminho));
   if (alvo === caminho) return caminho;

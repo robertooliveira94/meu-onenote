@@ -16,10 +16,11 @@ sem intenção de compartilhar com outras pessoas).
 
 ## Product Purpose
 
-Um bloco de anotações pessoal no espírito do OneNote — cadernos, seções e
-subseções — mas onde a hierarquia é a estrutura real de pastas do sistema
-operacional, e cada página é um arquivo `.md` ou `.txt` comum, sem formato
-proprietário. Existe para resolver a desorganização do Bloco de Notas sem
+Um bloco de anotações pessoal no espírito do OneNote — caderno → seção →
+página, hierarquia fixa de 3 níveis, igual ao OneNote de verdade — mas onde
+essa hierarquia é a estrutura real de pastas do sistema operacional, e cada
+página é um arquivo `.md` ou `.txt` comum, sem formato proprietário. Existe
+para resolver a desorganização do Bloco de Notas sem
 introduzir a complexidade e o peso do OneNote de verdade. Sucesso é o
 usuário nunca mais se perder entre anotações: encontrar qualquer coisa em
 segundos pela busca, manter tudo com backup simples (é só copiar a pasta) e
@@ -45,9 +46,11 @@ endereço, ou clicar num atalho na Área de Trabalho; não há passo de
 separado (`npm run dev`, porta diferente), documentado no README.
 
 As anotações ficam em `dados/`, dentro da pasta do projeto: cadernos são
-pastas de primeiro nível, seções e subseções são subpastas, páginas são
-arquivos `.md` (markdown) ou `.txt` (texto puro) — a pessoa escolhe o
-formato ao criar cada página. Metadados que não cabem num arquivo de texto
+pastas de primeiro nível, seções são subpastas deles (nunca aninhadas entre
+si — uma seção nunca tem outra seção dentro), páginas são arquivos `.md`
+(markdown) ou `.txt` (texto puro) sempre dentro de uma seção, nunca soltas
+direto no caderno — a pessoa escolhe o formato ao criar cada página.
+Metadados que não cabem num arquivo de texto
 (etiquetas, favoritos, ordem manual, cor/ícone do caderno) ficam num índice
 à parte (`dados/_sistema/indice.json`), para as notas em si continuarem
 limpas e abríveis em qualquer editor.
@@ -57,8 +60,13 @@ limpas e abríveis em qualquer editor.
 - **Sem banco de dados.** O sistema de arquivos é a fonte da verdade; o
   índice em `_sistema/` é reconstruído sozinho a partir do disco se for
   apagado (só etiquetas e favoritos se perdem nesse caso).
-- Cadernos, seções e subseções em profundidade livre; criar, renomear,
-  mover, reordenar e excluir (vai para uma lixeira própria, recuperável).
+- Hierarquia fixa de 3 níveis, igual ao OneNote: caderno → seção → página.
+  Sem aninhamento livre — uma seção nunca tem outra seção dentro, e uma
+  página nunca fica solta direto no caderno (sempre dentro de uma seção;
+  a seção "Geral" recebe automaticamente qualquer página que apareça solta,
+  seja de uma migração de versão anterior do app ou copiada ali por fora).
+  Criar, renomear, mover (seção só entre cadernos; página só entre seções),
+  reordenar e excluir (vai para uma lixeira própria, recuperável).
 - Página em markdown abre em modo leitura por padrão (renderizado, com
   realce de sintaxe); um botão "Editar" abre a edição lado a lado
   (texto cru + prévia ao vivo). Página em texto puro abre direto no editor,

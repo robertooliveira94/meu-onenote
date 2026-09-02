@@ -28,7 +28,7 @@ import {
 import { useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataCurta, urlDaNota } from "@/lib/rotas";
-import type { Etiqueta, Modelo, NoArvore, ResumoNota } from "@/lib/tipos";
+import type { Caderno, Etiqueta, Modelo, ResumoNota } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
 import { DialogoNovaPagina } from "./dialogo-nova-pagina";
@@ -53,7 +53,7 @@ export function ListaPaginas({
   nomeDaPasta: string;
   notas: ResumoNota[];
   etiquetas: Etiqueta[];
-  cadernos: NoArvore[];
+  cadernos: Caderno[];
   modelos: Modelo[];
   caminhoAtivo?: string;
 }) {
@@ -285,6 +285,7 @@ export function ListaPaginas({
 
       <DialogoMover
         aberto={acao?.tipo === "mover"}
+        tipo="pagina"
         cadernos={cadernos}
         caminhoAtual={alvo?.caminho ?? ""}
         aoFechar={fechar}

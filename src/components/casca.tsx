@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { acaoAbrirNotaDoDia, acaoCapturaRapida, acaoCriarCaderno, acaoExportarTudo } from "@/app/acoes";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import type { Etiqueta, Modelo, NoArvore } from "@/lib/tipos";
+import type { Caderno, Etiqueta, Modelo } from "@/lib/tipos";
 
 import { Arvore } from "./arvore";
 import { DialogoNome } from "./dialogos";
@@ -53,7 +53,7 @@ async function baixarTudo(): Promise<void> {
  * página) passa a usar a cor daquele caderno.
  */
 export function Casca(props: {
-  cadernos: NoArvore[];
+  cadernos: Caderno[];
   etiquetas: Etiqueta[];
   modelos: Modelo[];
   children: React.ReactNode;
@@ -71,7 +71,7 @@ function CascaInterna({
   modelos,
   children,
 }: {
-  cadernos: NoArvore[];
+  cadernos: Caderno[];
   etiquetas: Etiqueta[];
   modelos: Modelo[];
   children: React.ReactNode;
