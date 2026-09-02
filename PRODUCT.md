@@ -79,9 +79,10 @@ limpas e abríveis em qualquer editor.
   na hora de criar uma página em markdown, um menu opcional deixa começar
   já com o modelo escolhido em vez de em branco.
 - Captura rápida (`Ctrl+Shift+N`) e a nota do dia (`Ctrl+Shift+D`, sempre a
-  mesma página por data) caem no caderno "Entrada" — um caderno de verdade,
-  visível e renomeável na árvore como qualquer outro, não uma pasta
-  escondida. "Toda nota mora dentro de um caderno", mesmo as soltas.
+  mesma página por data) caem na seção "Geral" do caderno "Entrada" — um
+  caderno de verdade, visível e renomeável na tira de cadernos como
+  qualquer outro, não uma pasta escondida. "Toda nota mora dentro de uma
+  seção", mesmo as soltas.
 - Colar uma imagem (print, cópia de outro app) direto no editor de markdown
   salva o arquivo numa subpasta `_anexos/` ao lado da nota e insere
   `![](_anexos/arquivo.png)` — caminho relativo de verdade, que continua

@@ -26,6 +26,17 @@ export function urlDaMidia(caminho: string): string {
 }
 
 /**
+ * Nome do caderno implícito no endereço atual (`/secao/...` ou `/nota/...`),
+ * ou `null` fora dessas rotas (início, etiquetas, grafo...) — decide qual
+ * caderno aparece "aberto" na tira de cadernos no topo da tela.
+ */
+export function cadernoDaUrl(pathname: string): string | null {
+  const semPrefixo = decodeURIComponent(pathname).replace(/^\/(nota|secao)\//, "");
+  if (semPrefixo === pathname) return null;
+  return semPrefixo.split("/")[0] || null;
+}
+
+/**
  * Remonta o caminho a partir dos segmentos da URL.
  *
  * O Next entrega os segmentos como estão no endereço, ainda codificados — sem

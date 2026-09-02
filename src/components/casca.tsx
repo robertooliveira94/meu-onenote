@@ -12,7 +12,6 @@ import {
   NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   PocketKnife,
   Search,
   Sun,
@@ -21,17 +20,18 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 
-import { acaoAbrirNotaDoDia, acaoCapturaRapida, acaoCriarCaderno, acaoExportarTudo } from "@/app/acoes";
+import { acaoAbrirNotaDoDia, acaoCapturaRapida, acaoExportarTudo } from "@/app/acoes";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
+import { cadernoDaUrl } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo } from "@/lib/tipos";
 
-import { Arvore } from "./arvore";
-import { DialogoNome } from "./dialogos";
+import { ColunaSecoes } from "./coluna-secoes";
 import { PaletaBusca } from "./paleta-busca";
+import { SeletorDeCadernos } from "./seletor-cadernos";
 import { AlcaRedimensionar, BotaoIcone } from "./ui";
 
 /** Monta o vault inteiro num único arquivo no servidor e entrega ao navegador como download. */
@@ -77,9 +77,7 @@ function CascaInterna({
   children: React.ReactNode;
 }) {
   const caminhoAtual = usePathname();
-  const roteador = useRouter();
   const [buscaAberta, definirBuscaAberta] = useState(false);
-  const [criandoCaderno, definirCriandoCaderno] = useState(false);
   const [capturando, iniciarCaptura] = useTransition();
   const [indoParaHoje, iniciarIdaParaHoje] = useTransition();
   const [exportando, iniciarExportacao] = useTransition();
@@ -90,12 +88,13 @@ function CascaInterna({
   });
   const colunas = useColunas();
 
-  const corAtiva = useMemo(() => {
-    const semPrefixo = decodeURIComponent(caminhoAtual).replace(/^\/(nota|secao)\//, "");
-    if (semPrefixo === caminhoAtual) return null;
-    const caderno = cadernos.find((item) => item.nome === semPrefixo.split("/")[0]);
-    return caderno?.cor ?? null;
-  }, [caminhoAtual, cadernos]);
+  // O caderno "aberto" (implícito no endereço atual) decide a cor de
+  // destaque de tudo abaixo, e é quem passa suas seções para a coluna ao
+  // lado da tira de cadernos — fora de /secao/... e /nota/..., é null (a
+  // tela de início, etiquetas, grafo etc. não têm caderno "aberto").
+  const nomeCadernoAtivo = cadernoDaUrl(caminhoAtual);
+  const cadernoAtivo = cadernos.find((item) => item.nome === nomeCadernoAtivo) ?? null;
+  const corAtiva = cadernoAtivo?.cor ?? null;
 
   useEffect(() => {
     function aoTeclar(evento: KeyboardEvent) {
@@ -167,18 +166,6 @@ function CascaInterna({
           <BotaoTema />
         </div>
 
-        <div className="px-3 pb-3">
-          <button
-            type="button"
-            onClick={() => definirCriandoCaderno(true)}
-            className="transicao-realce flex h-9 w-full items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-semibold text-white shadow-[0_1px_2px_#16202e1f] hover:brightness-108 active:brightness-95"
-            style={{ background: "color-mix(in srgb, var(--realce) 70%, black)" }}
-          >
-            <Plus size={15} />
-            Novo caderno
-          </button>
-        </div>
-
         <div className="px-2 pb-2">
           <BotaoDaBarra
             icone={<Search size={14} />}
@@ -203,9 +190,7 @@ function CascaInterna({
 
         <div className="mx-3 h-px bg-linha" />
 
-        <Arvore cadernos={cadernos} modelos={modelos} />
-
-        <nav className="border-t border-linha p-2" aria-label="Atalhos">
+        <nav className="flex-1 overflow-y-auto p-2" aria-label="Atalhos">
           <Atalho href="/" icone={<House size={14} />} ativo={caminhoAtual === "/"}>
             Início
           </Atalho>
@@ -276,26 +261,20 @@ function CascaInterna({
         )}
       </aside>
 
-      <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <SeletorDeCadernos cadernos={cadernos} />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {cadernoAtivo ? (
+            <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} modelos={modelos} />
+          ) : null}
+          {children}
+        </div>
+      </main>
 
       <PaletaBusca
         aberta={buscaAberta}
         aoFechar={() => definirBuscaAberta(false)}
         etiquetas={etiquetas}
-      />
-
-      <DialogoNome
-        aberto={criandoCaderno}
-        titulo="Novo caderno"
-        descricao="Vira uma pasta de primeiro nível dentro de dados/."
-        rotulo="Nome do caderno"
-        textoBotao="Criar caderno"
-        aoFechar={() => definirCriandoCaderno(false)}
-        aoConfirmar={async (nome) => {
-          const resposta = await acaoCriarCaderno(nome);
-          if (resposta.ok) roteador.refresh();
-          return resposta.ok ? null : resposta.erro;
-        }}
       />
     </div>
   );

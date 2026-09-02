@@ -372,13 +372,22 @@ desenhar um cartão inteiro ao redor.
   ajuste.
 
 ### Navigation
-- **Árvore de cadernos:** item ativo ganha uma barra vertical de 2.5px na
-  cor do caderno, encostada na borda esquerda da linha, mais um fundo
-  `realce-medio` fraco atrás de todo o texto — a combinação de barra +
-  wash é o que sinaliza "você está aqui" sem depender só de cor de fundo.
+- **Tira de cadernos (topo da área de conteúdo):** um caderno é sempre o
+  nível mais alto — nunca fica aninhado dentro de outra coluna, como seções
+  ficavam antes. Vira uma lista horizontal, com rolagem própria se não
+  couber tudo: ícone + nome por chip, "+ Novo caderno" fixo no fim. Chip
+  ativo (o caderno implícito na URL atual) ganha fundo `realce-medio` e
+  peso de fonte — mesmo vocabulário de "você está aqui" que o resto do app
+  já usa, sem barra lateral aqui (não faz sentido numa lista horizontal).
+- **Coluna de seções:** existe só enquanto um caderno está aberto — sai da
+  tela inteira ao voltar para Início, Etiquetas, Grafo etc. Item ativo
+  ganha a mesma barra vertical de 2.5px na cor do caderno + wash de fundo
+  que a árvore antiga usava, herdada de quando seção e caderno dividiam a
+  mesma coluna.
 - **Atalhos fixos (Início, Etiquetas, Lixeira):** mesmo padrão de
-  wash + peso de fonte para o item ativo, sem a barra lateral (reservada à
-  árvore de cadernos).
+  wash + peso de fonte para o item ativo, na barra lateral esquerda —
+  que agora só carrega esses atalhos e busca/captura, nunca a estrutura de
+  cadernos.
 - **Mobile:** não há tratamento mobile — o app assume uso em desktop, como
   serviço local sempre aberto numa janela de navegador.
 
