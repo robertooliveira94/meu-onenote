@@ -391,6 +391,23 @@ desenhar um cartão inteiro ao redor.
 - **Mobile:** não há tratamento mobile — o app assume uso em desktop, como
   serviço local sempre aberto numa janela de navegador.
 
+### Arrastar para reordenar e mover
+- **Linha de encaixe (reordenar):** um traço de 2px na cor de destaque
+  ativa (`--realce`), encostado no topo ou na base da linha sobrevoada
+  (conforme o cursor está na metade de cima ou de baixo dela) — mesmo
+  vocabulário visual do anel de foco e da alça de redimensionar, então já é
+  um sinal reconhecido de "algo vai encaixar aqui" antes mesmo de soltar.
+- **Alvo inteiro destacado (mover para outro pai):** quando o item
+  arrastado é de um tipo diferente do que a linha representa (uma página
+  sobre uma seção, uma seção sobre um chip de caderno), a linha de encaixe
+  não faz sentido — a seção ou caderno inteiro ganha o mesmo fundo
+  `realce-medio` do estado ativo, porque a soltura ali não troca de posição
+  entre irmãos, muda de dono.
+- **Cursor:** `cursor-grab` em repouso sobre qualquer linha arrastável,
+  `cursor-grabbing` durante o arraste — a mudança de cursor já avisa que
+  aquele item pode ser pego, sem precisar de um ícone de "grip" extra
+  ocupando espaço numa coluna estreita.
+
 ### Wikilinks e Backlinks
 - **Link resolvido (`[[Nome]]` com página correspondente):** link comum do
   `next/link`, sem estilo extra — o texto já deixa claro que é um link; a

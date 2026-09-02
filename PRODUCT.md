@@ -66,7 +66,13 @@ limpas e abríveis em qualquer editor.
   a seção "Geral" recebe automaticamente qualquer página que apareça solta,
   seja de uma migração de versão anterior do app ou copiada ali por fora).
   Criar, renomear, mover (seção só entre cadernos; página só entre seções),
-  reordenar e excluir (vai para uma lixeira própria, recuperável).
+  reordenar e excluir (vai para uma lixeira própria, recuperável). Reordenar
+  e mover também dá pra fazer arrastando: seção arrastada para perto de
+  outra troca de posição, arrastada em cima de um caderno na tira do topo
+  muda de dono; página arrastada perto de outra troca de posição, arrastada
+  em cima de uma seção na coluna ao lado muda de seção. As setas "Subir" /
+  "Descer" e o "Mover para..." do menu continuam existindo, para quem
+  prefere não arrastar.
 - Página em markdown abre em modo leitura por padrão (renderizado, com
   realce de sintaxe); um botão "Editar" abre a edição lado a lado
   (texto cru + prévia ao vivo). Página em texto puro abre direto no editor,

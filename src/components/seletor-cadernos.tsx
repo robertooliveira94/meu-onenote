@@ -12,9 +12,11 @@ import {
   acaoDefinirIconeCaderno,
   acaoExcluir,
   acaoExportarSecao,
+  acaoMover,
   acaoRenomear,
   acaoReordenar,
 } from "@/app/acoes";
+import { lerCaminhoDeSecao, trazSecao } from "@/lib/arrastar";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import { cadernoDaUrl, urlDaSecao } from "@/lib/rotas";
 import type { Caderno } from "@/lib/tipos";
@@ -166,15 +168,39 @@ function ChipCaderno({
   aoAgir: (acao: Acao) => void;
 }) {
   const roteador = useRouter();
+  const caminhoAtual = usePathname();
+  const [sobrevoo, definirSobrevoo] = useState(false);
   // Abrir o caderno leva pra primeira seção dele — se ainda não tiver
   // nenhuma, cai na tela do próprio caderno, que já convida a criar uma.
   const endereco = urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
 
   return (
     <div
+      onDragOver={(evento) => {
+        if (!trazSecao(evento)) return;
+        evento.preventDefault();
+        evento.dataTransfer.dropEffect = "move";
+        definirSobrevoo(true);
+      }}
+      onDragLeave={() => definirSobrevoo(false)}
+      onDrop={async (evento) => {
+        if (!trazSecao(evento)) return;
+        evento.preventDefault();
+        definirSobrevoo(false);
+        const origem = lerCaminhoDeSecao(evento);
+        if (!origem) return;
+        const resposta = await acaoMover(origem, caderno.caminho);
+        if (!resposta.ok) return;
+        // A seção que estava aberta acabou de virar deste caderno: segue ela.
+        if (resposta.mensagem && decodeURIComponent(caminhoAtual) === `/secao/${origem}`) {
+          roteador.push(urlDaSecao(resposta.mensagem));
+        } else {
+          roteador.refresh();
+        }
+      }}
       className={clsx(
         "group flex shrink-0 items-center gap-1 rounded-lg pr-1 transition-colors",
-        ativo ? "bg-realce-medio" : "hover:bg-realce-fraco",
+        ativo || sobrevoo ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
       <Link href={endereco} className="flex items-center gap-1.5 py-1.5 pl-2.5">

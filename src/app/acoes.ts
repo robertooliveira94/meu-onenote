@@ -15,7 +15,9 @@ import {
   moverItem,
   renomearItem,
   reordenarNota,
+  reordenarNotasPara,
   reordenarPasta,
+  reordenarPastasPara,
   salvarAnexo,
 } from "@/lib/arquivos";
 import { PASTA_ENTRADA, PASTA_GERAL, juntar, limparNome, pastaDe } from "@/lib/caminhos";
@@ -173,6 +175,39 @@ export async function acaoReordenar(
     const validado = caminhoValido.parse(caminho);
     if (tipo === "nota") await reordenarNota(validado, direcao);
     else await reordenarPasta(validado, direcao);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+/**
+ * Regrava a ordem de todas as páginas de uma seção de uma vez — usada ao
+ * soltar uma página arrastada. `pasta` é só para validar que todo caminho
+ * da lista é mesmo dali; a ordem de verdade é a lista inteira, já com o
+ * item arrastado na posição nova.
+ */
+export async function acaoReordenarNotasPara(pasta: string, ordem: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const pastaValidada = caminhoValido.parse(pasta);
+    const lista = z.array(caminhoValido).max(2000).parse(ordem);
+    if (lista.some((caminho) => pastaDe(caminho) !== pastaValidada)) {
+      throw new Error("Uma das páginas não é desta seção");
+    }
+    await reordenarNotasPara(lista);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+/** Mesma ideia de `acaoReordenarNotasPara`, para as seções de um caderno. */
+export async function acaoReordenarSecoesPara(caderno: string, ordem: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const cadernoValidado = caminhoValido.parse(caderno);
+    const lista = z.array(caminhoValido).max(500).parse(ordem);
+    if (lista.some((caminho) => pastaDe(caminho) !== cadernoValidado)) {
+      throw new Error("Uma das seções não é deste caderno");
+    }
+    await reordenarPastasPara(lista);
   });
   atualizarTudo();
   return resposta;

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   acaoAlternarFavorita,
@@ -24,7 +24,9 @@ import {
   acaoMover,
   acaoRenomear,
   acaoReordenar,
+  acaoReordenarNotasPara,
 } from "@/app/acoes";
+import { calcularNovaOrdem, iniciarArrastoDePagina, lerCaminhoDePagina, trazPagina } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataCurta, urlDaNota } from "@/lib/rotas";
@@ -68,6 +70,29 @@ export function ListaPaginas({
   });
   const colunas = useColunas();
 
+  // Ordem local, pro arraste responder na hora — igual à coluna de seções:
+  // a ordem "de verdade" só volta depois de um round-trip com o servidor.
+  const [ordemLocal, definirOrdemLocal] = useState(() => notas.map((nota) => nota.caminho));
+  const [sobrevoo, definirSobrevoo] = useState<{ caminho: string; antes: boolean } | null>(null);
+  useEffect(() => {
+    definirOrdemLocal(notas.map((nota) => nota.caminho));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pasta, notas.map((nota) => nota.caminho).join("|")]);
+
+  const notasOrdenadas = ordemLocal
+    .map((caminho) => notas.find((nota) => nota.caminho === caminho))
+    .filter((nota): nota is ResumoNota => Boolean(nota));
+
+  function aoSoltarPagina(origem: string, alvoCaminho: string, antes: boolean) {
+    definirSobrevoo(null);
+    const nova = calcularNovaOrdem(ordemLocal, origem, alvoCaminho, antes);
+    if (!nova) return;
+    definirOrdemLocal(nova);
+    acaoReordenarNotasPara(pasta, nova).then((resposta) => {
+      if (!resposta.ok) roteador.refresh();
+    });
+  }
+
   return (
     <div
       className="relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-papel"
@@ -97,16 +122,43 @@ export function ListaPaginas({
           </p>
         ) : null}
 
-        {notas.map((nota) => {
+        {notasOrdenadas.map((nota) => {
           const ativa = nota.caminho === caminhoAtivo;
           const etiquetasDaNota = nota.etiquetas
             .map((id) => etiquetas.find((etiqueta) => etiqueta.id === id))
             .filter((etiqueta): etiqueta is Etiqueta => Boolean(etiqueta));
+          const linhaDeEncaixe = sobrevoo?.caminho === nota.caminho ? sobrevoo : null;
 
           return (
             <div
               key={nota.caminho}
-              className={clsx("cartao group relative", ativa && "shadow-[var(--sombra-cartao-alta)]")}
+              draggable
+              onDragStart={(evento) => iniciarArrastoDePagina(evento, nota.caminho)}
+              onDragOver={(evento) => {
+                if (!trazPagina(evento)) return;
+                evento.preventDefault();
+                evento.dataTransfer.dropEffect = "move";
+                const retangulo = evento.currentTarget.getBoundingClientRect();
+                definirSobrevoo({
+                  caminho: nota.caminho,
+                  antes: evento.clientY < retangulo.top + retangulo.height / 2,
+                });
+              }}
+              onDragLeave={() => definirSobrevoo((atual) => (atual?.caminho === nota.caminho ? null : atual))}
+              onDrop={(evento) => {
+                if (!trazPagina(evento)) return;
+                evento.preventDefault();
+                // Recalcula na hora em vez de confiar no estado guardado
+                // pelo último `dragover` — um drop rápido pode chegar antes
+                // desse estado atualizar numa nova renderização.
+                const retangulo = evento.currentTarget.getBoundingClientRect();
+                const antes = evento.clientY < retangulo.top + retangulo.height / 2;
+                aoSoltarPagina(lerCaminhoDePagina(evento), nota.caminho, antes);
+              }}
+              className={clsx(
+                "cartao group relative cursor-grab active:cursor-grabbing",
+                ativa && "shadow-[var(--sombra-cartao-alta)]",
+              )}
               style={
                 ativa
                   ? {
@@ -117,6 +169,13 @@ export function ListaPaginas({
                   : undefined
               }
             >
+              {linhaDeEncaixe ? (
+                <span
+                  className="pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full"
+                  style={{ background: "var(--realce)", [linhaDeEncaixe.antes ? "top" : "bottom"]: "-4px" }}
+                  aria-hidden
+                />
+              ) : null}
               <Link href={urlDaNota(nota.caminho)} className={clsx("block px-3.5", ativa ? "pt-3.5 pb-3" : "py-3")}>
                 <div className="flex items-center gap-1.5">
                   {nota.favorita ? (

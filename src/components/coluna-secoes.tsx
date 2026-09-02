@@ -4,12 +4,28 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, Download, FilePlus2, MoreHorizontal, MoveRight, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { acaoCriarSecao, acaoExcluir, acaoExportarSecao, acaoMover, acaoRenomear, acaoReordenar } from "@/app/acoes";
+import {
+  acaoCriarSecao,
+  acaoExcluir,
+  acaoExportarSecao,
+  acaoMover,
+  acaoRenomear,
+  acaoReordenar,
+  acaoReordenarSecoesPara,
+} from "@/app/acoes";
+import {
+  calcularNovaOrdem,
+  iniciarArrastoDeSecao,
+  lerCaminhoDePagina,
+  lerCaminhoDeSecao,
+  trazPagina,
+  trazSecao,
+} from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import { urlDaSecao } from "@/lib/rotas";
+import { urlDaNota, urlDaSecao } from "@/lib/rotas";
 import type { Caderno, Modelo, Secao } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
@@ -21,6 +37,14 @@ type Acao = {
   tipo: "nova-secao" | "nova-pagina" | "renomear" | "mover" | "excluir";
   alvo: Alvo;
 } | null;
+
+/**
+ * Onde um item arrastado ficaria se soltasse agora — pra desenhar o
+ * indicador certo: uma linha de encaixe (`tipo: "secao"`, reordena entre
+ * seções) ou a seção inteira destacada (`tipo: "pagina"`, ela vira o novo
+ * lar da página largada em cima).
+ */
+type Sobrevoo = { caminho: string; antes: boolean; tipo: "secao" | "pagina" } | null;
 
 /** Monta o arquivo no servidor e entrega ao navegador como download. */
 async function baixarSecao(caminho: string): Promise<void> {
@@ -54,12 +78,27 @@ export function ColunaSecoes({
   const caminhoAtual = usePathname();
   const roteador = useRouter();
   const [acao, definirAcao] = useState<Acao>(null);
+  const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
     padrao: 190,
     minima: 140,
     maxima: 340,
   });
   const colunas = useColunas();
+
+  // Ordem local, para o arraste responder na hora — a ordem "de verdade"
+  // (no índice, em disco) só chega de volta depois de um round-trip com o
+  // servidor. Sincroniza de novo sempre que o caderno aberto muda, ou
+  // quando a lista de seções dele muda por outro caminho (criar, excluir).
+  const [ordemLocal, definirOrdemLocal] = useState(() => caderno.secoes.map((secao) => secao.caminho));
+  useEffect(() => {
+    definirOrdemLocal(caderno.secoes.map((secao) => secao.caminho));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caderno.caminho, caderno.secoes.map((secao) => secao.caminho).join("|")]);
+
+  const secoesOrdenadas = ordemLocal
+    .map((caminho) => caderno.secoes.find((secao) => secao.caminho === caminho))
+    .filter((secao): secao is Secao => Boolean(secao));
 
   const fechar = () => definirAcao(null);
   const alvo = acao?.alvo ?? null;
@@ -68,11 +107,37 @@ export function ColunaSecoes({
     roteador.refresh();
   }
 
-  /** A página aberta está dentro da seção prestes a ser excluída? */
+  /** A página aberta está dentro da seção prestes a ser excluída (ou movida)? */
   function estaDentroDoQueSeraExcluido(caminhoExcluido: string): boolean {
     const semPrefixo = decodeURIComponent(caminhoAtual).replace(/^\/(secao|nota)\//, "");
     if (semPrefixo === caminhoAtual) return false;
     return semPrefixo === caminhoExcluido || semPrefixo.startsWith(`${caminhoExcluido}/`);
+  }
+
+  /** Arrastou uma seção pra perto de outra — reordena as duas na hora, sem esperar o servidor. */
+  function aoSoltarSecao(origem: string, alvoCaminho: string, antes: boolean) {
+    definirSobrevoo(null);
+    const nova = calcularNovaOrdem(ordemLocal, origem, alvoCaminho, antes);
+    if (!nova) return;
+    definirOrdemLocal(nova);
+    acaoReordenarSecoesPara(caderno.caminho, nova).then((resposta) => {
+      if (!resposta.ok) atualizar();
+    });
+  }
+
+  /** Arrastou uma página (de outra coluna) até aqui — muda ela pra esta seção. */
+  async function aoSoltarPagina(origem: string, secaoAlvo: Secao) {
+    definirSobrevoo(null);
+    const resposta = await acaoMover(origem, secaoAlvo.caminho);
+    if (!resposta.ok) return;
+    // Só troca de tela se a página movida era a que estava aberta — mover
+    // uma página qualquer não deveria puxar a pessoa pra longe do que ela
+    // estava lendo.
+    if (resposta.mensagem && decodeURIComponent(caminhoAtual) === `/nota/${origem}`) {
+      roteador.push(urlDaNota(resposta.mensagem));
+    } else {
+      atualizar();
+    }
   }
 
   return (
@@ -94,18 +159,23 @@ export function ColunaSecoes({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label={`Seções de ${caderno.nome}`}>
-        {caderno.secoes.length === 0 ? (
+        {secoesOrdenadas.length === 0 ? (
           <p className="px-2 py-3 text-[12px] leading-relaxed text-tinta-3">
             Nenhuma seção ainda. Use o “+” acima para criar a primeira.
           </p>
         ) : (
-          caderno.secoes.map((secao) => (
+          secoesOrdenadas.map((secao) => (
             <LinhaSecao
               key={secao.caminho}
               caderno={caderno}
               secao={secao}
               caminhoAtual={caminhoAtual}
               aoAgir={definirAcao}
+              sobrevoo={sobrevoo?.caminho === secao.caminho ? sobrevoo : null}
+              aoPassarPorCima={(antes, tipo) => definirSobrevoo({ caminho: secao.caminho, antes, tipo })}
+              aoSairDeCima={() => definirSobrevoo((atual) => (atual?.caminho === secao.caminho ? null : atual))}
+              aoSoltarSecao={(origem, antes) => aoSoltarSecao(origem, secao.caminho, antes)}
+              aoSoltarPagina={(origem) => aoSoltarPagina(origem, secao)}
             />
           ))
         )}
@@ -202,11 +272,21 @@ function LinhaSecao({
   secao,
   caminhoAtual,
   aoAgir,
+  sobrevoo,
+  aoPassarPorCima,
+  aoSairDeCima,
+  aoSoltarSecao,
+  aoSoltarPagina,
 }: {
   caderno: Caderno;
   secao: Secao;
   caminhoAtual: string;
   aoAgir: (acao: Acao) => void;
+  sobrevoo: Sobrevoo;
+  aoPassarPorCima: (antes: boolean, tipo: "secao" | "pagina") => void;
+  aoSairDeCima: () => void;
+  aoSoltarSecao: (origem: string, antes: boolean) => void;
+  aoSoltarPagina: (origem: string) => void;
 }) {
   const roteador = useRouter();
   const endereco = urlDaSecao(secao.caminho);
@@ -217,15 +297,52 @@ function LinhaSecao({
 
   return (
     <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeSecao(evento, secao.caminho)}
+      onDragOver={(evento) => {
+        if (!trazSecao(evento) && !trazPagina(evento)) return;
+        evento.preventDefault();
+        evento.dataTransfer.dropEffect = "move";
+        if (trazSecao(evento)) {
+          const retangulo = evento.currentTarget.getBoundingClientRect();
+          aoPassarPorCima(evento.clientY < retangulo.top + retangulo.height / 2, "secao");
+        } else {
+          aoPassarPorCima(false, "pagina");
+        }
+      }}
+      onDragLeave={aoSairDeCima}
+      onDrop={(evento) => {
+        if (trazSecao(evento)) {
+          evento.preventDefault();
+          // Recalcula na hora em vez de confiar no `sobrevoo` guardado pelo
+          // último `dragover`: como aquele valor só chega numa próxima
+          // renderização, um drop rápido logo depois de entrar na linha
+          // podia pegar o fechamento (closure) de antes do estado atualizar.
+          const retangulo = evento.currentTarget.getBoundingClientRect();
+          const antes = evento.clientY < retangulo.top + retangulo.height / 2;
+          aoSoltarSecao(lerCaminhoDeSecao(evento), antes);
+        } else if (trazPagina(evento)) {
+          evento.preventDefault();
+          aoSoltarPagina(lerCaminhoDePagina(evento));
+        }
+      }}
       className={clsx(
-        "group relative flex items-center gap-0.5 rounded-md pr-1 transition-colors",
-        ativa ? "bg-realce-medio" : "hover:bg-realce-fraco",
+        "group relative flex cursor-grab items-center gap-0.5 rounded-md pr-1 transition-colors active:cursor-grabbing",
+        ativa || sobrevoo?.tipo === "pagina" ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
       {ativa ? (
         <span
           className="barra-ativa absolute top-1 bottom-1 left-0 w-[2.5px] rounded-full"
           style={{ background: caderno.cor }}
+          aria-hidden
+        />
+      ) : null}
+
+      {sobrevoo?.tipo === "secao" ? (
+        <span
+          className="pointer-events-none absolute inset-x-2 h-0.5 rounded-full"
+          style={{ background: "var(--realce)", [sobrevoo.antes ? "top" : "bottom"]: 0 }}
           aria-hidden
         />
       ) : null}

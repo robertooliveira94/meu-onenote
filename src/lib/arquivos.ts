@@ -579,6 +579,28 @@ export async function reordenarPasta(caminho: string, direcao: -1 | 1): Promise<
   });
 }
 
+/**
+ * Regrava a ordem de um grupo de páginas (mesma seção) ou seções (mesmo
+ * caderno) de uma vez, na sequência exata dada — usado ao soltar um item
+ * arrastado, que já chega sabendo a ordem final, em vez de "subir uma
+ * posição" repetidas vezes como `reordenarNota`/`reordenarPasta`.
+ */
+export async function reordenarNotasPara(ordemDosCaminhos: string[]): Promise<void> {
+  await atualizarIndice((indice) => {
+    ordemDosCaminhos.forEach((caminho, posicao) => {
+      entradaDaNota(indice, caminho).ordem = posicao;
+    });
+  });
+}
+
+export async function reordenarPastasPara(ordemDosCaminhos: string[]): Promise<void> {
+  await atualizarIndice((indice) => {
+    ordemDosCaminhos.forEach((caminho, posicao) => {
+      entradaDaPasta(indice, caminho).ordem = posicao;
+    });
+  });
+}
+
 export async function notasRecentes(limite = 8): Promise<ResumoNota[]> {
   await sincronizarIndice();
   const indice = await lerIndice();
