@@ -379,15 +379,19 @@ desenhar um cartão inteiro ao redor.
   ativo (o caderno implícito na URL atual) ganha fundo `realce-medio` e
   peso de fonte — mesmo vocabulário de "você está aqui" que o resto do app
   já usa, sem barra lateral aqui (não faz sentido numa lista horizontal).
-- **Coluna de seções:** existe só enquanto um caderno está aberto — sai da
-  tela inteira ao voltar para Início, Etiquetas, Grafo etc. Item ativo
-  ganha a mesma barra vertical de 2.5px na cor do caderno + wash de fundo
-  que a árvore antiga usava, herdada de quando seção e caderno dividiam a
-  mesma coluna.
-- **Atalhos fixos (Início, Etiquetas, Lixeira):** mesmo padrão de
-  wash + peso de fonte para o item ativo, na barra lateral esquerda —
-  que agora só carrega esses atalhos e busca/captura, nunca a estrutura de
-  cadernos.
+- **Coluna de navegação:** uma coluna só, sempre visível — logo, busca,
+  captura rápida e tema no topo; os atalhos fixos (Início, Etiquetas,
+  Grafo, Tarefas, Modelos, Web Clipper, Hoje, Exportar tudo, Lixeira) no
+  rodapé; as seções do caderno aberto no meio, só quando há um caderno
+  aberto (fora de /secao, /nota e /kanban esse meio fica vazio, e a coluna
+  vira só os atalhos). Item de seção ativo ganha a mesma barra vertical de
+  2.5px na cor do caderno + wash de fundo que a árvore antiga usava.
+- **Recolher coluna a coluna:** a coluna de navegação e a de páginas
+  recolhem cada uma por conta própria (não é mais um "modo foco" único que
+  esconde as duas juntas) — cada botão de recolher vira uma barra fina de
+  40px com só o ícone pra abrir de novo, nunca desaparece de vez. Ter
+  sempre uma faixa visível é o que faz o botão de reabrir nunca ficar
+  "perdido" em outro lugar da tela.
 - **Mobile:** não há tratamento mobile — o app assume uso em desktop, como
   serviço local sempre aberto numa janela de navegador.
 

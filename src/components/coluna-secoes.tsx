@@ -1,15 +1,43 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Download, FilePlus2, MoreHorizontal, MoveRight, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarDays,
+  Download,
+  FilePlus2,
+  GitBranch,
+  House,
+  KanbanSquare,
+  LayoutTemplate,
+  ListChecks,
+  Moon,
+  MoreHorizontal,
+  MoveRight,
+  NotebookPen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  PocketKnife,
+  Plus,
+  Search,
+  Sun,
+  Tag,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
+  acaoAbrirNotaDoDia,
+  acaoCapturaRapida,
   acaoCriarSecao,
   acaoExcluir,
   acaoExportarSecao,
+  acaoExportarTudo,
   acaoMover,
   acaoRenomear,
   acaoReordenar,
@@ -25,11 +53,12 @@ import {
 } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import { urlDaNota, urlDaSecao } from "@/lib/rotas";
-import type { Caderno, Modelo, Secao } from "@/lib/tipos";
+import { urlDaNota, urlDaSecao, urlDoKanban } from "@/lib/rotas";
+import type { Caderno, Etiqueta, Modelo, Secao } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
 import { DialogoNovaPagina } from "./dialogo-nova-pagina";
+import { PaletaBusca } from "./paleta-busca";
 import { AlcaRedimensionar, BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
 type Alvo = { caminho: string; nome: string };
@@ -46,6 +75,9 @@ type Acao = {
  */
 type Sobrevoo = { caminho: string; antes: boolean; tipo: "secao" | "pagina" } | null;
 
+const CLASSE_ICONE_LINK =
+  "inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta";
+
 /** Monta o arquivo no servidor e entrega ao navegador como download. */
 async function baixarSecao(caminho: string): Promise<void> {
   const { nome, conteudo } = await acaoExportarSecao(caminho);
@@ -57,47 +89,65 @@ async function baixarSecao(caminho: string): Promise<void> {
   URL.revokeObjectURL(endereco);
 }
 
+/** Monta o vault inteiro num único arquivo no servidor e entrega ao navegador como download. */
+async function baixarTudo(): Promise<void> {
+  const { nome, conteudo } = await acaoExportarTudo();
+  const endereco = URL.createObjectURL(new Blob([conteudo], { type: "text/markdown" }));
+  const link = document.createElement("a");
+  link.href = endereco;
+  link.download = nome;
+  link.click();
+  URL.revokeObjectURL(endereco);
+}
+
 /**
- * As seções do caderno aberto no momento — nunca de outro. Diferente da
- * antiga árvore (que mostrava todo caderno com tudo dentro, sempre), esta
- * coluna só existe enquanto um caderno está aberto (ver `cadernoDaUrl`), e
- * troca de conteúdo inteira quando a pessoa abre outro caderno na tira do
- * topo.
+ * A coluna de navegação: sempre visível (busca, captura rápida, tema e os
+ * atalhos fixos no rodapé), com as seções do caderno aberto no meio quando
+ * houver um. Substitui a antiga barra lateral inteira — não há mais uma
+ * coluna à parte só para essas ações.
  */
 export function ColunaSecoes({
   caderno,
   cadernos,
+  etiquetas,
   modelos,
 }: {
-  /** O caderno aberto — cujas seções aparecem na coluna. */
-  caderno: Caderno;
+  /** O caderno aberto — cujas seções aparecem no meio da coluna. `null` fora de /secao, /nota e /kanban. */
+  caderno: Caderno | null;
   /** Todos os cadernos — só para o diálogo "Mover para" oferecer os outros como destino. */
   cadernos: Caderno[];
+  etiquetas: Etiqueta[];
   modelos: Modelo[];
 }) {
   const caminhoAtual = usePathname();
   const roteador = useRouter();
   const [acao, definirAcao] = useState<Acao>(null);
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
+  const [buscaAberta, definirBuscaAberta] = useState(false);
+  const [capturando, iniciarCaptura] = useTransition();
+  const [indoParaHoje, iniciarIdaParaHoje] = useTransition();
+  const [exportando, iniciarExportacao] = useTransition();
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
-    padrao: 190,
-    minima: 140,
-    maxima: 340,
+    padrao: 220,
+    minima: 170,
+    maxima: 360,
   });
   const colunas = useColunas();
+  const recolhida = colunas.recolhida("secoes");
 
   // Ordem local, para o arraste responder na hora — a ordem "de verdade"
   // (no índice, em disco) só chega de volta depois de um round-trip com o
   // servidor. Sincroniza de novo sempre que o caderno aberto muda, ou
   // quando a lista de seções dele muda por outro caminho (criar, excluir).
-  const [ordemLocal, definirOrdemLocal] = useState(() => caderno.secoes.map((secao) => secao.caminho));
+  const secoesDoCaderno = caderno?.secoes ?? [];
+  const [ordemLocal, definirOrdemLocal] = useState(() => secoesDoCaderno.map((secao) => secao.caminho));
   useEffect(() => {
-    definirOrdemLocal(caderno.secoes.map((secao) => secao.caminho));
+    definirOrdemLocal(secoesDoCaderno.map((secao) => secao.caminho));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caderno.caminho, caderno.secoes.map((secao) => secao.caminho).join("|")]);
+  }, [caderno?.caminho, secoesDoCaderno.map((secao) => secao.caminho).join("|")]);
 
   const secoesOrdenadas = ordemLocal
-    .map((caminho) => caderno.secoes.find((secao) => secao.caminho === caminho))
+    .map((caminho) => secoesDoCaderno.find((secao) => secao.caminho === caminho))
     .filter((secao): secao is Secao => Boolean(secao));
 
   const fechar = () => definirAcao(null);
@@ -117,6 +167,7 @@ export function ColunaSecoes({
   /** Arrastou uma seção pra perto de outra — reordena as duas na hora, sem esperar o servidor. */
   function aoSoltarSecao(origem: string, alvoCaminho: string, antes: boolean) {
     definirSobrevoo(null);
+    if (!caderno) return;
     const nova = calcularNovaOrdem(ordemLocal, origem, alvoCaminho, antes);
     if (!nova) return;
     definirOrdemLocal(nova);
@@ -140,46 +191,208 @@ export function ColunaSecoes({
     }
   }
 
+  useEffect(() => {
+    function aoTeclar(evento: KeyboardEvent) {
+      const combinando = evento.ctrlKey || evento.metaKey;
+      if (combinando && evento.key.toLowerCase() === "k") {
+        evento.preventDefault();
+        definirBuscaAberta(true);
+      }
+      if (combinando && evento.shiftKey && evento.key.toLowerCase() === "n") {
+        evento.preventDefault();
+        iniciarCaptura(async () => {
+          await acaoCapturaRapida();
+        });
+      }
+      if (combinando && evento.shiftKey && evento.key.toLowerCase() === "d") {
+        evento.preventDefault();
+        iniciarIdaParaHoje(async () => {
+          await acaoAbrirNotaDoDia();
+        });
+      }
+    }
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, []);
+
+  if (recolhida) {
+    return (
+      <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-superficie pt-3">
+        <BotaoIcone rotulo="Mostrar seções e atalhos" onClick={() => colunas.alternar("secoes")}>
+          <PanelLeftOpen size={15} />
+        </BotaoIcone>
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-superficie"
-      style={{ width: colunas.recolhidas ? 0 : largura.largura }}
-      aria-hidden={colunas.recolhidas}
-      inert={colunas.recolhidas}
+      style={{ width: largura.largura }}
     >
-      <div className="flex items-center justify-between px-3.5 pt-3 pb-1.5">
-        <span className="text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">Seções</span>
-        <BotaoIcone
-          rotulo={`Nova seção em ${caderno.nome}`}
-          onClick={() => definirAcao({ tipo: "nova-secao", alvo: { caminho: caderno.caminho, nome: caderno.nome } })}
-          className="size-6"
-        >
-          <Plus size={14} />
+      <div className="flex items-center gap-2 px-3.5 py-3">
+        <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span
+            className="transicao-realce flex size-7 shrink-0 items-center justify-center rounded-lg text-[14px] text-white"
+            style={{ background: "var(--realce)" }}
+            aria-hidden
+          >
+            <NotebookPen size={15} />
+          </span>
+          <span className="truncate text-[13.5px] font-bold tracking-[-0.01em]">
+            Meu bloco de anotações
+          </span>
+        </Link>
+        <BotaoIcone rotulo="Recolher seções" onClick={() => colunas.alternar("secoes")}>
+          <PanelLeftClose size={14} />
         </BotaoIcone>
+        <BotaoTema />
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label={`Seções de ${caderno.nome}`}>
-        {secoesOrdenadas.length === 0 ? (
-          <p className="px-2 py-3 text-[12px] leading-relaxed text-tinta-3">
-            Nenhuma seção ainda. Use o “+” acima para criar a primeira.
-          </p>
-        ) : (
-          secoesOrdenadas.map((secao) => (
-            <LinhaSecao
-              key={secao.caminho}
-              caderno={caderno}
-              secao={secao}
-              caminhoAtual={caminhoAtual}
-              aoAgir={definirAcao}
-              sobrevoo={sobrevoo?.caminho === secao.caminho ? sobrevoo : null}
-              aoPassarPorCima={(antes, tipo) => definirSobrevoo({ caminho: secao.caminho, antes, tipo })}
-              aoSairDeCima={() => definirSobrevoo((atual) => (atual?.caminho === secao.caminho ? null : atual))}
-              aoSoltarSecao={(origem, antes) => aoSoltarSecao(origem, secao.caminho, antes)}
-              aoSoltarPagina={(origem) => aoSoltarPagina(origem, secao)}
-            />
-          ))
-        )}
+      <div className="px-2 pb-2">
+        <BotaoDaBarra
+          icone={<Search size={14} />}
+          atalho="Ctrl K"
+          onClick={() => definirBuscaAberta(true)}
+        >
+          Buscar
+        </BotaoDaBarra>
+        <BotaoDaBarra
+          icone={<Zap size={14} />}
+          atalho="Ctrl ⇧ N"
+          disabled={capturando}
+          onClick={() =>
+            iniciarCaptura(async () => {
+              await acaoCapturaRapida();
+            })
+          }
+        >
+          Captura rápida
+        </BotaoDaBarra>
+      </div>
+
+      <div className="mx-3 h-px bg-linha" />
+
+      {caderno ? (
+        <>
+          <div className="flex items-center justify-between px-3.5 pt-3 pb-1.5">
+            <span className="text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">Seções</span>
+            <div className="flex items-center gap-0.5">
+              <Link
+                href={urlDoKanban(caderno.caminho)}
+                title={`Kanban de ${caderno.nome}`}
+                aria-label={`Kanban de ${caderno.nome}`}
+                className={CLASSE_ICONE_LINK}
+              >
+                <KanbanSquare size={14} />
+              </Link>
+              <BotaoIcone
+                rotulo={`Nova seção em ${caderno.nome}`}
+                onClick={() =>
+                  definirAcao({ tipo: "nova-secao", alvo: { caminho: caderno.caminho, nome: caderno.nome } })
+                }
+              >
+                <Plus size={14} />
+              </BotaoIcone>
+            </div>
+          </div>
+
+          <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" aria-label={`Seções de ${caderno.nome}`}>
+            {secoesOrdenadas.length === 0 ? (
+              <p className="px-2 py-3 text-[12px] leading-relaxed text-tinta-3">
+                Nenhuma seção ainda. Use o “+” acima para criar a primeira.
+              </p>
+            ) : (
+              secoesOrdenadas.map((secao) => (
+                <LinhaSecao
+                  key={secao.caminho}
+                  caderno={caderno}
+                  secao={secao}
+                  caminhoAtual={caminhoAtual}
+                  aoAgir={definirAcao}
+                  sobrevoo={sobrevoo?.caminho === secao.caminho ? sobrevoo : null}
+                  aoPassarPorCima={(antes, tipo) => definirSobrevoo({ caminho: secao.caminho, antes, tipo })}
+                  aoSairDeCima={() => definirSobrevoo((atual) => (atual?.caminho === secao.caminho ? null : atual))}
+                  aoSoltarSecao={(origem, antes) => aoSoltarSecao(origem, secao.caminho, antes)}
+                  aoSoltarPagina={(origem) => aoSoltarPagina(origem, secao)}
+                />
+              ))
+            )}
+          </nav>
+
+          <div className="mx-3 h-px bg-linha" />
+        </>
+      ) : (
+        <div className="min-h-0 flex-1" />
+      )}
+
+      <nav className="shrink-0 overflow-y-auto p-2" aria-label="Atalhos">
+        <Atalho href="/" icone={<House size={14} />} ativo={caminhoAtual === "/"}>
+          Início
+        </Atalho>
+        <Atalho
+          href="/etiquetas"
+          icone={<Tag size={14} />}
+          ativo={caminhoAtual.startsWith("/etiquetas")}
+        >
+          Etiquetas
+        </Atalho>
+        <Atalho
+          href="/grafo"
+          icone={<GitBranch size={14} />}
+          ativo={caminhoAtual.startsWith("/grafo")}
+        >
+          Grafo
+        </Atalho>
+        <Atalho
+          href="/tarefas"
+          icone={<ListChecks size={14} />}
+          ativo={caminhoAtual.startsWith("/tarefas")}
+        >
+          Tarefas
+        </Atalho>
+        <Atalho
+          href="/modelos"
+          icone={<LayoutTemplate size={14} />}
+          ativo={caminhoAtual.startsWith("/modelos")}
+        >
+          Modelos
+        </Atalho>
+        <Atalho
+          href="/clipper"
+          icone={<PocketKnife size={14} />}
+          ativo={caminhoAtual.startsWith("/clipper")}
+        >
+          Web Clipper
+        </Atalho>
+        <AtalhoBotao
+          icone={<CalendarDays size={14} />}
+          disabled={indoParaHoje}
+          onClick={() =>
+            iniciarIdaParaHoje(async () => {
+              await acaoAbrirNotaDoDia();
+            })
+          }
+        >
+          Hoje
+        </AtalhoBotao>
+        <AtalhoBotao icone={<Download size={14} />} disabled={exportando} onClick={() => iniciarExportacao(baixarTudo)}>
+          Exportar tudo
+        </AtalhoBotao>
+        <Atalho
+          href="/lixeira"
+          icone={<Trash2 size={14} />}
+          ativo={caminhoAtual.startsWith("/lixeira")}
+        >
+          Lixeira
+        </Atalho>
       </nav>
+
+      <AlcaRedimensionar
+        aoArrastar={largura.iniciarArraste}
+        aoRestaurar={largura.restaurarPadrao}
+        rotulo="Redimensionar a coluna de seções"
+      />
 
       <DialogoNome
         aberto={acao?.tipo === "nova-secao"}
@@ -219,7 +432,7 @@ export function ColunaSecoes({
         caminhoAtual={alvo?.caminho ?? ""}
         aoFechar={fechar}
         aoConfirmar={async (destino) => {
-          if (!alvo) return null;
+          if (!alvo || !caderno) return null;
           const resposta = await acaoMover(alvo.caminho, destino);
           if (resposta.ok) {
             atualizar();
@@ -238,7 +451,7 @@ export function ColunaSecoes({
         textoBotao="Mandar para a lixeira"
         aoFechar={fechar}
         aoConfirmar={async () => {
-          if (!alvo) return null;
+          if (!alvo || !caderno) return null;
           const resposta = await acaoExcluir(alvo.caminho);
           if (!resposta.ok) return resposta.erro;
           if (estaDentroDoQueSeraExcluido(alvo.caminho)) roteador.push(urlDaSecao(caderno.caminho));
@@ -255,14 +468,110 @@ export function ColunaSecoes({
         aoFechar={fechar}
       />
 
-      {colunas.recolhidas ? null : (
-        <AlcaRedimensionar
-          aoArrastar={largura.iniciarArraste}
-          aoRestaurar={largura.restaurarPadrao}
-          rotulo="Redimensionar a coluna de seções"
-        />
-      )}
+      <PaletaBusca aberta={buscaAberta} aoFechar={() => definirBuscaAberta(false)} etiquetas={etiquetas} />
     </div>
+  );
+}
+
+/** Linha clicável da coluna, com o atalho de teclado à direita. */
+function BotaoDaBarra({
+  icone,
+  atalho,
+  children,
+  ...resto
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  icone: React.ReactNode;
+  atalho?: string;
+}) {
+  return (
+    <button
+      type="button"
+      {...resto}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-left text-[12.5px] text-tinta-2 transition-colors hover:bg-realce-fraco hover:text-tinta disabled:opacity-50"
+    >
+      <span className="text-tinta-3">{icone}</span>
+      <span className="flex-1 truncate">{children}</span>
+      {atalho ? <kbd className="font-mono text-[10px] text-tinta-3">{atalho}</kbd> : null}
+    </button>
+  );
+}
+
+function Atalho({
+  href,
+  icone,
+  ativo,
+  children,
+}: {
+  href: string;
+  icone: React.ReactNode;
+  ativo: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={clsx(
+        "flex items-center gap-2.5 rounded-md px-2 py-[5px] text-[12.5px] transition-colors",
+        ativo ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
+      )}
+    >
+      <span className="text-tinta-3">{icone}</span>
+      {children}
+    </Link>
+  );
+}
+
+/** Mesma cara do Atalho, mas dispara uma ação em vez de ir para um link fixo
+ * — usado por "Hoje", cujo endereço depende da data e só se sabe no servidor. */
+function AtalhoBotao({
+  icone,
+  disabled,
+  onClick,
+  children,
+}: {
+  icone: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-left text-[12.5px] text-tinta-2 transition-colors hover:bg-realce-fraco hover:text-tinta disabled:opacity-50"
+    >
+      <span className="text-tinta-3">{icone}</span>
+      {children}
+    </button>
+  );
+}
+
+function BotaoTema() {
+  const [tema, definirTema] = useState<"claro" | "escuro">("claro");
+
+  useEffect(() => {
+    definirTema(document.documentElement.dataset.tema === "escuro" ? "escuro" : "claro");
+  }, []);
+
+  function alternar() {
+    const proximo = tema === "claro" ? "escuro" : "claro";
+    document.documentElement.dataset.tema = proximo;
+    definirTema(proximo);
+    try {
+      localStorage.setItem("tema", proximo);
+    } catch {
+      // Sem armazenamento: o tema vale só para esta sessão.
+    }
+  }
+
+  return (
+    <BotaoIcone
+      rotulo={tema === "claro" ? "Usar tema escuro" : "Usar tema claro"}
+      onClick={alternar}
+    >
+      {tema === "claro" ? <Moon size={14} /> : <Sun size={14} />}
+    </BotaoIcone>
   );
 }
 

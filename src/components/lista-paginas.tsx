@@ -7,6 +7,8 @@ import {
   ArrowUp,
   MoreHorizontal,
   MoveRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Star,
@@ -93,12 +95,20 @@ export function ListaPaginas({
     });
   }
 
+  if (colunas.recolhida("paginas")) {
+    return (
+      <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-papel pt-3">
+        <BotaoIcone rotulo="Mostrar páginas" onClick={() => colunas.alternar("paginas")}>
+          <PanelLeftOpen size={15} />
+        </BotaoIcone>
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-papel"
-      style={{ width: colunas.recolhidas ? 0 : listaDePaginas.largura }}
-      aria-hidden={colunas.recolhidas}
-      inert={colunas.recolhidas}
+      style={{ width: listaDePaginas.largura }}
     >
       <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5">
         <div className="min-w-0">
@@ -109,9 +119,14 @@ export function ListaPaginas({
               : `${notas.length} ${notas.length === 1 ? "página" : "páginas"}`}
           </p>
         </div>
-        <BotaoIcone rotulo="Nova página" onClick={() => definirAcao({ tipo: "nova" })}>
-          <Plus size={15} />
-        </BotaoIcone>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <BotaoIcone rotulo="Nova página" onClick={() => definirAcao({ tipo: "nova" })}>
+            <Plus size={15} />
+          </BotaoIcone>
+          <BotaoIcone rotulo="Recolher páginas" onClick={() => colunas.alternar("paginas")}>
+            <PanelLeftClose size={14} />
+          </BotaoIcone>
+        </div>
       </div>
 
       <div className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
@@ -374,13 +389,11 @@ export function ListaPaginas({
         }}
       />
 
-      {colunas.recolhidas ? null : (
-        <AlcaRedimensionar
-          aoArrastar={listaDePaginas.iniciarArraste}
-          aoRestaurar={listaDePaginas.restaurarPadrao}
-          rotulo="Redimensionar a lista de páginas"
-        />
-      )}
+      <AlcaRedimensionar
+        aoArrastar={listaDePaginas.iniciarArraste}
+        aoRestaurar={listaDePaginas.restaurarPadrao}
+        rotulo="Redimensionar a lista de páginas"
+      />
     </div>
   );
 }

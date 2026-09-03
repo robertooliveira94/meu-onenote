@@ -20,6 +20,11 @@ export function urlDaEtiqueta(id: string): string {
   return `/etiquetas/${encodeURIComponent(id)}`;
 }
 
+/** O quadro Kanban de um caderno — um por caderno, nunca por seção. */
+export function urlDoKanban(caderno: string): string {
+  return `/kanban/${codificar(caderno)}`;
+}
+
 /** Onde uma imagem colada numa nota fica servível — ver src/app/midia. */
 export function urlDaMidia(caminho: string): string {
   return `/midia/${codificar(caminho)}`;
@@ -31,7 +36,7 @@ export function urlDaMidia(caminho: string): string {
  * caderno aparece "aberto" na tira de cadernos no topo da tela.
  */
 export function cadernoDaUrl(pathname: string): string | null {
-  const semPrefixo = decodeURIComponent(pathname).replace(/^\/(nota|secao)\//, "");
+  const semPrefixo = decodeURIComponent(pathname).replace(/^\/(nota|secao|kanban)\//, "");
   if (semPrefixo === pathname) return null;
   return semPrefixo.split("/")[0] || null;
 }

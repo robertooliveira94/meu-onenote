@@ -3,34 +3,46 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 /**
- * Recolher a barra lateral e a lista de páginas de uma vez, para escrever
- * com mais espaço. Um estado só, porque as duas colunas moram em componentes
- * diferentes (`Casca` e `ListaPaginas`, esta última dentro de `children`) e
- * o botão que alterna fica num terceiro lugar (o topo da barra lateral).
+ * Recolher a coluna de seções e a de páginas — cada uma por conta própria,
+ * não mais as duas juntas. Um contexto só porque cada botão de recolher
+ * mora dentro da própria coluna, mas o estado precisa sobreviver a essa
+ * coluna trocando de conteúdo (de caderno pra caderno, de seção pra seção)
+ * sem se perder.
  */
+export type Coluna = "secoes" | "paginas";
+
 const ColunasContexto = createContext<{
-  recolhidas: boolean;
-  alternar: () => void;
+  recolhida: (coluna: Coluna) => boolean;
+  alternar: (coluna: Coluna) => void;
 } | null>(null);
 
-const CHAVE = "colunas-recolhidas";
+const CHAVES: Record<Coluna, string> = {
+  secoes: "coluna-secoes-recolhida",
+  paginas: "coluna-paginas-recolhida",
+};
 
 export function ColunasProvedor({ children }: { children: React.ReactNode }) {
-  const [recolhidas, definirRecolhidas] = useState(false);
+  const [estado, definirEstado] = useState<Record<Coluna, boolean>>({
+    secoes: false,
+    paginas: false,
+  });
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(CHAVE) === "1") definirRecolhidas(true);
+      definirEstado({
+        secoes: localStorage.getItem(CHAVES.secoes) === "1",
+        paginas: localStorage.getItem(CHAVES.paginas) === "1",
+      });
     } catch {
-      // Sem armazenamento: começa sempre aberto.
+      // Sem armazenamento: as duas começam sempre abertas.
     }
   }, []);
 
-  function alternar() {
-    definirRecolhidas((atual) => {
-      const proximo = !atual;
+  function alternar(coluna: Coluna) {
+    definirEstado((atual) => {
+      const proximo = { ...atual, [coluna]: !atual[coluna] };
       try {
-        localStorage.setItem(CHAVE, proximo ? "1" : "0");
+        localStorage.setItem(CHAVES[coluna], proximo[coluna] ? "1" : "0");
       } catch {
         // Sem armazenamento: vale só para esta sessão.
       }
@@ -39,7 +51,7 @@ export function ColunasProvedor({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ColunasContexto.Provider value={{ recolhidas, alternar }}>
+    <ColunasContexto.Provider value={{ recolhida: (coluna) => estado[coluna], alternar }}>
       {children}
     </ColunasContexto.Provider>
   );
@@ -48,5 +60,5 @@ export function ColunasProvedor({ children }: { children: React.ReactNode }) {
 /** Fora de um `ColunasProvedor`, se comporta como se nunca estivesse recolhido. */
 export function useColunas() {
   const contexto = useContext(ColunasContexto);
-  return contexto ?? { recolhidas: false, alternar: () => {} };
+  return contexto ?? { recolhida: () => false, alternar: () => {} };
 }
