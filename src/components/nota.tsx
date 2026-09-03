@@ -1,6 +1,5 @@
 "use client";
 
-import clsx from "clsx";
 import {
   ArrowLeftRight,
   Check,
@@ -21,6 +20,7 @@ import { acaoAlternarFavorita, acaoColarImagem, acaoConverterFormato, acaoSalvar
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
+import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataHora, urlDaNota } from "@/lib/rotas";
 import type { Etiqueta, Nota } from "@/lib/tipos";
 import { useZoomTexto } from "@/lib/zoom";
@@ -28,7 +28,7 @@ import { useZoomTexto } from "@/lib/zoom";
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
-import { Botao, BotaoIcone } from "./ui";
+import { AlcaRedimensionar, Botao, BotaoIcone } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
 type Estado = "salvo" | "pendente" | "salvando" | "erro";
@@ -101,6 +101,15 @@ export function PaginaNota({
   const area = useRef<HTMLTextAreaElement>(null);
   const zoom = useZoomTexto();
   const pastaDaNota = pastaDe(nota.caminho);
+  // Largura do texto cru na edição lado a lado — a prévia ocupa o resto.
+  // Mesmo padrão das outras colunas ajustáveis do app (barra lateral,
+  // coluna de seções, lista de páginas): arrasta a borda, some ao dobrar
+  // clique nela.
+  const divisorEditor = useLarguraRedimensionavel("largura-editor-texto", {
+    padrao: 560,
+    minima: 280,
+    maxima: 1400,
+  });
 
   const salvar = useCallback(
     async (texto: string) => {
@@ -338,25 +347,45 @@ export function PaginaNota({
               ) : null}
 
               <div className="flex min-h-0 flex-1">
-                <div className="min-w-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
-                  <textarea
-                    ref={area}
-                    value={conteudo}
-                    onChange={(evento) => definirConteudo(evento.target.value)}
-                    onKeyDown={aoTeclarNoCampo}
-                    onPaste={aoColarNoCampo}
-                    spellCheck
-                    placeholder={
-                      ehMarkdown
-                        ? "Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
-                        : "Escreva à vontade."
-                    }
-                    className={clsx(
-                      "min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none",
-                      ehMarkdown ? "editor-texto" : "editor-simples",
-                    )}
-                  />
-                </div>
+                {ehMarkdown ? (
+                  // Envoltório à parte, sem rolagem própria: é o que faz a
+                  // alça de redimensionar (posicionada em relação a ele)
+                  // ficar sempre na borda visível, em vez de rolar junto
+                  // com o texto — mesmo padrão da lista de páginas e da
+                  // coluna de seções.
+                  <div className="relative shrink-0 overflow-hidden" style={{ width: divisorEditor.largura }}>
+                    <div className="h-full overflow-y-auto" ref={zoom.refRolagem}>
+                      <textarea
+                        ref={area}
+                        value={conteudo}
+                        onChange={(evento) => definirConteudo(evento.target.value)}
+                        onKeyDown={aoTeclarNoCampo}
+                        onPaste={aoColarNoCampo}
+                        spellCheck
+                        placeholder="Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
+                        className="editor-texto min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none"
+                      />
+                    </div>
+                    <AlcaRedimensionar
+                      aoArrastar={divisorEditor.iniciarArraste}
+                      aoRestaurar={divisorEditor.restaurarPadrao}
+                      rotulo="Redimensionar o texto e a prévia"
+                    />
+                  </div>
+                ) : (
+                  <div className="min-w-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
+                    <textarea
+                      ref={area}
+                      value={conteudo}
+                      onChange={(evento) => definirConteudo(evento.target.value)}
+                      onKeyDown={aoTeclarNoCampo}
+                      onPaste={aoColarNoCampo}
+                      spellCheck
+                      placeholder="Escreva à vontade."
+                      className="editor-simples min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none"
+                    />
+                  </div>
+                )}
 
                 {ehMarkdown ? (
                   <div

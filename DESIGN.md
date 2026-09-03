@@ -359,8 +359,12 @@ desenhar um cartão inteiro ao redor.
 - **Rótulo:** sempre acima do campo, em versalete 11px.
 
 ### Alça de Redimensionar
-- **Faixa clicável:** 6px, encostada na borda direita do painel (barra
-  lateral e lista de páginas), com `cursor: col-resize`. Mais larga que a
+- **Onde aparece:** coluna de navegação, coluna de páginas, e agora também
+  entre o texto cru e a prévia na edição lado a lado de uma página em
+  markdown — mesmo componente, mesmo comportamento, só mudando qual painel
+  ele ajusta.
+- **Faixa clicável:** 6px, encostada na borda direita do painel, com
+  `cursor: col-resize`. Mais larga que a
   linha visível — não exige mirar num traço de 1px, como em qualquer app de
   planilha.
 - **Estado:** invisível em repouso (a borda de 1px do painel já marca a
