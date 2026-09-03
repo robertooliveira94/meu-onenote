@@ -117,6 +117,16 @@ limpas e abríveis em qualquer editor.
   navegador que recorta a página aberta (título, endereço e o texto
   selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
   nenhuma para instalar.
+- Kanban por caderno (`/kanban/<Caderno>`, botão ao lado de "Nova seção"):
+  um quadro independente das anotações, com 4 colunas fixas — Backlog,
+  Fazendo, Impedido, Feito. Cada tarefa é um arquivo `.md` de verdade
+  (`<Caderno>/_kanban/<Coluna>/<Tarefa>.md`); arrastar entre colunas move o
+  arquivo de pasta, exatamente como mover uma página entre seções. Clicar
+  numa tarefa abre um editor pequeno (título + corpo em markdown, com
+  prévia ao lado) — dá pra descrever, fazer um checklist, o que quiser.
+  Exclusão vai para a mesma lixeira das páginas. As tarefas do Kanban não
+  aparecem no painel `/tarefas` (o quadro já cumpre esse papel) nem na
+  árvore de seções (a pasta `_kanban` é interna, como `_sistema`).
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app

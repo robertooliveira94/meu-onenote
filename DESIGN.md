@@ -412,6 +412,26 @@ desenhar um cartão inteiro ao redor.
   aquele item pode ser pego, sem precisar de um ícone de "grip" extra
   ocupando espaço numa coluna estreita.
 
+### Kanban
+- **Colunas fixas, cor só de acento:** cada coluna ganha um traço de 2px no
+  topo do cartão (`box-shadow: inset`), não um fundo colorido inteiro —
+  Backlog em `tinta-3` (neutro), Fazendo na cor de destaque do caderno,
+  Impedido em vermelho-terracota, Feito em verde. Cor demais nas 4 colunas
+  ao mesmo tempo cansaria; um traço já basta pra escanear "que coluna é
+  essa" de relance.
+- **Cartão:** mesma classe `.cartao` das páginas na lista — branco, borda
+  sutil, sobe 1px no hover. O quadro usa o mesmo vocabulário de cartão do
+  resto do app em vez de inventar um estilo próprio de "cartão Kanban".
+- **Adicionar rápido:** um campo de texto que nasce direto na coluna (sem
+  diálogo) — Enter cria, Esc cancela, perder o foco também confirma. Uma
+  tarefa é rápida de anotar; abrir um diálogo pra isso seria atrito
+  desnecessário. Detalhar (descrição, checklist) fica pro editor, que abre
+  só ao clicar num cartão já criado.
+- **Editor de tarefa:** diálogo largo (`max-w-3xl`) de duas colunas —
+  markdown cru à esquerda, prévia ao vivo à direita — o mesmo par
+  edição+prévia do editor de página, só que sem as ferramentas extras
+  (zoom, barra de formatação, histórico) que uma tarefa curta não precisa.
+
 ### Wikilinks e Backlinks
 - **Link resolvido (`[[Nome]]` com página correspondente):** link comum do
   `next/link`, sem estilo extra — o texto já deixa claro que é um link; a

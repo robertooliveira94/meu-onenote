@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 
-import { resolverCaminho, tituloDe } from "./caminhos";
+import { PASTA_KANBAN, resolverCaminho, tituloDe } from "./caminhos";
 import { extrairTarefas } from "./formatacao";
 import { lerIndice } from "./indice";
 
@@ -28,6 +28,9 @@ export async function listarTarefas(): Promise<Tarefa[]> {
   const tarefas: Tarefa[] = [];
 
   for (const caminho of Object.keys(indice.notas)) {
+    // Tarefa do Kanban não entra aqui — o quadro já É o painel de tarefas
+    // dela; listar de novo seria só duplicar.
+    if (caminho.includes(`/${PASTA_KANBAN}/`)) continue;
     let conteudo: string;
     try {
       conteudo = await fs.readFile(resolverCaminho(caminho), "utf8");

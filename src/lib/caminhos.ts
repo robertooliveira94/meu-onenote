@@ -52,6 +52,13 @@ export const PASTA_ENTRADA = "Entrada";
  * sempre caderno → seção → página.
  */
 export const PASTA_GERAL = "Geral";
+/**
+ * Pasta interna dentro de cada caderno com o quadro Kanban dele. Começa com
+ * "_" como `_sistema`, então já fica fora da lista de seções sem precisar
+ * de filtro extra. Um quadro por caderno, nunca por seção — o Kanban é
+ * pensado como um espaço à parte das anotações, não uma seção disfarçada.
+ */
+export const PASTA_KANBAN = "_kanban";
 
 export {
   CaminhoInvalido,

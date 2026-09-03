@@ -15,6 +15,8 @@
 
 export const FORMATO_SECAO = "application/x-meu-onenote-secao";
 export const FORMATO_PAGINA = "application/x-meu-onenote-pagina";
+/** Uma tarefa do Kanban, arrastada entre colunas (Backlog, Fazendo...). */
+export const FORMATO_TAREFA = "application/x-meu-onenote-tarefa";
 
 export function iniciarArrastoDeSecao(evento: React.DragEvent, caminho: string): void {
   evento.dataTransfer.setData(FORMATO_SECAO, caminho);
@@ -26,6 +28,11 @@ export function iniciarArrastoDePagina(evento: React.DragEvent, caminho: string)
   evento.dataTransfer.effectAllowed = "move";
 }
 
+export function iniciarArrastoDeTarefa(evento: React.DragEvent, caminho: string): void {
+  evento.dataTransfer.setData(FORMATO_TAREFA, caminho);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
 export function trazSecao(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_SECAO);
 }
@@ -34,12 +41,20 @@ export function trazPagina(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_PAGINA);
 }
 
+export function trazTarefa(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_TAREFA);
+}
+
 export function lerCaminhoDeSecao(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_SECAO);
 }
 
 export function lerCaminhoDePagina(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_PAGINA);
+}
+
+export function lerCaminhoDeTarefa(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_TAREFA);
 }
 
 /** Tira um item de uma posição e insere em outra, sem mexer no resto da ordem. */
