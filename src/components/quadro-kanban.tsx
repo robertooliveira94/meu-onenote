@@ -262,6 +262,10 @@ function CartaoTarefa({
         onDragOver={(evento) => {
           if (!trazTarefa(evento)) return;
           evento.preventDefault();
+          // Sem isto, o `dragover` também dispara no `onDragOver` da coluna
+          // por baixo (o evento borbulha) — o card já decidiu antes/depois
+          // pela posição exata do cursor; a coluna não precisa opinar de novo.
+          evento.stopPropagation();
           evento.dataTransfer.dropEffect = "move";
           const retangulo = evento.currentTarget.getBoundingClientRect();
           aoPassarPorCima(evento.clientY < retangulo.top + retangulo.height / 2);
@@ -270,6 +274,12 @@ function CartaoTarefa({
         onDrop={(evento) => {
           if (!trazTarefa(evento)) return;
           evento.preventDefault();
+          // Essencial: sem isto, o mesmo `drop` borbulha até a coluna por
+          // baixo do card e o `onDrop` dela roda de novo pro mesmo evento —
+          // a tarefa acabava movida (ou reordenada) duas vezes, e como o
+          // card já tinha saído da coluna de origem na primeira vez, a
+          // segunda rodada duplicava ele na tela.
+          evento.stopPropagation();
           const retangulo = evento.currentTarget.getBoundingClientRect();
           const antes = evento.clientY < retangulo.top + retangulo.height / 2;
           aoSoltar(lerCaminhoDeTarefa(evento), antes);
