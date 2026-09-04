@@ -66,10 +66,7 @@ export function SeletorDeCadernos({
   }
 
   return (
-    <div
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-linha bg-superficie px-3 py-2"
-      aria-label="Cadernos"
-    >
+    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="Cadernos">
       {cadernos.map((caderno) => (
         <ChipCaderno
           key={caderno.caminho}

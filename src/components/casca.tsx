@@ -9,6 +9,7 @@ import type { Caderno, Etiqueta, Modelo } from "@/lib/tipos";
 import { ColunaSecoes } from "./coluna-secoes";
 import { SeletorAplicativo } from "./seletor-aplicativo";
 import { SeletorDeCadernos } from "./seletor-cadernos";
+import { BotaoTema } from "./ui";
 
 /**
  * Moldura fixa do aplicativo: a tira de cadernos no topo, a coluna de
@@ -63,8 +64,12 @@ function CascaInterna({
       className="flex h-screen flex-col overflow-hidden"
       style={corAtiva ? ({ "--realce": corAtiva } as React.CSSProperties) : undefined}
     >
-      <SeletorAplicativo appAtual={appAtual} cadernoAtivo={cadernoAtivo} cadernos={cadernos} />
-      <SeletorDeCadernos cadernos={cadernos} appAtual={appAtual} />
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-linha bg-superficie px-3 py-2">
+        <SeletorAplicativo appAtual={appAtual} cadernoAtivo={cadernoAtivo} cadernos={cadernos} />
+        <div className="h-5 w-px shrink-0 bg-linha" aria-hidden />
+        <SeletorDeCadernos cadernos={cadernos} appAtual={appAtual} />
+        <BotaoTema />
+      </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {appAtual === "notas" ? (
           <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />

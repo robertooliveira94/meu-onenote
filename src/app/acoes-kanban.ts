@@ -82,11 +82,13 @@ export async function acaoSalvarTarefa(caminho: string, conteudo: string): Promi
 }
 
 export async function acaoRenomearTarefa(caminho: string, novoTitulo: string): Promise<Resposta> {
-  const resposta = await tentar(async () => {
-    await renomearTarefa(caminhoValido.parse(caminho), z.string().max(200).parse(novoTitulo));
-  });
-  atualizarTudo();
-  return resposta;
+  try {
+    const alvo = await renomearTarefa(caminhoValido.parse(caminho), z.string().max(200).parse(novoTitulo));
+    atualizarTudo();
+    return { ok: true, mensagem: alvo };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para renomear" };
+  }
 }
 
 export async function acaoMoverTarefa(caminho: string, colunaDestino: ColunaKanban): Promise<Resposta> {

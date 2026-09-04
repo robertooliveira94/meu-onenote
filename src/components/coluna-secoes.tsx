@@ -11,7 +11,6 @@ import {
   House,
   LayoutTemplate,
   ListChecks,
-  Moon,
   MoreHorizontal,
   MoveRight,
   NotebookPen,
@@ -21,7 +20,6 @@ import {
   PocketKnife,
   Plus,
   Search,
-  Sun,
   Tag,
   Trash2,
   Zap,
@@ -242,7 +240,6 @@ export function ColunaSecoes({
         <BotaoIcone rotulo="Recolher seções" onClick={() => colunas.alternar("secoes")}>
           <PanelLeftClose size={14} />
         </BotaoIcone>
-        <BotaoTema />
       </div>
 
       <div className="px-2 pb-2">
@@ -532,34 +529,6 @@ function AtalhoBotao({
       <span className="text-tinta-3">{icone}</span>
       {children}
     </button>
-  );
-}
-
-function BotaoTema() {
-  const [tema, definirTema] = useState<"claro" | "escuro">("claro");
-
-  useEffect(() => {
-    definirTema(document.documentElement.dataset.tema === "escuro" ? "escuro" : "claro");
-  }, []);
-
-  function alternar() {
-    const proximo = tema === "claro" ? "escuro" : "claro";
-    document.documentElement.dataset.tema = proximo;
-    definirTema(proximo);
-    try {
-      localStorage.setItem("tema", proximo);
-    } catch {
-      // Sem armazenamento: o tema vale só para esta sessão.
-    }
-  }
-
-  return (
-    <BotaoIcone
-      rotulo={tema === "claro" ? "Usar tema escuro" : "Usar tema claro"}
-      onClick={alternar}
-    >
-      {tema === "claro" ? <Moon size={14} /> : <Sun size={14} />}
-    </BotaoIcone>
   );
 }
 

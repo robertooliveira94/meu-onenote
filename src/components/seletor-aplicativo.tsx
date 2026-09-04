@@ -43,7 +43,7 @@ export function SeletorAplicativo({
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 border-b border-linha bg-superficie-alta px-3.5 py-2">
+    <div className="flex shrink-0 items-center gap-1.5">
       <BotaoApp ativo={appAtual === "notas"} icone={<NotebookText size={14} />} onClick={irParaNotas}>
         Anotações
       </BotaoApp>

@@ -41,6 +41,7 @@ import {
   acaoLerTarefa,
   acaoMoverTarefa,
   acaoRenomearColuna,
+  acaoRenomearTarefa,
   acaoReordenarColunas,
   acaoReordenarTarefasPara,
   acaoSalvarTarefa,
@@ -68,8 +69,6 @@ import { DialogoConfirmar, DialogoNome } from "./dialogos";
 import { SeletorEtiquetasKanban } from "./seletor-etiquetas-kanban";
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, RotuloMenu, SeparadorMenu } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
-
-const ESPERA_SALVAMENTO = 800;
 
 /** Cor de cada coluna — só um acento discreto no topo do cartão, não um fundo colorido inteiro. */
 const CORES_COLUNA = ["var(--tinta-3)", "var(--realce)", "#D85A30", "#639922", "#7C5CFC", "#2D7FF9"];
@@ -230,6 +229,37 @@ export function QuadroKanban({
   async function duplicarTarefaAção(caminho: string) {
     const resposta = await acaoDuplicarTarefa(caminho);
     if (resposta.ok) roteador.refresh();
+  }
+
+  /**
+   * Renomear muda o caminho do arquivo — precisa reapontar `mapa`,
+   * `ordemLocal` e (se for a tarefa aberta no editor) `tarefaAberta` na
+   * hora, senão tudo que depende do caminho antigo (salvar, excluir, o
+   * próprio diálogo) fica órfão até o próximo refresh do servidor.
+   */
+  async function renomearTarefaAção(caminhoAtual: string, novoTitulo: string): Promise<string | null> {
+    const resposta = await acaoRenomearTarefa(caminhoAtual, novoTitulo);
+    if (!resposta.ok) return resposta.erro;
+
+    const novoCaminho = resposta.mensagem ?? caminhoAtual;
+    const tarefaAtual = mapa[caminhoAtual];
+    if (novoCaminho !== caminhoAtual && tarefaAtual) {
+      definirMapa((atual) => {
+        const copia = { ...atual };
+        delete copia[caminhoAtual];
+        copia[novoCaminho] = { ...tarefaAtual, caminho: novoCaminho, titulo: novoTitulo.trim() };
+        return copia;
+      });
+      definirOrdemLocal((atual) => ({
+        ...atual,
+        [tarefaAtual.coluna]: (atual[tarefaAtual.coluna] ?? []).map((c) => (c === caminhoAtual ? novoCaminho : c)),
+      }));
+      definirTarefaAberta((atual) => (atual === caminhoAtual ? novoCaminho : atual));
+    } else if (tarefaAtual) {
+      definirMapa((atual) => ({ ...atual, [caminhoAtual]: { ...atual[caminhoAtual], titulo: novoTitulo.trim() } }));
+    }
+    roteador.refresh();
+    return null;
   }
 
   async function favoritarAção(caminho: string) {
@@ -521,6 +551,7 @@ export function QuadroKanban({
                     }
                     aoSoltar={(origem, antes) => aoSoltarPertoDe(tarefa, origem, antes)}
                     aoAbrir={() => definirTarefaAberta(tarefa.caminho)}
+                    aoRenomear={(novoTitulo) => renomearTarefaAção(tarefa.caminho, novoTitulo)}
                     aoMoverPara={(destino) => moverTarefaPara(tarefa.caminho, destino)}
                     aoDuplicar={() => duplicarTarefaAção(tarefa.caminho)}
                     aoFavoritar={() => favoritarAção(tarefa.caminho)}
@@ -548,6 +579,7 @@ export function QuadroKanban({
           etiquetasKanban={etiquetasKanban}
           sprints={sprints}
           aoFechar={() => definirTarefaAberta(null)}
+          aoRenomear={(novoTitulo) => renomearTarefaAção(tarefaAberta, novoTitulo)}
           aoAtualizar={(patch) =>
             definirMapa((atual) => ({ ...atual, [tarefaAberta]: { ...atual[tarefaAberta], ...patch } }))
           }
@@ -666,6 +698,90 @@ function FiltroMenu({
   );
 }
 
+/**
+ * Título que vira campo de texto com um duplo clique — usado tanto no
+ * cartão quanto no cabeçalho do editor da tarefa. Um clique simples não
+ * faz nada (deixa o duplo clique inconfundível de um clique normal que
+ * abriria o cartão).
+ */
+function TituloEditavel({
+  titulo,
+  aoRenomear,
+  className,
+}: {
+  titulo: string;
+  aoRenomear: (novoTitulo: string) => Promise<string | null>;
+  className?: string;
+}) {
+  const [editando, definirEditando] = useState(false);
+  const [valor, definirValor] = useState(titulo);
+  const [erro, definirErro] = useState<string | null>(null);
+  const [salvando, definirSalvando] = useState(false);
+  const campo = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editando) return;
+    definirValor(titulo);
+    definirErro(null);
+    campo.current?.focus();
+    campo.current?.select();
+  }, [editando, titulo]);
+
+  async function confirmar() {
+    const limpo = valor.trim();
+    if (!limpo || limpo === titulo) {
+      definirEditando(false);
+      return;
+    }
+    definirSalvando(true);
+    const falha = await aoRenomear(limpo);
+    definirSalvando(false);
+    if (falha) {
+      definirErro(falha);
+      return;
+    }
+    definirEditando(false);
+  }
+
+  if (editando) {
+    return (
+      <div onClick={(evento) => evento.stopPropagation()}>
+        <input
+          ref={campo}
+          value={valor}
+          disabled={salvando}
+          onChange={(evento) => definirValor(evento.target.value)}
+          onKeyDown={(evento) => {
+            evento.stopPropagation();
+            if (evento.key === "Enter") confirmar();
+            if (evento.key === "Escape") definirEditando(false);
+          }}
+          onBlur={confirmar}
+          className={clsx(
+            className,
+            "w-full border-b border-[var(--realce)] bg-transparent focus:outline-none disabled:opacity-60",
+          )}
+        />
+        {erro ? <p className="mt-1 text-[11.5px] text-perigo">{erro}</p> : null}
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={(evento) => evento.stopPropagation()}
+      onDoubleClick={(evento) => {
+        evento.stopPropagation();
+        definirEditando(true);
+      }}
+      title="Clique duas vezes para renomear"
+      className={className}
+    >
+      {titulo}
+    </span>
+  );
+}
+
 /** Lista de sprints com criação rápida embutida — reaproveitado no filtro e no editor de tarefa. */
 function SeletorSprintConteudo({
   sprints,
@@ -776,6 +892,7 @@ function CartaoTarefa({
   aoSairDeCima,
   aoSoltar,
   aoAbrir,
+  aoRenomear,
   aoMoverPara,
   aoDuplicar,
   aoFavoritar,
@@ -795,6 +912,7 @@ function CartaoTarefa({
   aoSairDeCima: () => void;
   aoSoltar: (origem: string, antes: boolean) => void;
   aoAbrir: () => void;
+  aoRenomear: (novoTitulo: string) => Promise<string | null>;
   aoMoverPara: (coluna: string) => void;
   aoDuplicar: () => void;
   aoFavoritar: () => void;
@@ -815,8 +933,9 @@ function CartaoTarefa({
           aria-hidden
         />
       ) : null}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         draggable
         onDragStart={(evento) => iniciarArrastoDeTarefa(evento, tarefa.caminho)}
         onDragOver={(evento) => {
@@ -845,6 +964,12 @@ function CartaoTarefa({
           aoSoltar(lerCaminhoDeTarefa(evento), antes);
         }}
         onClick={aoAbrir}
+        onKeyDown={(evento) => {
+          if (evento.key === "Enter" || evento.key === " ") {
+            evento.preventDefault();
+            aoAbrir();
+          }
+        }}
         className="cartao block w-full cursor-grab px-3 py-2.5 pr-7 text-left active:cursor-grabbing"
         style={{ borderLeft: `3px solid ${corDaColuna}` }}
       >
@@ -858,7 +983,11 @@ function CartaoTarefa({
             />
           ) : null}
           {tarefa.favorita ? <Star size={11} className="mt-0.5 shrink-0 fill-current text-[#c69214]" /> : null}
-          <span className="min-w-0 flex-1 text-[13px] leading-snug font-medium text-tinta">{tarefa.titulo}</span>
+          <TituloEditavel
+            titulo={tarefa.titulo}
+            aoRenomear={aoRenomear}
+            className="min-w-0 flex-1 text-[13px] leading-snug font-medium text-tinta"
+          />
           {pendentes > 0 ? (
             <span
               className="flex shrink-0 items-center gap-0.5 text-[10.5px] text-perigo"
@@ -903,7 +1032,7 @@ function CartaoTarefa({
             ))}
           </div>
         ) : null}
-      </button>
+      </div>
 
       <div className="absolute top-1.5 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <Menu
@@ -1051,6 +1180,7 @@ function DialogoTarefa({
   aoFechar,
   aoAtualizar,
   aoExcluir,
+  aoRenomear,
 }: {
   tarefa: TarefaKanban;
   /** Todas as tarefas do quadro (qualquer coluna) — pra escolher dependência. */
@@ -1061,11 +1191,14 @@ function DialogoTarefa({
   /** Avisa o quadro pra atualizar a tarefa na hora (etiquetas, dependências…), sem esperar um refresh. */
   aoAtualizar: (patch: Partial<TarefaKanban>) => void;
   aoExcluir: () => void;
+  aoRenomear: (novoTitulo: string) => Promise<string | null>;
 }) {
   const caminho = tarefa.caminho;
   const [carregando, definirCarregando] = useState(true);
   const [conteudo, definirConteudo] = useState("");
-  const [conteudoOriginal, definirConteudoOriginal] = useState("");
+  const [modoDescricao, definirModoDescricao] = useState<"leitura" | "edicao">("leitura");
+  const [rascunho, definirRascunho] = useState("");
+  const [salvandoDescricao, definirSalvandoDescricao] = useState(false);
   const [confirmandoExclusao, definirConfirmandoExclusao] = useState(false);
   const [erro, definirErro] = useState<string | null>(null);
 
@@ -1074,7 +1207,10 @@ function DialogoTarefa({
     acaoLerTarefa(caminho).then((lida) => {
       if (cancelado || !lida) return;
       definirConteudo(lida.conteudo);
-      definirConteudoOriginal(lida.conteudo);
+      definirRascunho(lida.conteudo);
+      // Tarefa recém-criada (ainda sem corpo) já nasce em edição — economiza
+      // um clique em "Editar" pra quem só quer começar a escrever.
+      definirModoDescricao(lida.conteudo.trim() ? "leitura" : "edicao");
       definirCarregando(false);
     });
     return () => {
@@ -1082,16 +1218,18 @@ function DialogoTarefa({
     };
   }, [caminho]);
 
-  // Salva sozinho depois de uma pausa na digitação — mesmo padrão do editor de página.
-  useEffect(() => {
-    if (carregando || conteudo === conteudoOriginal) return;
-    const espera = setTimeout(async () => {
-      const resposta = await acaoSalvarTarefa(caminho, conteudo);
-      if (resposta.ok) definirConteudoOriginal(conteudo);
-      else definirErro(resposta.erro);
-    }, ESPERA_SALVAMENTO);
-    return () => clearTimeout(espera);
-  }, [conteudo, conteudoOriginal, caminho, carregando]);
+  async function salvarDescricao() {
+    definirSalvandoDescricao(true);
+    const resposta = await acaoSalvarTarefa(caminho, rascunho);
+    definirSalvandoDescricao(false);
+    if (!resposta.ok) {
+      definirErro(resposta.erro);
+      return;
+    }
+    definirConteudo(rascunho);
+    definirErro(null);
+    definirModoDescricao("leitura");
+  }
 
   const dependencias = tarefa.dependeDe
     .map((caminhoDep) => todasTarefas.find((item) => item.caminho === caminhoDep))
@@ -1122,189 +1260,254 @@ function DialogoTarefa({
   }
 
   return (
-    <Dialogo titulo={tarefa.titulo || "Tarefa"} aberto largura="max-w-3xl" aoFechar={aoFechar}>
+    <Dialogo
+      titulo={tarefa.titulo || "Tarefa"}
+      aberto
+      largura="max-w-4xl"
+      aoFechar={aoFechar}
+      tituloPersonalizado={
+        <TituloEditavel
+          titulo={tarefa.titulo}
+          aoRenomear={aoRenomear}
+          className="text-[16px] leading-tight font-bold tracking-[-0.02em]"
+        />
+      }
+    >
       {carregando ? (
         <p className="py-8 text-center text-[12.5px] text-tinta-3">Carregando…</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Menu
-              alinhamento="esquerda"
-              gatilho={(abrir) => (
-                <button
-                  type="button"
-                  onClick={abrir}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-linha-forte px-2 py-0.5 text-[11.5px] text-tinta-2 transition-colors hover:border-[var(--realce)] hover:text-tinta"
-                >
-                  <Flag size={11} style={tarefa.prioridade ? { color: CORES_PRIORIDADE[tarefa.prioridade] } : undefined} />
-                  {tarefa.prioridade ? RUBRICA_PRIORIDADE[tarefa.prioridade] : "Prioridade"}
-                </button>
-              )}
-            >
-              {(fechar) => (
+          <div className="mt-1 grid gap-6 sm:grid-cols-[1fr_220px]">
+            <div className="min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Descrição</p>
+                {modoDescricao === "leitura" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      definirRascunho(conteudo);
+                      definirModoDescricao("edicao");
+                    }}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px] text-tinta-2 transition-colors hover:bg-realce-fraco hover:text-tinta"
+                  >
+                    <Pencil size={11} />
+                    Editar
+                  </button>
+                ) : null}
+              </div>
+
+              {modoDescricao === "leitura" ? (
+                <div className="prosa mt-1.5 min-h-[160px] rounded-lg border border-linha bg-superficie px-3 py-2.5">
+                  <VisualizadorMarkdown conteudo={conteudo} />
+                </div>
+              ) : (
                 <>
-                  {PRIORIDADES.map((prioridade) => (
-                    <button
-                      key={prioridade}
-                      type="button"
-                      onClick={() => {
-                        mudarPrioridade(prioridade);
-                        fechar();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
-                    >
-                      <Flag size={12} style={{ color: CORES_PRIORIDADE[prioridade] }} />
-                      <span className="flex-1 truncate">{RUBRICA_PRIORIDADE[prioridade]}</span>
-                      {tarefa.prioridade === prioridade ? <Check size={13} style={{ color: "var(--realce)" }} /> : null}
-                    </button>
-                  ))}
-                  {tarefa.prioridade ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        mudarPrioridade(null);
-                        fechar();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] text-tinta-3 hover:bg-realce-fraco"
-                    >
-                      <FlagOff size={12} />
-                      Remover prioridade
-                    </button>
-                  ) : null}
+                  <textarea
+                    value={rascunho}
+                    onChange={(evento) => definirRascunho(evento.target.value)}
+                    placeholder="Descrição, checklist, o que quiser — em markdown."
+                    rows={14}
+                    autoFocus
+                    className="editor-texto mt-1.5 w-full resize-none rounded-lg border border-linha bg-superficie px-3 py-2.5 text-[13px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    {conteudo.trim() ? (
+                      <Botao
+                        variante="sutil"
+                        onClick={() => {
+                          definirRascunho(conteudo);
+                          definirModoDescricao("leitura");
+                        }}
+                      >
+                        Cancelar
+                      </Botao>
+                    ) : null}
+                    <Botao variante="primario" disabled={salvandoDescricao} onClick={salvarDescricao}>
+                      <Check size={13} />
+                      Salvar
+                    </Botao>
+                  </div>
                 </>
               )}
-            </Menu>
 
-            <label className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-linha-forte px-2 py-0.5 text-[11.5px] text-tinta-2">
-              <Calendar size={11} />
-              <input
-                type="date"
-                value={tarefa.prazo ?? ""}
-                onChange={(evento) => mudarPrazo(evento.target.value || null)}
-                className="bg-transparent text-[11.5px] text-tinta focus:outline-none"
-              />
-              {tarefa.prazo ? (
-                <button
-                  type="button"
-                  onClick={() => mudarPrazo(null)}
-                  aria-label="Remover prazo"
-                  className="text-tinta-3 hover:text-tinta"
+              <Aviso>{erro}</Aviso>
+            </div>
+
+            <div className="flex flex-col gap-4 sm:border-l sm:border-linha sm:pl-5">
+              <CampoLateral rotulo="Prioridade">
+                <Menu
+                  alinhamento="direita"
+                  gatilho={(abrir) => (
+                    <button
+                      type="button"
+                      onClick={abrir}
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-linha px-2.5 py-1.5 text-[12.5px] text-tinta-2 transition-colors hover:border-[var(--realce)] hover:text-tinta"
+                    >
+                      <Flag
+                        size={12}
+                        style={tarefa.prioridade ? { color: CORES_PRIORIDADE[tarefa.prioridade] } : undefined}
+                      />
+                      {tarefa.prioridade ? RUBRICA_PRIORIDADE[tarefa.prioridade] : "Nenhuma"}
+                    </button>
+                  )}
                 >
-                  <X size={11} />
-                </button>
-              ) : null}
-            </label>
-
-            <Menu
-              alinhamento="esquerda"
-              gatilho={(abrir) => (
-                <button
-                  type="button"
-                  onClick={abrir}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-linha-forte px-2 py-0.5 text-[11.5px] text-tinta-2 transition-colors hover:border-[var(--realce)] hover:text-tinta"
-                >
-                  <ListChecks size={11} />
-                  {sprintAtual ? sprintAtual.nome : "Sprint"}
-                </button>
-              )}
-            >
-              {() => (
-                <SeletorSprintConteudo
-                  sprints={sprints}
-                  selecionada={tarefa.sprintId}
-                  aoEscolher={(id) => mudarSprint(tarefa.sprintId === id ? null : id)}
-                />
-              )}
-            </Menu>
-          </div>
-
-          <div className="mt-2.5">
-            <SeletorEtiquetasKanban
-              caminho={caminho}
-              etiquetasDaTarefa={tarefa.etiquetas}
-              todasEtiquetas={etiquetasKanban}
-              aoMudar={(etiquetas) => aoAtualizar({ etiquetas })}
-            />
-          </div>
-
-          <div className="mt-3">
-            <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Bloqueado por</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {dependencias.map((dependencia) => (
-                <span
-                  key={dependencia.caminho}
-                  className="flex items-center gap-1 rounded-full border border-linha bg-superficie py-0.5 pr-1 pl-2 text-[11.5px]"
-                >
-                  <Lock
-                    size={10}
-                    className={dependencia.coluna === tarefa.coluna ? "text-tinta-3" : "text-perigo"}
-                  />
-                  <span className="text-tinta-2">{dependencia.titulo}</span>
-                  <button
-                    type="button"
-                    onClick={() => mudarDependencias(tarefa.dependeDe.filter((item) => item !== dependencia.caminho))}
-                    className="rounded-full p-0.5 text-tinta-3 hover:bg-realce-medio hover:text-tinta"
-                    aria-label={`Não depender mais de ${dependencia.titulo}`}
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              ))}
-
-              <Menu
-                alinhamento="esquerda"
-                gatilho={(abrir) => (
-                  <button
-                    type="button"
-                    onClick={abrir}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-linha-forte px-2 py-0.5 text-[11.5px] text-tinta-3 transition-colors hover:border-[var(--realce)] hover:text-tinta"
-                  >
-                    <Plus size={11} />
-                    depende de…
-                  </button>
-                )}
-              >
-                {() => (
-                  <div className="max-h-64 overflow-y-auto">
-                    {candidatas.length === 0 ? (
-                      <p className="px-2 py-2 text-[12px] leading-snug text-tinta-3">
-                        Nenhuma outra tarefa disponível neste quadro.
-                      </p>
-                    ) : (
-                      candidatas.map((candidata) => (
+                  {(fechar) => (
+                    <>
+                      {PRIORIDADES.map((prioridade) => (
                         <button
-                          key={candidata.caminho}
+                          key={prioridade}
                           type="button"
-                          onClick={() => mudarDependencias([...tarefa.dependeDe, candidata.caminho])}
+                          onClick={() => {
+                            mudarPrioridade(prioridade);
+                            fechar();
+                          }}
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
                         >
-                          <span className="flex-1 truncate">{candidata.titulo}</span>
-                          <span className="shrink-0 text-[10.5px] text-tinta-3">{candidata.coluna}</span>
+                          <Flag size={12} style={{ color: CORES_PRIORIDADE[prioridade] }} />
+                          <span className="flex-1 truncate">{RUBRICA_PRIORIDADE[prioridade]}</span>
+                          {tarefa.prioridade === prioridade ? <Check size={13} style={{ color: "var(--realce)" }} /> : null}
                         </button>
-                      ))
+                      ))}
+                      {tarefa.prioridade ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mudarPrioridade(null);
+                            fechar();
+                          }}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] text-tinta-3 hover:bg-realce-fraco"
+                        >
+                          <FlagOff size={12} />
+                          Remover prioridade
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </Menu>
+              </CampoLateral>
+
+              <CampoLateral rotulo="Prazo">
+                <label className="flex w-full items-center gap-1.5 rounded-lg border border-linha px-2.5 py-1.5 text-[12.5px] text-tinta-2">
+                  <Calendar size={12} className="shrink-0" />
+                  <input
+                    type="date"
+                    value={tarefa.prazo ?? ""}
+                    onChange={(evento) => mudarPrazo(evento.target.value || null)}
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] text-tinta focus:outline-none"
+                  />
+                  {tarefa.prazo ? (
+                    <button
+                      type="button"
+                      onClick={() => mudarPrazo(null)}
+                      aria-label="Remover prazo"
+                      className="shrink-0 text-tinta-3 hover:text-tinta"
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : null}
+                </label>
+              </CampoLateral>
+
+              <CampoLateral rotulo="Sprint">
+                <Menu
+                  alinhamento="direita"
+                  gatilho={(abrir) => (
+                    <button
+                      type="button"
+                      onClick={abrir}
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-linha px-2.5 py-1.5 text-[12.5px] text-tinta-2 transition-colors hover:border-[var(--realce)] hover:text-tinta"
+                    >
+                      <ListChecks size={12} className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-left">{sprintAtual ? sprintAtual.nome : "Nenhuma"}</span>
+                    </button>
+                  )}
+                >
+                  {() => (
+                    <SeletorSprintConteudo
+                      sprints={sprints}
+                      selecionada={tarefa.sprintId}
+                      aoEscolher={(id) => mudarSprint(tarefa.sprintId === id ? null : id)}
+                    />
+                  )}
+                </Menu>
+              </CampoLateral>
+
+              <CampoLateral rotulo="Etiquetas">
+                <SeletorEtiquetasKanban
+                  caminho={caminho}
+                  etiquetasDaTarefa={tarefa.etiquetas}
+                  todasEtiquetas={etiquetasKanban}
+                  aoMudar={(etiquetas) => aoAtualizar({ etiquetas })}
+                />
+              </CampoLateral>
+
+              <CampoLateral rotulo="Bloqueado por">
+                <div className="flex flex-col gap-1.5">
+                  {dependencias.map((dependencia) => (
+                    <span
+                      key={dependencia.caminho}
+                      className="flex items-center gap-1.5 rounded-lg border border-linha bg-superficie py-1 pr-1.5 pl-2 text-[12px]"
+                    >
+                      <Lock
+                        size={10}
+                        className={clsx(
+                          "shrink-0",
+                          dependencia.coluna === tarefa.coluna ? "text-tinta-3" : "text-perigo",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-tinta-2">{dependencia.titulo}</span>
+                      <button
+                        type="button"
+                        onClick={() => mudarDependencias(tarefa.dependeDe.filter((item) => item !== dependencia.caminho))}
+                        className="shrink-0 rounded-full p-0.5 text-tinta-3 hover:bg-realce-medio hover:text-tinta"
+                        aria-label={`Não depender mais de ${dependencia.titulo}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+
+                  <Menu
+                    alinhamento="direita"
+                    gatilho={(abrir) => (
+                      <button
+                        type="button"
+                        onClick={abrir}
+                        className="flex w-full items-center gap-1 rounded-lg border border-dashed border-linha-forte px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:border-[var(--realce)] hover:text-tinta"
+                      >
+                        <Plus size={11} />
+                        depende de…
+                      </button>
                     )}
-                  </div>
-                )}
-              </Menu>
+                  >
+                    {() => (
+                      <div className="max-h-64 overflow-y-auto">
+                        {candidatas.length === 0 ? (
+                          <p className="px-2 py-2 text-[12px] leading-snug text-tinta-3">
+                            Nenhuma outra tarefa disponível neste quadro.
+                          </p>
+                        ) : (
+                          candidatas.map((candidata) => (
+                            <button
+                              key={candidata.caminho}
+                              type="button"
+                              onClick={() => mudarDependencias([...tarefa.dependeDe, candidata.caminho])}
+                              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-realce-fraco"
+                            >
+                              <span className="flex-1 truncate">{candidata.titulo}</span>
+                              <span className="shrink-0 text-[10.5px] text-tinta-3">{candidata.coluna}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </Menu>
+                </div>
+              </CampoLateral>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <textarea
-              value={conteudo}
-              onChange={(evento) => definirConteudo(evento.target.value)}
-              placeholder="Descrição, checklist, o que quiser — em markdown."
-              rows={12}
-              className="editor-texto w-full resize-none rounded-lg border border-linha bg-superficie px-3 py-2.5 text-[13px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
-            />
-            <div className="prosa overflow-y-auto rounded-lg border border-linha bg-superficie px-3 py-2.5">
-              <VisualizadorMarkdown conteudo={conteudo} />
-            </div>
-          </div>
-
-          <Aviso>{erro}</Aviso>
-
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-5 flex items-center justify-between border-t border-linha pt-3.5">
             <button
               type="button"
               onClick={() => definirConfirmandoExclusao(true)}
@@ -1344,5 +1547,15 @@ function DialogoTarefa({
         </>
       )}
     </Dialogo>
+  );
+}
+
+/** Rótulo pequeno acima de um campo, na coluna lateral do editor de tarefa. */
+function CampoLateral({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1 text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">{rotulo}</p>
+      {children}
+    </div>
   );
 }

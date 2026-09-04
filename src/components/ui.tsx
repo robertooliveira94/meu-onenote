@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { Moon, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -100,6 +100,7 @@ export function Dialogo({
   aoFechar,
   children,
   largura = "max-w-md",
+  tituloPersonalizado,
 }: {
   titulo: string;
   descricao?: string;
@@ -107,6 +108,8 @@ export function Dialogo({
   aoFechar: () => void;
   children: React.ReactNode;
   largura?: string;
+  /** Substitui o `<h2>` padrão por outro conteúdo (ex.: um título editável) — `titulo` continua servindo de aria-label. */
+  tituloPersonalizado?: React.ReactNode;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
 
@@ -145,8 +148,10 @@ export function Dialogo({
         )}
       >
         <div className="mb-3 flex items-start gap-3">
-          <div className="flex-1">
-            <h2 className="text-[16px] leading-tight font-bold tracking-[-0.02em]">{titulo}</h2>
+          <div className="min-w-0 flex-1">
+            {tituloPersonalizado ?? (
+              <h2 className="text-[16px] leading-tight font-bold tracking-[-0.02em]">{titulo}</h2>
+            )}
             {descricao ? <p className="mt-1 text-[12.5px] text-tinta-2">{descricao}</p> : null}
           </div>
           <BotaoIcone rotulo="Fechar" onClick={aoFechar}>
@@ -324,6 +329,36 @@ export function RotuloMenu({ children }: { children: React.ReactNode }) {
     <span className="block px-2 pt-1 pb-0.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
       {children}
     </span>
+  );
+}
+
+/**
+ * Alterna entre tema claro e escuro — comum às duas aplicações (Anotações e
+ * Kanban), por isso mora aqui em vez de dentro de uma coluna que só existe
+ * numa delas.
+ */
+export function BotaoTema() {
+  const [tema, definirTema] = useState<"claro" | "escuro">("claro");
+
+  useEffect(() => {
+    definirTema(document.documentElement.dataset.tema === "escuro" ? "escuro" : "claro");
+  }, []);
+
+  function alternar() {
+    const proximo = tema === "claro" ? "escuro" : "claro";
+    document.documentElement.dataset.tema = proximo;
+    definirTema(proximo);
+    try {
+      localStorage.setItem("tema", proximo);
+    } catch {
+      // Sem armazenamento: o tema vale só para esta sessão.
+    }
+  }
+
+  return (
+    <BotaoIcone rotulo={tema === "claro" ? "Usar tema escuro" : "Usar tema claro"} onClick={alternar}>
+      {tema === "claro" ? <Moon size={14} /> : <Sun size={14} />}
+    </BotaoIcone>
   );
 }
 

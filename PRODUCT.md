@@ -118,13 +118,14 @@ limpas e abríveis em qualquer editor.
   selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
   nenhuma para instalar.
 - **Anotações e Kanban são duas aplicações independentes**, alternadas por
-  um seletor bem no topo da tela (acima até da tira de cadernos) — não um
-  botão discreto perto de outra coisa. Em modo Kanban, a coluna inteira de
-  navegação das anotações (busca, captura rápida, tema, seções, os atalhos
-  fixos) some da tela; só ficam a tira de cadernos (cujos chips passam a
-  abrir o quadro de cada caderno, não as seções) e o quadro em si. Trocar de
-  aplicação preserva o caderno atual quando dá — vai da seção aberta pro
-  quadro daquele mesmo caderno, e volta pra primeira seção dele.
+  um seletor no topo da tela — numa única barra junto com a tira de
+  cadernos e o botão de tema claro/escuro (visível nos dois modos, não só
+  em Anotações). Em modo Kanban, a coluna inteira de navegação das
+  anotações (busca, captura rápida, seções, os atalhos fixos) some da
+  tela; só ficam essa barra do topo e o quadro em si — os chips de caderno
+  passam a abrir o quadro de cada um, não as seções. Trocar de aplicação
+  preserva o caderno atual quando dá — vai da seção aberta pro quadro
+  daquele mesmo caderno, e volta pra primeira seção dele.
 - Kanban por caderno (`/kanban/<Caderno>`):
   um quadro independente das anotações, com 4 colunas fixas — Backlog,
   Fazendo, Impedido, Feito. Cada tarefa é um arquivo `.md` de verdade
@@ -164,6 +165,15 @@ limpas e abríveis em qualquer editor.
     outra coluna, mudar prioridade, duplicar tarefa (etiqueta/prioridade/
     prazo vêm junto, dependências não), favoritar e excluir — sem precisar
     abrir o editor da tarefa pra nada disso.
+  - **Renomear com dois cliques**: dois cliques no título — do cartão ou do
+    editor aberto — trocam ele por um campo de texto na hora (Enter ou sair
+    do campo confirma, Esc cancela). Um clique só não faz nada, pra não se
+    confundir com abrir o cartão.
+  - **Editor da tarefa**: título editável no topo, descrição em markdown
+    que abre só com a caixa de edição (sem prévia lado a lado) — um botão
+    "Salvar" embaixo dela grava e troca pra visualização renderizada; um
+    "Editar" volta pra caixa de texto. Prioridade, prazo, sprint, etiquetas
+    e "Bloqueado por" ficam numa coluna à direita, separados do conteúdo.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app
