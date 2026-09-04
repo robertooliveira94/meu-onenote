@@ -7,6 +7,7 @@ import { cadernoDaUrl } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo } from "@/lib/tipos";
 
 import { ColunaSecoes } from "./coluna-secoes";
+import { SeletorAplicativo } from "./seletor-aplicativo";
 import { SeletorDeCadernos } from "./seletor-cadernos";
 
 /**
@@ -52,15 +53,22 @@ function CascaInterna({
   const nomeCadernoAtivo = cadernoDaUrl(caminhoAtual);
   const cadernoAtivo = cadernos.find((item) => item.nome === nomeCadernoAtivo) ?? null;
   const corAtiva = cadernoAtivo?.cor ?? null;
+  // As duas aplicações são independentes: fora de /kanban/..., é sempre
+  // Anotações — mesmo nas telas globais (início, etiquetas, grafo...) que
+  // não têm um caderno "aberto".
+  const appAtual: "notas" | "kanban" = caminhoAtual.startsWith("/kanban/") ? "kanban" : "notas";
 
   return (
     <div
       className="flex h-screen flex-col overflow-hidden"
       style={corAtiva ? ({ "--realce": corAtiva } as React.CSSProperties) : undefined}
     >
-      <SeletorDeCadernos cadernos={cadernos} />
+      <SeletorAplicativo appAtual={appAtual} cadernoAtivo={cadernoAtivo} cadernos={cadernos} />
+      <SeletorDeCadernos cadernos={cadernos} appAtual={appAtual} />
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+        {appAtual === "notas" ? (
+          <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+        ) : null}
         <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
       </div>
     </div>

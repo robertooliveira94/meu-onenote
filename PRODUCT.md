@@ -117,7 +117,15 @@ limpas e abríveis em qualquer editor.
   navegador que recorta a página aberta (título, endereço e o texto
   selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
   nenhuma para instalar.
-- Kanban por caderno (`/kanban/<Caderno>`, botão ao lado de "Nova seção"):
+- **Anotações e Kanban são duas aplicações independentes**, alternadas por
+  um seletor bem no topo da tela (acima até da tira de cadernos) — não um
+  botão discreto perto de outra coisa. Em modo Kanban, a coluna inteira de
+  navegação das anotações (busca, captura rápida, tema, seções, os atalhos
+  fixos) some da tela; só ficam a tira de cadernos (cujos chips passam a
+  abrir o quadro de cada caderno, não as seções) e o quadro em si. Trocar de
+  aplicação preserva o caderno atual quando dá — vai da seção aberta pro
+  quadro daquele mesmo caderno, e volta pra primeira seção dele.
+- Kanban por caderno (`/kanban/<Caderno>`):
   um quadro independente das anotações, com 4 colunas fixas — Backlog,
   Fazendo, Impedido, Feito. Cada tarefa é um arquivo `.md` de verdade
   (`<Caderno>/_kanban/<Coluna>/<Tarefa>.md`); arrastar entre colunas move o

@@ -9,7 +9,6 @@ import {
   FilePlus2,
   GitBranch,
   House,
-  KanbanSquare,
   LayoutTemplate,
   ListChecks,
   Moon,
@@ -53,7 +52,7 @@ import {
 } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import { urlDaNota, urlDaSecao, urlDoKanban } from "@/lib/rotas";
+import { urlDaNota, urlDaSecao } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, Secao } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
@@ -74,9 +73,6 @@ type Acao = {
  * lar da página largada em cima).
  */
 type Sobrevoo = { caminho: string; antes: boolean; tipo: "secao" | "pagina" } | null;
-
-const CLASSE_ICONE_LINK =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta";
 
 /** Monta o arquivo no servidor e entrega ao navegador como download. */
 async function baixarSecao(caminho: string): Promise<void> {
@@ -278,14 +274,6 @@ export function ColunaSecoes({
           <div className="flex items-center justify-between px-3.5 pt-3 pb-1.5">
             <span className="text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">Seções</span>
             <div className="flex items-center gap-0.5">
-              <Link
-                href={urlDoKanban(caderno.caminho)}
-                title={`Kanban de ${caderno.nome}`}
-                aria-label={`Kanban de ${caderno.nome}`}
-                className={CLASSE_ICONE_LINK}
-              >
-                <KanbanSquare size={14} />
-              </Link>
               <BotaoIcone
                 rotulo={`Nova seção em ${caderno.nome}`}
                 onClick={() =>

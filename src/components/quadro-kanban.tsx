@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, KanbanSquare, Lock, Plus, Star, Trash2, X } from "lucide-react";
+import { Check, KanbanSquare, Lock, Plus, Star, Tag, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -173,6 +174,13 @@ export function QuadroKanban({
             <span className="font-mono">{caderno.nome}/_kanban/</span>.
           </p>
         </div>
+        <Link
+          href="/kanban/etiquetas"
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta"
+        >
+          <Tag size={13} />
+          Gerenciar etiquetas
+        </Link>
       </header>
 
       {bloqueio ? (

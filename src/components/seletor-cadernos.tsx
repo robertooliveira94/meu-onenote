@@ -18,7 +18,7 @@ import {
 } from "@/app/acoes";
 import { lerCaminhoDeSecao, trazSecao } from "@/lib/arrastar";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
-import { cadernoDaUrl, urlDaSecao } from "@/lib/rotas";
+import { cadernoDaUrl, urlDaSecao, urlDoKanban } from "@/lib/rotas";
 import type { Caderno } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoCor, DialogoIcone, DialogoNome } from "./dialogos";
@@ -44,7 +44,14 @@ async function baixarCaderno(caminho: string): Promise<void> {
  * árvore nenhuma: só uma lista horizontal, igual ao seletor de cadernos do
  * OneNote de verdade.
  */
-export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
+export function SeletorDeCadernos({
+  cadernos,
+  appAtual,
+}: {
+  cadernos: Caderno[];
+  /** Em modo Kanban, cada chip abre o quadro do caderno em vez das seções dele. */
+  appAtual: "notas" | "kanban";
+}) {
   const caminhoAtual = usePathname();
   const roteador = useRouter();
   const [acao, definirAcao] = useState<Acao>(null);
@@ -68,6 +75,7 @@ export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
           key={caderno.caminho}
           caderno={caderno}
           ativo={caderno.nome === nomeAtivo}
+          appAtual={appAtual}
           aoAgir={definirAcao}
         />
       ))}
@@ -161,18 +169,23 @@ export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
 function ChipCaderno({
   caderno,
   ativo,
+  appAtual,
   aoAgir,
 }: {
   caderno: Caderno;
   ativo: boolean;
+  appAtual: "notas" | "kanban";
   aoAgir: (acao: Acao) => void;
 }) {
   const roteador = useRouter();
   const caminhoAtual = usePathname();
   const [sobrevoo, definirSobrevoo] = useState(false);
-  // Abrir o caderno leva pra primeira seção dele — se ainda não tiver
-  // nenhuma, cai na tela do próprio caderno, que já convida a criar uma.
-  const endereco = urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
+  // Em modo Kanban, o chip abre o quadro deste caderno — trocar de caderno
+  // não deveria te tirar da aplicação em que você está. Em modo Anotações,
+  // leva pra primeira seção dele (ou pro próprio caderno, se ainda não
+  // tiver nenhuma, o que já convida a criar uma).
+  const endereco =
+    appAtual === "kanban" ? urlDoKanban(caderno.caminho) : urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
 
   return (
     <div
