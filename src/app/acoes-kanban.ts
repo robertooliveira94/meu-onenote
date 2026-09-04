@@ -3,9 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import {
+  criarEtiquetaKanban,
+  editarEtiquetaKanban,
+  excluirEtiquetaKanban,
+} from "@/lib/etiquetas-kanban";
 import { COLUNAS_KANBAN } from "@/lib/tipos";
 import {
   criarTarefa,
+  definirDependencias,
+  definirEtiquetasDaTarefa,
   excluirTarefa,
   lerTarefa,
   listarQuadro,
@@ -96,6 +103,69 @@ export async function acaoReordenarTarefasPara(pastaColuna: string, ordem: strin
 export async function acaoExcluirTarefa(caminho: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
     await excluirTarefa(caminhoValido.parse(caminho));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirEtiquetasDaTarefa(caminho: string, etiquetas: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const lista = z.array(z.string().max(60)).max(20).parse(etiquetas);
+    await definirEtiquetasDaTarefa(validado, lista);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirDependencias(caminho: string, dependeDe: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const lista = z.array(caminhoValido).max(50).parse(dependeDe);
+    await definirDependencias(validado, lista);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// --------------------------------------------------------- etiquetas kanban
+
+export async function acaoCriarEtiquetaKanban(
+  nome: string,
+  cor: string,
+  descricao: string,
+): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await criarEtiquetaKanban(
+      z.string().min(1).max(40).parse(nome),
+      z.string().parse(cor),
+      z.string().max(140).parse(descricao),
+    );
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoEditarEtiquetaKanban(
+  id: string,
+  nome: string,
+  cor: string,
+  descricao: string,
+): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await editarEtiquetaKanban(z.string().max(60).parse(id), {
+      nome: z.string().min(1).max(40).parse(nome),
+      cor: z.string().parse(cor),
+      descricao: z.string().max(140).parse(descricao),
+    });
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoExcluirEtiquetaKanban(id: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await excluirEtiquetaKanban(z.string().max(60).parse(id));
   });
   atualizarTudo();
   return resposta;

@@ -16,7 +16,7 @@ import {
 import { enviarParaLixeira } from "./lixeira";
 import { atualizarIndice, entradaDaNota, lerIndice, reapontar } from "./indice";
 import { COLUNAS_KANBAN } from "./tipos";
-import type { ColunaKanban, Quadro, TarefaKanban } from "./tipos";
+import type { ColunaKanban, Indice, Quadro, TarefaKanban } from "./tipos";
 
 /**
  * O quadro Kanban de um caderno — independente das anotações, mas do mesmo
@@ -68,6 +68,18 @@ async function nomeDisponivel(pasta: string, base: string): Promise<string> {
   return tentativa;
 }
 
+/**
+ * Quando uma tarefa muda de caminho (mover ou renomear), qualquer outra
+ * tarefa que dependia dela (`dependeDe`) ficaria apontando para um arquivo
+ * que não existe mais. Corrige a referência em todo mundo que dependia.
+ */
+function atualizarDependenciasApósMover(indice: Indice, de: string, para: string): void {
+  for (const entrada of Object.values(indice.notas)) {
+    if (!entrada.dependeDe?.includes(de)) continue;
+    entrada.dependeDe = entrada.dependeDe.map((caminho) => (caminho === de ? para : caminho));
+  }
+}
+
 /** Todas as tarefas do caderno, já separadas por coluna e na ordem manual. */
 export async function listarQuadro(caderno: string): Promise<Quadro> {
   await garantirQuadro(caderno);
@@ -94,8 +106,9 @@ export async function listarQuadro(caderno: string): Promise<Quadro> {
         coluna,
         criadoEm: meta?.criadoEm ?? new Date().toISOString(),
         atualizadoEm: meta?.atualizadoEm ?? new Date().toISOString(),
-        etiquetas: meta?.etiquetas ?? [],
+        etiquetas: meta?.etiquetasKanban ?? [],
         favorita: meta?.favorita ?? false,
+        dependeDe: meta?.dependeDe ?? [],
       });
     }
 
@@ -163,7 +176,10 @@ export async function renomearTarefa(caminho: string, novoTitulo: string): Promi
   if (await existe(resolverCaminho(alvo))) throw new Error("Já existe uma tarefa com esse nome aqui");
 
   await fs.rename(resolverCaminho(caminho), resolverCaminho(alvo));
-  await atualizarIndice((indice) => reapontar(indice, caminho, alvo));
+  await atualizarIndice((indice) => {
+    reapontar(indice, caminho, alvo);
+    atualizarDependenciasApósMover(indice, caminho, alvo);
+  });
   return alvo;
 }
 
@@ -179,7 +195,10 @@ export async function moverTarefa(caminho: string, colunaDestino: ColunaKanban):
   if (await existe(resolverCaminho(alvo))) throw new Error("Já existe uma tarefa com esse nome na coluna de destino");
 
   await fs.rename(resolverCaminho(caminho), resolverCaminho(alvo));
-  await atualizarIndice((indice) => reapontar(indice, caminho, alvo));
+  await atualizarIndice((indice) => {
+    reapontar(indice, caminho, alvo);
+    atualizarDependenciasApósMover(indice, caminho, alvo);
+  });
   return alvo;
 }
 
@@ -195,4 +214,25 @@ export async function reordenarTarefasPara(ordemDosCaminhos: string[]): Promise<
 /** Manda para a mesma lixeira das notas — reaproveitada como está, sem nada específico de Kanban. */
 export async function excluirTarefa(caminho: string): Promise<void> {
   await enviarParaLixeira(caminho);
+}
+
+export async function definirEtiquetasDaTarefa(caminho: string, etiquetas: string[]): Promise<void> {
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).etiquetasKanban = [...new Set(etiquetas)];
+  });
+}
+
+/**
+ * `dependeDe` são caminhos de outras tarefas que bloqueiam esta — ela só
+ * pode entrar em "Feito" quando todas elas já estiverem lá. Recusa depender
+ * dela mesma; não faz uma varredura completa atrás de ciclo mais longo
+ * (A depende de B, que depende de A de novo por um caminho indireto) —
+ * na prática, com quadros pequenos, o próprio "Bloqueado por" já deixa
+ * isso bem visível na hora de escolher.
+ */
+export async function definirDependencias(caminho: string, dependeDe: string[]): Promise<void> {
+  const limpas = [...new Set(dependeDe)].filter((item) => item !== caminho);
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).dependeDe = limpas;
+  });
 }

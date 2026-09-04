@@ -127,6 +127,16 @@ limpas e abríveis em qualquer editor.
   Exclusão vai para a mesma lixeira das páginas. As tarefas do Kanban não
   aparecem no painel `/tarefas` (o quadro já cumpre esse papel) nem na
   árvore de seções (a pasta `_kanban` é interna, como `_sistema`).
+  - **Etiquetas do Kanban** (`/kanban/etiquetas`): cadastro à parte das
+    etiquetas de anotações — mesma interface, mas vale só para tarefas, em
+    qualquer quadro. O editor de tarefa tem seu próprio seletor, que já
+    linka pra lá quando falta cadastrar uma cor nova.
+  - **Dependências ("Bloqueado por")**: uma tarefa pode depender de outras
+    do mesmo quadro. O cartão mostra um cadeado com a contagem de
+    dependências ainda não concluídas; arrastar a tarefa pra "Feito"
+    enquanto sobrar alguma pendente é recusado, com um aviso explicando
+    quais faltam. Mover ou renomear uma tarefa da qual outras dependem
+    atualiza a referência sozinho, sem quebrar o vínculo.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app

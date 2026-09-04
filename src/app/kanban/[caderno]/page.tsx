@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { QuadroKanban } from "@/components/quadro-kanban";
 import { lerArvore } from "@/lib/arquivos";
+import { listarEtiquetasKanban } from "@/lib/etiquetas-kanban";
 import { listarQuadro } from "@/lib/kanban";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function TelaDoKanban({
   const cadernoAtual = cadernos.find((item) => item.caminho === caderno);
   if (!cadernoAtual) notFound();
 
-  const quadro = await listarQuadro(caderno);
+  const [quadro, etiquetasKanban] = await Promise.all([listarQuadro(caderno), listarEtiquetasKanban()]);
 
-  return <QuadroKanban caderno={cadernoAtual} quadro={quadro} />;
+  return <QuadroKanban caderno={cadernoAtual} quadro={quadro} etiquetasKanban={etiquetasKanban} />;
 }
