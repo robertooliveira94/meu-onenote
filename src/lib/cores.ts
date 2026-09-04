@@ -19,6 +19,14 @@ export const CORES_CADERNO = [
 /** Cores oferecidas no cadastro de etiquetas. */
 export const CORES_ETIQUETA = [...CORES_CADERNO, "#F5B921", "#46A758"];
 
+/** Cor de cada nível de prioridade de tarefa do Kanban, do mais calmo ao mais aceso. */
+export const CORES_PRIORIDADE: Record<"baixa" | "media" | "alta" | "urgente", string> = {
+  baixa: "#7C93A8",
+  media: "#F5B921",
+  alta: "#F5822C",
+  urgente: "#E5484D",
+};
+
 /** Ícone inicial de cada caderno, na ordem de criação. */
 export const ICONES_CADERNO = ["📓", "📗", "📘", "📙", "📕", "📔"];
 

@@ -8,16 +8,26 @@ import {
   editarEtiquetaKanban,
   excluirEtiquetaKanban,
 } from "@/lib/etiquetas-kanban";
-import { COLUNAS_KANBAN } from "@/lib/tipos";
+import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban";
+import { PRIORIDADES } from "@/lib/tipos";
 import {
+  criarColuna,
   criarTarefa,
+  definirColunaConcluida,
   definirDependencias,
   definirEtiquetasDaTarefa,
+  definirPrazo,
+  definirPrioridade,
+  definirSprintDaTarefa,
+  duplicarTarefa,
+  excluirColuna,
   excluirTarefa,
   lerTarefa,
   listarQuadro,
   moverTarefa,
+  renomearColuna,
   renomearTarefa,
+  reordenarColunas,
   reordenarTarefasPara,
   salvarTarefa,
 } from "@/lib/kanban";
@@ -31,7 +41,8 @@ import type { Resposta } from "./acoes";
  */
 
 const caminhoValido = z.string().min(1).max(400);
-const colunaValida = z.enum(COLUNAS_KANBAN);
+const colunaValida = z.string().min(1).max(40);
+const prioridadeValida = z.enum(PRIORIDADES);
 
 async function tentar(acao: () => Promise<void>): Promise<Resposta> {
   try {
@@ -86,6 +97,14 @@ export async function acaoMoverTarefa(caminho: string, colunaDestino: ColunaKanb
   return resposta;
 }
 
+export async function acaoDuplicarTarefa(caminho: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await duplicarTarefa(caminhoValido.parse(caminho));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
 /** `pastaColuna` é o caminho da pasta da coluna (ex.: "Caderno/_kanban/Backlog"), só para validar. */
 export async function acaoReordenarTarefasPara(pastaColuna: string, ordem: string[]): Promise<Resposta> {
   const resposta = await tentar(async () => {
@@ -128,7 +147,109 @@ export async function acaoDefinirDependencias(caminho: string, dependeDe: string
   return resposta;
 }
 
-// --------------------------------------------------------- etiquetas kanban
+export async function acaoDefinirPrioridade(caminho: string, prioridade: string | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const valor = prioridade === null ? null : prioridadeValida.parse(prioridade);
+    await definirPrioridade(validado, valor);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirPrazo(caminho: string, prazo: string | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const valor = prazo === null ? null : z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(prazo);
+    await definirPrazo(validado, valor);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirSprintDaTarefa(caminho: string, sprintId: string | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const valor = sprintId === null ? null : z.string().max(60).parse(sprintId);
+    await definirSprintDaTarefa(validado, valor);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// --------------------------------------------------------------- colunas
+
+export async function acaoCriarColuna(caderno: string, nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await criarColuna(caminhoValido.parse(caderno), z.string().min(1).max(40).parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoRenomearColuna(caderno: string, nomeAtual: string, novoNome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await renomearColuna(
+      caminhoValido.parse(caderno),
+      colunaValida.parse(nomeAtual),
+      z.string().min(1).max(40).parse(novoNome),
+    );
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoExcluirColuna(caderno: string, nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await excluirColuna(caminhoValido.parse(caderno), colunaValida.parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoReordenarColunas(caderno: string, novaOrdem: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await reordenarColunas(caminhoValido.parse(caderno), z.array(colunaValida).max(30).parse(novaOrdem));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirColunaConcluida(caderno: string, nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await definirColunaConcluida(caminhoValido.parse(caderno), colunaValida.parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// --------------------------------------------------------------- sprints
+
+export async function acaoCriarSprint(nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await criarSprint(z.string().min(1).max(60).parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoRenomearSprint(id: string, nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await renomearSprint(z.string().max(60).parse(id), z.string().min(1).max(60).parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoExcluirSprint(id: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await excluirSprint(z.string().max(60).parse(id));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// --------------------------------------------------------------- etiquetas kanban
 
 export async function acaoCriarEtiquetaKanban(
   nome: string,

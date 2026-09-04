@@ -141,10 +141,29 @@ limpas e abríveis em qualquer editor.
     linka pra lá quando falta cadastrar uma cor nova.
   - **Dependências ("Bloqueado por")**: uma tarefa pode depender de outras
     do mesmo quadro. O cartão mostra um cadeado com a contagem de
-    dependências ainda não concluídas; arrastar a tarefa pra "Feito"
-    enquanto sobrar alguma pendente é recusado, com um aviso explicando
-    quais faltam. Mover ou renomear uma tarefa da qual outras dependem
-    atualiza a referência sozinho, sem quebrar o vínculo.
+    dependências ainda não concluídas; arrastar a tarefa pra a coluna de
+    conclusão enquanto sobrar alguma pendente é recusado, com um aviso
+    explicando quais faltam. Mover ou renomear uma tarefa da qual outras
+    dependem atualiza a referência sozinho, sem quebrar o vínculo.
+  - **Colunas configuráveis por caderno**: as 4 colunas padrão (Backlog,
+    Fazendo, Impedido, Feito) são só o ponto de partida — dá pra criar,
+    renomear, reordenar e excluir coluna (só vazia) pelo menu de três
+    pontos no cabeçalho de cada uma. Uma delas é marcada como "coluna de
+    conclusão" (Feito, por padrão) — é ela que o bloqueio de dependências
+    usa. Guardado em `<Caderno>/_kanban/config.json`.
+  - **Prioridade** (Baixa/Média/Alta/Urgente, com cor) e **prazo** (data
+    opcional, cartão destaca em vermelho quando atrasado e a tarefa ainda
+    não está na coluna de conclusão) por tarefa.
+  - **Sprints**: agrupador simples e global (sem datas nem burndown) — cria
+    uma sprint com um nome, vincula tarefas de qualquer quadro a ela,
+    filtra o quadro por sprint.
+  - **Filtro do quadro** por etiqueta, prioridade ou sprint — no topo do
+    quadro, sem sair da tela; mostra quantas tarefas batem de quantas
+    existem na coluna.
+  - **Menu de três pontos no cartão** (some ao passar o mouse): mover para
+    outra coluna, mudar prioridade, duplicar tarefa (etiqueta/prioridade/
+    prazo vêm junto, dependências não), favoritar e excluir — sem precisar
+    abrir o editor da tarefa pra nada disso.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app
