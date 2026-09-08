@@ -16,36 +16,43 @@ import {
 import { enviarParaLixeira } from "./lixeira";
 import { atualizarIndice, entradaDaNota, lerIndice, reapontar } from "./indice";
 import { COLUNAS_KANBAN_PADRAO } from "./tipos";
-import type { ColunaKanban, ConfigQuadro, Indice, Prioridade, Quadro, TarefaKanban } from "./tipos";
+import type {
+  ColunaKanban,
+  ConfigQuadro,
+  Indice,
+  Prioridade,
+  Quadro,
+  Subtarefa,
+  TarefaKanban,
+} from "./tipos";
 
 /**
- * O quadro Kanban de um caderno — independente das anotações, mas do mesmo
- * jeito que elas: cada tarefa é um arquivo `.md` de verdade, e cada coluna é
- * uma pasta (`<Caderno>/_kanban/<Coluna>/`). Arrastar uma tarefa entre
- * colunas é literalmente mover o arquivo de pasta. As colunas em si são
- * configuráveis por caderno (`config.json` dentro de `_kanban/`): todo
+ * O conteúdo de um quadro Kanban. O Kanban é uma aplicação à parte das
+ * anotações, com quadros próprios (ver `quadros.ts`) que não têm nada a ver
+ * com os cadernos: cada quadro é uma pasta em `_kanban/<Quadro>/`, cada
+ * coluna é uma subpasta e cada tarefa é um arquivo `.md` de verdade.
+ * Arrastar uma tarefa entre colunas é literalmente mover o arquivo de pasta.
+ * As colunas são configuráveis por quadro (`config.json` dentro dele): todo
  * quadro novo nasce com Backlog/Fazendo/Impedido/Feito, mas dá pra criar,
  * renomear, reordenar e excluir coluna (só vazia).
  *
  * As tarefas continuam entrando no índice geral (`_sistema/indice.json`,
- * mesma `entradaDaNota` das páginas) — ganham etiqueta, favorito e ordem de
- * graça, e aparecem na busca global. Só ficam de fora do painel `/tarefas`
- * (que já é sobre isso) e da árvore de seções (automático: `_kanban` começa
- * com "_", igual a `_sistema`).
+ * mesma `entradaDaNota` das páginas) — ganham favorito, ordem e histórico de
+ * datas de graça. Ficam de fora do que é das Anotações (busca, recentes,
+ * painel `/tarefas`, árvore de cadernos), porque são de outra aplicação.
  *
  * As funções aqui não passam pelas de `arquivos.ts` (criarNota, moverItem)
  * de propósito: aquelas existem para proteger a hierarquia fixa de páginas
  * (sempre dentro de uma seção, profundidade 2) — a hierarquia do Kanban é
- * outra (sempre dentro de uma coluna, profundidade 3), então tem sua
- * própria validação, sem afrouxar a das páginas.
+ * outra, então tem sua própria validação, sem afrouxar a das páginas.
  */
 
-function pastaDaColuna(caderno: string, coluna: ColunaKanban): string {
-  return juntar(caderno, PASTA_KANBAN, coluna);
+function pastaDaColuna(quadro: string, coluna: ColunaKanban): string {
+  return juntar(PASTA_KANBAN, quadro, coluna);
 }
 
-function caminhoConfig(caderno: string): string {
-  return juntar(caderno, PASTA_KANBAN, "config.json");
+function caminhoConfig(quadro: string): string {
+  return juntar(PASTA_KANBAN, quadro, "config.json");
 }
 
 function configPadrao(): ConfigQuadro {
@@ -61,24 +68,24 @@ async function existe(absoluto: string): Promise<boolean> {
   }
 }
 
-async function salvarConfigQuadro(caderno: string, config: ConfigQuadro): Promise<void> {
-  await fs.mkdir(resolverCaminho(juntar(caderno, PASTA_KANBAN)), { recursive: true });
-  await fs.writeFile(resolverCaminho(caminhoConfig(caderno)), JSON.stringify(config, null, 2), "utf8");
+async function salvarConfigQuadro(quadro: string, config: ConfigQuadro): Promise<void> {
+  await fs.mkdir(resolverCaminho(juntar(PASTA_KANBAN, quadro)), { recursive: true });
+  await fs.writeFile(resolverCaminho(caminhoConfig(quadro)), JSON.stringify(config, null, 2), "utf8");
 }
 
-async function garantirPastasDasColunas(caderno: string, config: ConfigQuadro): Promise<void> {
+async function garantirPastasDasColunas(quadro: string, config: ConfigQuadro): Promise<void> {
   for (const coluna of config.colunas) {
-    await fs.mkdir(resolverCaminho(pastaDaColuna(caderno, coluna)), { recursive: true });
+    await fs.mkdir(resolverCaminho(pastaDaColuna(quadro, coluna)), { recursive: true });
   }
 }
 
 /**
- * Garante que o quadro do caderno existe (arquivo de configuração + pastas
- * de coluna) e devolve a configuração atual — cria com o padrão de 4
- * colunas na primeira vez que o quadro deste caderno é aberto.
+ * Garante que o quadro existe (arquivo de configuração + pastas de coluna)
+ * e devolve a configuração atual — cria com o padrão de 4 colunas na
+ * primeira vez que este quadro é aberto.
  */
-export async function garantirQuadro(caderno: string): Promise<ConfigQuadro> {
-  const caminhoCfg = resolverCaminho(caminhoConfig(caderno));
+export async function garantirQuadro(quadro: string): Promise<ConfigQuadro> {
+  const caminhoCfg = resolverCaminho(caminhoConfig(quadro));
   let config: ConfigQuadro;
   if (await existe(caminhoCfg)) {
     try {
@@ -92,9 +99,9 @@ export async function garantirQuadro(caderno: string): Promise<ConfigQuadro> {
     }
   } else {
     config = configPadrao();
-    await salvarConfigQuadro(caderno, config);
+    await salvarConfigQuadro(quadro, config);
   }
-  await garantirPastasDasColunas(caderno, config);
+  await garantirPastasDasColunas(quadro, config);
   return config;
 }
 
@@ -122,14 +129,14 @@ function atualizarDependenciasApósMover(indice: Indice, de: string, para: strin
   }
 }
 
-/** Todas as tarefas do caderno, já separadas por coluna e na ordem manual. */
-export async function listarQuadro(caderno: string): Promise<Quadro> {
-  const config = await garantirQuadro(caderno);
+/** Todas as tarefas do quadro, já separadas por coluna e na ordem manual. */
+export async function listarQuadro(quadro: string): Promise<Quadro> {
+  const config = await garantirQuadro(quadro);
   const indice = await lerIndice();
 
   const tarefasPorColuna: Record<string, TarefaKanban[]> = {};
   for (const coluna of config.colunas) {
-    const pasta = pastaDaColuna(caderno, coluna);
+    const pasta = pastaDaColuna(quadro, coluna);
     let entradas: Dirent[];
     try {
       entradas = await fs.readdir(resolverCaminho(pasta), { withFileTypes: true });
@@ -154,6 +161,8 @@ export async function listarQuadro(caderno: string): Promise<Quadro> {
         prioridade: meta?.prioridadeKanban ?? null,
         prazo: meta?.prazoKanban ?? null,
         sprintId: meta?.sprintKanban ?? null,
+        subtarefas: meta?.subtarefasKanban ?? [],
+        impedimento: meta?.impedimentoKanban ?? null,
       });
     }
 
@@ -168,14 +177,14 @@ export async function listarQuadro(caderno: string): Promise<Quadro> {
 }
 
 export async function criarTarefa(
-  caderno: string,
+  quadro: string,
   coluna: ColunaKanban,
   titulo: string,
   conteudoInicial = "",
 ): Promise<string> {
-  const config = await garantirQuadro(caderno);
+  const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(coluna)) throw new Error("Coluna não existe");
-  const pasta = pastaDaColuna(caderno, coluna);
+  const pasta = pastaDaColuna(quadro, coluna);
   const base = limparNome(titulo) || "Nova tarefa";
   const nome = await nomeDisponivel(pasta, base);
   const caminho = juntar(pasta, nome);
@@ -229,13 +238,14 @@ export async function renomearTarefa(caminho: string, novoTitulo: string): Promi
   return alvo;
 }
 
-/** Move a tarefa para outra coluna do mesmo caderno — arrastar entre áreas do quadro. */
+/** Move a tarefa para outra coluna do mesmo quadro — arrastar entre áreas do quadro. */
 export async function moverTarefa(caminho: string, colunaDestino: ColunaKanban): Promise<string> {
   garantirForaDoSistema(caminho);
-  const caderno = segmentos(caminho)[0];
-  const config = await garantirQuadro(caderno);
+  // "_kanban/<Quadro>/<Coluna>/<Tarefa>.md" — o quadro é o 2º segmento.
+  const quadro = segmentos(caminho)[1];
+  const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(colunaDestino)) throw new Error("Coluna de destino não existe");
-  const pastaDestino = pastaDaColuna(caderno, colunaDestino);
+  const pastaDestino = pastaDaColuna(quadro, colunaDestino);
 
   const alvo = juntar(pastaDestino, nomeDe(caminho));
   if (alvo === caminho) return caminho;
@@ -272,6 +282,9 @@ export async function duplicarTarefa(caminho: string): Promise<string> {
       prioridadeKanban: original?.prioridadeKanban,
       prazoKanban: original?.prazoKanban,
       sprintKanban: original?.sprintKanban,
+      subtarefasKanban: original?.subtarefasKanban?.map((item) => ({ ...item })),
+      // `impedimentoKanban` fica de fora junto com `dependeDe`: o que
+      // travava a original não trava automaticamente a cópia.
       // dependeDe fica de fora de propósito: é uma relação da tarefa
       // original, a cópia não deveria nascer bloqueada por causa dela.
     };
@@ -333,26 +346,52 @@ export async function definirSprintDaTarefa(caminho: string, sprintId: string | 
   });
 }
 
+/**
+ * A checklist da tarefa. Fica no índice, e não no corpo em markdown, de
+ * propósito: o corpo é texto livre de quem escreve, e o cartão precisa
+ * contar "2/5" sem depender de a pessoa ter escrito as caixinhas num
+ * formato específico lá dentro.
+ */
+export async function definirSubtarefas(caminho: string, subtarefas: Subtarefa[]): Promise<void> {
+  const limpas = subtarefas
+    .map((item) => ({ id: item.id, texto: item.texto.trim().slice(0, 200), feita: Boolean(item.feita) }))
+    .filter((item) => item.texto.length > 0);
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).subtarefasKanban = limpas;
+  });
+}
+
+/**
+ * Marca a tarefa como impedida, com o motivo — `null` destrava. É diferente
+ * de "depende de outra tarefa": aqui o bloqueio é externo (esperando
+ * terceiro, faltando informação), e por isso aparece escrito no cartão.
+ */
+export async function definirImpedimento(caminho: string, motivo: string | null): Promise<void> {
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).impedimentoKanban = motivo === null ? undefined : motivo.trim().slice(0, 200);
+  });
+}
+
 // ------------------------------------------------------------------ colunas
 
 function limparNomeColuna(nome: string): string {
   return nome.trim().replace(/[/\\]/g, "-").slice(0, 40);
 }
 
-export async function criarColuna(caderno: string, nome: string): Promise<void> {
-  const config = await garantirQuadro(caderno);
+export async function criarColuna(quadro: string, nome: string): Promise<void> {
+  const config = await garantirQuadro(quadro);
   const limpo = limparNomeColuna(nome);
   if (!limpo) throw new Error("Dê um nome para a coluna");
   if (config.colunas.some((coluna) => coluna.toLowerCase() === limpo.toLowerCase())) {
     throw new Error("Já existe uma coluna com esse nome");
   }
   config.colunas.push(limpo);
-  await fs.mkdir(resolverCaminho(pastaDaColuna(caderno, limpo)), { recursive: true });
-  await salvarConfigQuadro(caderno, config);
+  await fs.mkdir(resolverCaminho(pastaDaColuna(quadro, limpo)), { recursive: true });
+  await salvarConfigQuadro(quadro, config);
 }
 
-export async function renomearColuna(caderno: string, nomeAtual: string, novoNome: string): Promise<void> {
-  const config = await garantirQuadro(caderno);
+export async function renomearColuna(quadro: string, nomeAtual: string, novoNome: string): Promise<void> {
+  const config = await garantirQuadro(quadro);
   const limpo = limparNomeColuna(novoNome);
   if (!limpo) throw new Error("Dê um nome para a coluna");
   if (limpo === nomeAtual) return;
@@ -361,8 +400,8 @@ export async function renomearColuna(caderno: string, nomeAtual: string, novoNom
     throw new Error("Já existe uma coluna com esse nome");
   }
 
-  const pastaAntiga = pastaDaColuna(caderno, nomeAtual);
-  const pastaNova = pastaDaColuna(caderno, limpo);
+  const pastaAntiga = pastaDaColuna(quadro, nomeAtual);
+  const pastaNova = pastaDaColuna(quadro, limpo);
   await fs.rename(resolverCaminho(pastaAntiga), resolverCaminho(pastaNova));
 
   await atualizarIndice((indice) => {
@@ -377,16 +416,16 @@ export async function renomearColuna(caderno: string, nomeAtual: string, novoNom
 
   config.colunas = config.colunas.map((coluna) => (coluna === nomeAtual ? limpo : coluna));
   if (config.colunaConcluida === nomeAtual) config.colunaConcluida = limpo;
-  await salvarConfigQuadro(caderno, config);
+  await salvarConfigQuadro(quadro, config);
 }
 
 /** Só deixa excluir coluna vazia — evita apagar tarefa por engano ao mexer na estrutura do quadro. */
-export async function excluirColuna(caderno: string, nome: string): Promise<void> {
-  const config = await garantirQuadro(caderno);
+export async function excluirColuna(quadro: string, nome: string): Promise<void> {
+  const config = await garantirQuadro(quadro);
   if (config.colunas.length <= 1) throw new Error("O quadro precisa ter pelo menos uma coluna");
   if (!config.colunas.includes(nome)) throw new Error("Coluna não encontrada");
 
-  const pasta = pastaDaColuna(caderno, nome);
+  const pasta = pastaDaColuna(quadro, nome);
   let entradas: Dirent[] = [];
   try {
     entradas = await fs.readdir(resolverCaminho(pasta), { withFileTypes: true });
@@ -400,22 +439,22 @@ export async function excluirColuna(caderno: string, nome: string): Promise<void
   await fs.rm(resolverCaminho(pasta), { recursive: true, force: true });
   config.colunas = config.colunas.filter((coluna) => coluna !== nome);
   if (config.colunaConcluida === nome) config.colunaConcluida = config.colunas[config.colunas.length - 1];
-  await salvarConfigQuadro(caderno, config);
+  await salvarConfigQuadro(quadro, config);
 }
 
-export async function reordenarColunas(caderno: string, novaOrdem: string[]): Promise<void> {
-  const config = await garantirQuadro(caderno);
+export async function reordenarColunas(quadro: string, novaOrdem: string[]): Promise<void> {
+  const config = await garantirQuadro(quadro);
   const mesmoConjunto =
     novaOrdem.length === config.colunas.length && novaOrdem.every((coluna) => config.colunas.includes(coluna));
   if (!mesmoConjunto) throw new Error("A lista de colunas não bate com o quadro atual");
   config.colunas = novaOrdem;
-  await salvarConfigQuadro(caderno, config);
+  await salvarConfigQuadro(quadro, config);
 }
 
 /** Qual coluna conta como "concluída" pro bloqueio de dependências ("Bloqueado por"). */
-export async function definirColunaConcluida(caderno: string, nome: string): Promise<void> {
-  const config = await garantirQuadro(caderno);
+export async function definirColunaConcluida(quadro: string, nome: string): Promise<void> {
+  const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(nome)) throw new Error("Coluna não encontrada");
   config.colunaConcluida = nome;
-  await salvarConfigQuadro(caderno, config);
+  await salvarConfigQuadro(quadro, config);
 }

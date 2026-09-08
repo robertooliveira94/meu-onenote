@@ -4,23 +4,23 @@ import clsx from "clsx";
 import {
   Calendar,
   Check,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Copy,
   Flag,
   FlagOff,
-  KanbanSquare,
   ListChecks,
   Lock,
   MoreHorizontal,
+  OctagonAlert,
   Pencil,
   Plus,
+  Square,
   Star,
-  Tag,
   Trash2,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -31,9 +31,11 @@ import {
   acaoCriarTarefa,
   acaoDefinirColunaConcluida,
   acaoDefinirDependencias,
+  acaoDefinirImpedimento,
   acaoDefinirPrazo,
   acaoDefinirPrioridade,
   acaoDefinirSprintDaTarefa,
+  acaoDefinirSubtarefas,
   acaoDuplicarTarefa,
   acaoExcluirColuna,
   acaoExcluirSprint,
@@ -54,14 +56,16 @@ import {
 } from "@/lib/arrastar";
 import { juntar } from "@/lib/caminho-texto";
 import { CORES_PRIORIDADE } from "@/lib/cores";
+import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
 import { PRIORIDADES, RUBRICA_PRIORIDADE } from "@/lib/tipos";
 import type {
-  Caderno,
   ColunaKanban,
   EtiquetaKanban,
   Prioridade,
   Quadro,
+  ResumoQuadro,
   SprintKanban,
+  Subtarefa,
   TarefaKanban,
 } from "@/lib/tipos";
 
@@ -99,44 +103,47 @@ function dependenciasPendentes(
 }
 
 /**
- * O quadro Kanban de um caderno — independente das anotações. Cada tarefa é
- * um arquivo `.md` de verdade (`<Caderno>/_kanban/<Coluna>/<Tarefa>.md`);
- * arrastar entre colunas move o arquivo de pasta. As colunas são
- * configuráveis (criar, renomear, reordenar, excluir se vazia).
+ * Um quadro do Kanban — aplicação à parte das anotações, com quadros
+ * próprios. Cada tarefa é um arquivo `.md` de verdade
+ * (`_kanban/<Quadro>/<Coluna>/<Tarefa>.md`); arrastar entre colunas move o
+ * arquivo de pasta. As colunas são configuráveis (criar, renomear,
+ * reordenar, excluir se vazia).
  */
 export function QuadroKanban({
-  caderno,
   quadro,
+  conteudo,
   etiquetasKanban,
   sprints,
 }: {
-  caderno: Caderno;
-  quadro: Quadro;
+  /** O quadro em si: nome, cor, ícone. */
+  quadro: ResumoQuadro;
+  /** O conteúdo dele: colunas configuradas + tarefas de cada uma. */
+  conteudo: Quadro;
   etiquetasKanban: EtiquetaKanban[];
   sprints: SprintKanban[];
 }) {
   const roteador = useRouter();
-  const colunas = quadro.config.colunas;
-  const assinaturaTarefas = colunas.map((coluna) => (quadro.tarefas[coluna] ?? []).map((t) => t.caminho).join(",")).join("|");
+  const colunas = conteudo.config.colunas;
+  const assinaturaTarefas = colunas.map((coluna) => (conteudo.tarefas[coluna] ?? []).map((t) => t.caminho).join(",")).join("|");
 
   const [ordemLocal, definirOrdemLocal] = useState<Record<string, string[]>>(() =>
-    Object.fromEntries(colunas.map((coluna) => [coluna, (quadro.tarefas[coluna] ?? []).map((t) => t.caminho)])),
+    Object.fromEntries(colunas.map((coluna) => [coluna, (conteudo.tarefas[coluna] ?? []).map((t) => t.caminho)])),
   );
   const [mapa, definirMapa] = useState<Record<string, TarefaKanban>>(() => {
     const m: Record<string, TarefaKanban> = {};
-    for (const coluna of colunas) for (const tarefa of quadro.tarefas[coluna] ?? []) m[tarefa.caminho] = tarefa;
+    for (const coluna of colunas) for (const tarefa of conteudo.tarefas[coluna] ?? []) m[tarefa.caminho] = tarefa;
     return m;
   });
 
   useEffect(() => {
     definirOrdemLocal(
-      Object.fromEntries(colunas.map((coluna) => [coluna, (quadro.tarefas[coluna] ?? []).map((t) => t.caminho)])),
+      Object.fromEntries(colunas.map((coluna) => [coluna, (conteudo.tarefas[coluna] ?? []).map((t) => t.caminho)])),
     );
     const m: Record<string, TarefaKanban> = {};
-    for (const coluna of colunas) for (const tarefa of quadro.tarefas[coluna] ?? []) m[tarefa.caminho] = tarefa;
+    for (const coluna of colunas) for (const tarefa of conteudo.tarefas[coluna] ?? []) m[tarefa.caminho] = tarefa;
     definirMapa(m);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caderno.caminho, colunas.join("|"), assinaturaTarefas]);
+  }, [quadro.nome, colunas.join("|"), assinaturaTarefas]);
 
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const [tarefaAberta, definirTarefaAberta] = useState<string | null>(null);
@@ -159,7 +166,7 @@ export function QuadroKanban({
   }, [aviso]);
 
   function pastaDaColuna(coluna: ColunaKanban): string {
-    return juntar(caderno.caminho, "_kanban", coluna);
+    return juntar(quadro.caminho, coluna);
   }
 
   function passaNoFiltro(tarefa: TarefaKanban): boolean {
@@ -174,8 +181,8 @@ export function QuadroKanban({
     const tarefaOrigem = mapa[origem];
     if (!tarefaOrigem || tarefaOrigem.coluna === coluna) return;
 
-    if (coluna === quadro.config.colunaConcluida) {
-      const pendentes = dependenciasPendentes(tarefaOrigem, mapa, quadro.config.colunaConcluida);
+    if (coluna === conteudo.config.colunaConcluida) {
+      const pendentes = dependenciasPendentes(tarefaOrigem, mapa, conteudo.config.colunaConcluida);
       if (pendentes.length > 0) {
         definirAviso(
           `"${tarefaOrigem.titulo}" ainda depende de ${pendentes.length === 1 ? "1 tarefa" : `${pendentes.length} tarefas`} não concluída${pendentes.length === 1 ? "" : "s"}: ${pendentes.map((p) => p.titulo).join(", ")}.`,
@@ -221,7 +228,7 @@ export function QuadroKanban({
       definirColunaAdicionando(null);
       return;
     }
-    const resposta = await acaoCriarTarefa(caderno.caminho, coluna, limpo);
+    const resposta = await acaoCriarTarefa(quadro.nome, coluna, limpo);
     definirColunaAdicionando(null);
     if (resposta.ok) roteador.refresh();
   }
@@ -273,37 +280,44 @@ export function QuadroKanban({
     await acaoDefinirPrioridade(caminho, prioridade);
   }
 
+  async function definirImpedimentoAção(caminho: string, motivo: string | null) {
+    definirMapa((atual) => ({ ...atual, [caminho]: { ...atual[caminho], impedimento: motivo } }));
+    await acaoDefinirImpedimento(caminho, motivo);
+  }
+
+  async function definirSubtarefasAção(caminho: string, subtarefas: Subtarefa[]) {
+    definirMapa((atual) => ({ ...atual, [caminho]: { ...atual[caminho], subtarefas } }));
+    await acaoDefinirSubtarefas(caminho, subtarefas);
+  }
+
   async function moverColuna(nome: string, direcao: -1 | 1) {
     const indice = colunas.indexOf(nome);
     const alvo = indice + direcao;
     if (alvo < 0 || alvo >= colunas.length) return;
     const nova = [...colunas];
     [nova[indice], nova[alvo]] = [nova[alvo], nova[indice]];
-    const resposta = await acaoReordenarColunas(caderno.caminho, nova);
+    const resposta = await acaoReordenarColunas(quadro.nome, nova);
     if (resposta.ok) roteador.refresh();
   }
 
   const etiquetaAtiva = filtroEtiqueta ? etiquetasKanban.find((e) => e.id === filtroEtiqueta) : null;
   const sprintAtiva = filtroSprint ? sprints.find((s) => s.id === filtroSprint) : null;
+  const totalDeTarefas = Object.keys(mapa).length;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-papel">
-      <header className="flex shrink-0 items-center gap-2 border-b border-linha bg-superficie px-6 py-3.5">
-        <KanbanSquare size={16} style={{ color: "var(--realce)" }} aria-hidden />
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-linha bg-superficie px-6 py-3">
+        <span className="text-[18px] leading-none" aria-hidden>
+          {quadro.icone}
+        </span>
         <div className="min-w-0">
-          <h1 className="truncate text-[16px] font-extrabold tracking-[-0.02em]">Kanban · {caderno.nome}</h1>
+          <h1 className="truncate text-[16px] font-extrabold tracking-[-0.02em]">{quadro.nome}</h1>
           <p className="text-[11.5px] text-tinta-2">
-            Independente das anotações — cada tarefa é um arquivo, salvo dentro de{" "}
-            <span className="font-mono">{caderno.nome}/_kanban/</span>.
+            {totalDeTarefas === 0
+              ? "Quadro vazio — comece criando uma tarefa numa coluna."
+              : `${totalDeTarefas} ${totalDeTarefas === 1 ? "tarefa" : "tarefas"} · cada uma é um arquivo em ${quadro.caminho}/`}
           </p>
         </div>
-        <Link
-          href="/kanban/etiquetas"
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta"
-        >
-          <Tag size={13} />
-          Gerenciar etiquetas
-        </Link>
       </header>
 
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-linha bg-superficie px-6 py-2">
@@ -443,7 +457,7 @@ export function QuadroKanban({
                 style={{ boxShadow: `inset 0 2px 0 ${cor}` }}
               >
                 <span className="truncate text-[12.5px] font-bold tracking-[-0.01em]">{coluna}</span>
-                {coluna === quadro.config.colunaConcluida ? (
+                {coluna === conteudo.config.colunaConcluida ? (
                   <span title="Coluna de conclusão — trava tarefas com dependência pendente">
                     <Check size={11} className="shrink-0 text-tinta-3" />
                   </span>
@@ -477,12 +491,12 @@ export function QuadroKanban({
                         >
                           Renomear
                         </ItemMenu>
-                        {coluna !== quadro.config.colunaConcluida ? (
+                        {coluna !== conteudo.config.colunaConcluida ? (
                           <ItemMenu
                             icone={<Check size={13} />}
                             onClick={async () => {
                               fechar();
-                              const resposta = await acaoDefinirColunaConcluida(caderno.caminho, coluna);
+                              const resposta = await acaoDefinirColunaConcluida(quadro.nome, coluna);
                               if (resposta.ok) roteador.refresh();
                             }}
                           >
@@ -540,10 +554,10 @@ export function QuadroKanban({
                     tarefa={tarefa}
                     etiquetasKanban={etiquetasKanban}
                     sprints={sprints}
-                    pendentes={dependenciasPendentes(tarefa, mapa, quadro.config.colunaConcluida).length}
+                    pendentes={dependenciasPendentes(tarefa, mapa, conteudo.config.colunaConcluida).length}
                     corDaColuna={cor}
                     outrasColunas={colunas.filter((c) => c !== coluna)}
-                    atrasada={Boolean(tarefa.prazo) && tarefa.prazo! < hojeISO() && coluna !== quadro.config.colunaConcluida}
+                    atrasada={Boolean(tarefa.prazo) && tarefa.prazo! < hojeISO() && coluna !== conteudo.config.colunaConcluida}
                     sobrevoo={sobrevoo?.caminho === tarefa.caminho ? sobrevoo : null}
                     aoPassarPorCima={(antes) => definirSobrevoo({ coluna, caminho: tarefa.caminho, antes })}
                     aoSairDeCima={() =>
@@ -551,11 +565,11 @@ export function QuadroKanban({
                     }
                     aoSoltar={(origem, antes) => aoSoltarPertoDe(tarefa, origem, antes)}
                     aoAbrir={() => definirTarefaAberta(tarefa.caminho)}
-                    aoRenomear={(novoTitulo) => renomearTarefaAção(tarefa.caminho, novoTitulo)}
                     aoMoverPara={(destino) => moverTarefaPara(tarefa.caminho, destino)}
                     aoDuplicar={() => duplicarTarefaAção(tarefa.caminho)}
                     aoFavoritar={() => favoritarAção(tarefa.caminho)}
                     aoDefinirPrioridade={(prioridade) => definirPrioridadeAção(tarefa.caminho, prioridade)}
+                    aoTirarImpedimento={() => definirImpedimentoAção(tarefa.caminho, null)}
                     aoExcluir={() => definirTarefaParaExcluir(tarefa.caminho)}
                   />
                 ))}
@@ -580,6 +594,8 @@ export function QuadroKanban({
           sprints={sprints}
           aoFechar={() => definirTarefaAberta(null)}
           aoRenomear={(novoTitulo) => renomearTarefaAção(tarefaAberta, novoTitulo)}
+          aoDefinirImpedimento={(motivo) => definirImpedimentoAção(tarefaAberta, motivo)}
+          aoDefinirSubtarefas={(subtarefas) => definirSubtarefasAção(tarefaAberta, subtarefas)}
           aoAtualizar={(patch) =>
             definirMapa((atual) => ({ ...atual, [tarefaAberta]: { ...atual[tarefaAberta], ...patch } }))
           }
@@ -598,7 +614,7 @@ export function QuadroKanban({
         textoBotao="Criar coluna"
         aoFechar={() => definirCriandoColuna(false)}
         aoConfirmar={async (nome) => {
-          const resposta = await acaoCriarColuna(caderno.caminho, nome);
+          const resposta = await acaoCriarColuna(quadro.nome, nome);
           if (resposta.ok) roteador.refresh();
           return resposta.ok ? null : resposta.erro;
         }}
@@ -614,7 +630,7 @@ export function QuadroKanban({
         aoFechar={() => definirColunaParaRenomear(null)}
         aoConfirmar={async (nome) => {
           if (!colunaParaRenomear) return null;
-          const resposta = await acaoRenomearColuna(caderno.caminho, colunaParaRenomear, nome);
+          const resposta = await acaoRenomearColuna(quadro.nome, colunaParaRenomear, nome);
           if (resposta.ok) roteador.refresh();
           return resposta.ok ? null : resposta.erro;
         }}
@@ -628,7 +644,7 @@ export function QuadroKanban({
         aoFechar={() => definirColunaParaExcluir(null)}
         aoConfirmar={async () => {
           if (!colunaParaExcluir) return null;
-          const resposta = await acaoExcluirColuna(caderno.caminho, colunaParaExcluir);
+          const resposta = await acaoExcluirColuna(quadro.nome, colunaParaExcluir);
           if (resposta.ok) roteador.refresh();
           return resposta.ok ? null : resposta.erro;
         }}
@@ -892,11 +908,11 @@ function CartaoTarefa({
   aoSairDeCima,
   aoSoltar,
   aoAbrir,
-  aoRenomear,
   aoMoverPara,
   aoDuplicar,
   aoFavoritar,
   aoDefinirPrioridade,
+  aoTirarImpedimento,
   aoExcluir,
 }: {
   tarefa: TarefaKanban;
@@ -912,17 +928,19 @@ function CartaoTarefa({
   aoSairDeCima: () => void;
   aoSoltar: (origem: string, antes: boolean) => void;
   aoAbrir: () => void;
-  aoRenomear: (novoTitulo: string) => Promise<string | null>;
   aoMoverPara: (coluna: string) => void;
   aoDuplicar: () => void;
   aoFavoritar: () => void;
   aoDefinirPrioridade: (prioridade: Prioridade | null) => void;
+  aoTirarImpedimento: () => void;
   aoExcluir: () => void;
 }) {
   const etiquetasDaTarefa = tarefa.etiquetas
     .map((id) => etiquetasKanban.find((etiqueta) => etiqueta.id === id))
     .filter((etiqueta): etiqueta is EtiquetaKanban => Boolean(etiqueta));
   const sprint = tarefa.sprintId ? sprints.find((s) => s.id === tarefa.sprintId) : null;
+  const feitas = tarefa.subtarefas.filter((item) => item.feita).length;
+  const impedida = tarefa.impedimento !== null;
 
   return (
     <div className="group relative">
@@ -970,9 +988,29 @@ function CartaoTarefa({
             aoAbrir();
           }
         }}
-        className="cartao block w-full cursor-grab px-3 py-2.5 pr-7 text-left active:cursor-grabbing"
-        style={{ borderLeft: `3px solid ${corDaColuna}` }}
+        className={clsx(
+          "cartao block w-full cursor-grab overflow-hidden px-3 py-2.5 pr-7 text-left active:cursor-grabbing",
+          impedida && "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]",
+        )}
+        style={{ borderLeft: `3px solid ${impedida ? "var(--perigo)" : corDaColuna}` }}
       >
+        {impedida ? (
+          <div
+            className="-mx-3 -mt-2.5 mb-2 flex items-center gap-1.5 px-3 py-1"
+            style={{ background: "color-mix(in srgb, var(--perigo) 12%, transparent)" }}
+          >
+            <OctagonAlert size={11} className="shrink-0 text-perigo" aria-hidden />
+            <span className="truncate text-[10.5px] font-bold tracking-[0.04em] text-perigo uppercase">
+              Impedido
+            </span>
+            {tarefa.impedimento ? (
+              <span className="min-w-0 flex-1 truncate text-[10.5px] text-perigo/90" title={tarefa.impedimento}>
+                · {tarefa.impedimento}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex items-start gap-1.5">
           {tarefa.prioridade ? (
             <Flag
@@ -983,11 +1021,7 @@ function CartaoTarefa({
             />
           ) : null}
           {tarefa.favorita ? <Star size={11} className="mt-0.5 shrink-0 fill-current text-[#c69214]" /> : null}
-          <TituloEditavel
-            titulo={tarefa.titulo}
-            aoRenomear={aoRenomear}
-            className="min-w-0 flex-1 text-[13px] leading-snug font-medium text-tinta"
-          />
+          <span className="min-w-0 flex-1 text-[13px] leading-snug font-medium text-tinta">{tarefa.titulo}</span>
           {pendentes > 0 ? (
             <span
               className="flex shrink-0 items-center gap-0.5 text-[10.5px] text-perigo"
@@ -998,8 +1032,18 @@ function CartaoTarefa({
             </span>
           ) : null}
         </div>
-        {etiquetasDaTarefa.length > 0 || tarefa.prazo || sprint ? (
+        {etiquetasDaTarefa.length > 0 || tarefa.prazo || sprint || tarefa.subtarefas.length > 0 ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
+            {tarefa.subtarefas.length > 0 ? (
+              <span
+                className={clsx("pastilha", feitas === tarefa.subtarefas.length ? "text-[#639922]" : "text-tinta-2")}
+                style={{ background: "var(--realce-fraco)" }}
+                title={`${feitas} de ${tarefa.subtarefas.length} subtarefas concluídas`}
+              >
+                <CheckSquare size={10} />
+                {feitas}/{tarefa.subtarefas.length}
+              </span>
+            ) : null}
             {tarefa.prazo ? (
               <span
                 className={clsx(
@@ -1032,6 +1076,10 @@ function CartaoTarefa({
             ))}
           </div>
         ) : null}
+
+        <p className="mt-1.5 text-[10.5px] text-tinta-3" title={`Criada em ${formatarDataHora(tarefa.criadoEm)}`}>
+          Criada {formatarDataCurta(tarefa.criadoEm)}
+        </p>
       </div>
 
       <div className="absolute top-1.5 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -1115,6 +1163,17 @@ function CartaoTarefa({
               >
                 {tarefa.favorita ? "Desfavoritar" : "Favoritar"}
               </ItemMenu>
+              {impedida ? (
+                <ItemMenu
+                  icone={<OctagonAlert size={13} />}
+                  onClick={() => {
+                    fechar();
+                    aoTirarImpedimento();
+                  }}
+                >
+                  Tirar impedimento
+                </ItemMenu>
+              ) : null}
 
               <SeparadorMenu />
               <ItemMenu
@@ -1181,6 +1240,8 @@ function DialogoTarefa({
   aoAtualizar,
   aoExcluir,
   aoRenomear,
+  aoDefinirImpedimento,
+  aoDefinirSubtarefas,
 }: {
   tarefa: TarefaKanban;
   /** Todas as tarefas do quadro (qualquer coluna) — pra escolher dependência. */
@@ -1192,6 +1253,8 @@ function DialogoTarefa({
   aoAtualizar: (patch: Partial<TarefaKanban>) => void;
   aoExcluir: () => void;
   aoRenomear: (novoTitulo: string) => Promise<string | null>;
+  aoDefinirImpedimento: (motivo: string | null) => void;
+  aoDefinirSubtarefas: (subtarefas: Subtarefa[]) => void;
 }) {
   const caminho = tarefa.caminho;
   const [carregando, definirCarregando] = useState(true);
@@ -1297,7 +1360,7 @@ function DialogoTarefa({
               </div>
 
               {modoDescricao === "leitura" ? (
-                <div className="prosa mt-1.5 min-h-[160px] rounded-lg border border-linha bg-superficie px-3 py-2.5">
+                <div className="prosa mt-1.5 max-h-[46vh] min-h-[140px] min-w-0 overflow-y-auto rounded-lg border border-linha bg-superficie px-3 py-2.5">
                   <VisualizadorMarkdown conteudo={conteudo} />
                 </div>
               ) : (
@@ -1330,10 +1393,16 @@ function DialogoTarefa({
                 </>
               )}
 
+              <ListaSubtarefas subtarefas={tarefa.subtarefas} aoMudar={aoDefinirSubtarefas} />
+
               <Aviso>{erro}</Aviso>
             </div>
 
             <div className="flex flex-col gap-4 sm:border-l sm:border-linha sm:pl-5">
+              <CampoLateral rotulo="Impedimento">
+                <CampoImpedimento motivo={tarefa.impedimento} aoMudar={aoDefinirImpedimento} />
+              </CampoLateral>
+
               <CampoLateral rotulo="Prioridade">
                 <Menu
                   alinhamento="direita"
@@ -1547,6 +1616,203 @@ function DialogoTarefa({
         </>
       )}
     </Dialogo>
+  );
+}
+
+/**
+ * A checklist da tarefa: marcar é um clique, criar é digitar e dar Enter —
+ * o campo continua aberto para a próxima, que é como se escreve uma lista
+ * de subtarefas de verdade (várias seguidas, sem parar para clicar em
+ * "adicionar" toda vez).
+ */
+function ListaSubtarefas({
+  subtarefas,
+  aoMudar,
+}: {
+  subtarefas: Subtarefa[];
+  aoMudar: (subtarefas: Subtarefa[]) => void;
+}) {
+  const [nova, definirNova] = useState("");
+  const feitas = subtarefas.filter((item) => item.feita).length;
+
+  function adicionar() {
+    const texto = nova.trim();
+    if (!texto) return;
+    aoMudar([...subtarefas, { id: crypto.randomUUID(), texto, feita: false }]);
+    definirNova("");
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Subtarefas</p>
+        {subtarefas.length > 0 ? (
+          <span className="text-[11.5px] text-tinta-3 tabular-nums">
+            {feitas}/{subtarefas.length}
+          </span>
+        ) : null}
+      </div>
+
+      {subtarefas.length > 0 ? (
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-realce-medio">
+          <div
+            className="h-full rounded-full transition-[width]"
+            style={{
+              width: `${(feitas / subtarefas.length) * 100}%`,
+              background: feitas === subtarefas.length ? "#639922" : "var(--realce)",
+            }}
+          />
+        </div>
+      ) : null}
+
+      <ul className="mt-1.5 space-y-0.5">
+        {subtarefas.map((item) => (
+          <li key={item.id} className="group/sub flex items-center gap-2 rounded-md px-1 py-[3px] hover:bg-realce-fraco">
+            <button
+              type="button"
+              onClick={() =>
+                aoMudar(subtarefas.map((atual) => (atual.id === item.id ? { ...atual, feita: !atual.feita } : atual)))
+              }
+              aria-pressed={item.feita}
+              aria-label={item.feita ? `Desmarcar ${item.texto}` : `Marcar ${item.texto} como feita`}
+              className="shrink-0 text-tinta-3 transition-colors hover:text-tinta"
+            >
+              {item.feita ? (
+                <CheckSquare size={14} style={{ color: "var(--realce)" }} />
+              ) : (
+                <Square size={14} />
+              )}
+            </button>
+            <span
+              className={clsx(
+                "min-w-0 flex-1 text-[12.5px] break-words",
+                item.feita ? "text-tinta-3 line-through" : "text-tinta-2",
+              )}
+            >
+              {item.texto}
+            </span>
+            <button
+              type="button"
+              onClick={() => aoMudar(subtarefas.filter((atual) => atual.id !== item.id))}
+              aria-label={`Excluir a subtarefa ${item.texto}`}
+              className="shrink-0 rounded-md p-0.5 text-tinta-3 opacity-0 transition-opacity hover:text-perigo group-hover/sub:opacity-100"
+            >
+              <X size={12} />
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          adicionar();
+        }}
+        className="mt-1 flex items-center gap-1.5 px-1"
+      >
+        <Plus size={13} className="shrink-0 text-tinta-3" aria-hidden />
+        <input
+          value={nova}
+          onChange={(evento) => definirNova(evento.target.value)}
+          placeholder="Adicionar subtarefa…"
+          maxLength={200}
+          className="min-w-0 flex-1 bg-transparent py-[3px] text-[12.5px] text-tinta placeholder:text-tinta-3 focus:outline-none"
+        />
+      </form>
+    </div>
+  );
+}
+
+/** Marcar a tarefa como impedida, escrevendo o motivo que aparece no cartão. */
+function CampoImpedimento({
+  motivo,
+  aoMudar,
+}: {
+  motivo: string | null;
+  aoMudar: (motivo: string | null) => void;
+}) {
+  const [editando, definirEditando] = useState(false);
+  const [texto, definirTexto] = useState(motivo ?? "");
+
+  if (!editando && motivo === null) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          definirTexto("");
+          definirEditando(true);
+        }}
+        className="flex w-full items-center gap-1.5 rounded-lg border border-dashed border-linha-forte px-2.5 py-1.5 text-[12.5px] text-tinta-3 transition-colors hover:border-perigo hover:text-perigo"
+      >
+        <OctagonAlert size={12} className="shrink-0" />
+        Marcar impedida
+      </button>
+    );
+  }
+
+  if (editando) {
+    return (
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          aoMudar(texto.trim());
+          definirEditando(false);
+        }}
+      >
+        <input
+          value={texto}
+          autoFocus
+          maxLength={200}
+          placeholder="Esperando o quê?"
+          onChange={(evento) => definirTexto(evento.target.value)}
+          onKeyDown={(evento) => {
+            if (evento.key === "Escape") definirEditando(false);
+          }}
+          className="w-full rounded-lg border border-linha bg-superficie px-2.5 py-1.5 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-perigo focus:outline-none"
+        />
+        <div className="mt-1.5 flex justify-end gap-1.5">
+          <Botao variante="sutil" onClick={() => definirEditando(false)}>
+            Cancelar
+          </Botao>
+          <Botao type="submit" variante="primario">
+            Salvar
+          </Botao>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg border px-2.5 py-1.5"
+      style={{
+        borderColor: "color-mix(in srgb, var(--perigo) 35%, transparent)",
+        background: "color-mix(in srgb, var(--perigo) 8%, transparent)",
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <OctagonAlert size={12} className="shrink-0 text-perigo" aria-hidden />
+        <span className="flex-1 text-[11px] font-bold tracking-[0.04em] text-perigo uppercase">Impedida</span>
+        <button
+          type="button"
+          onClick={() => aoMudar(null)}
+          aria-label="Tirar o impedimento"
+          className="shrink-0 rounded-full p-0.5 text-perigo/70 hover:text-perigo"
+        >
+          <X size={12} />
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          definirTexto(motivo ?? "");
+          definirEditando(true);
+        }}
+        className="mt-0.5 block w-full text-left text-[12px] break-words text-tinta-2 hover:text-tinta"
+      >
+        {motivo || "Sem motivo escrito — clique para explicar."}
+      </button>
+    </div>
   );
 }
 

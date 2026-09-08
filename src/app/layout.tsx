@@ -5,6 +5,7 @@ import { Casca } from "@/components/casca";
 import { lerArvore } from "@/lib/arquivos";
 import { listarEtiquetas } from "@/lib/etiquetas";
 import { listarModelos } from "@/lib/modelos";
+import { listarQuadros } from "@/lib/quadros";
 
 import "./globals.css";
 
@@ -40,8 +41,9 @@ try {
 `;
 
 export default async function LayoutRaiz({ children }: { children: React.ReactNode }) {
-  const [cadernos, etiquetas, modelos] = await Promise.all([
+  const [cadernos, quadros, etiquetas, modelos] = await Promise.all([
     lerArvore(),
+    listarQuadros(),
     listarEtiquetas(),
     listarModelos(),
   ]);
@@ -59,7 +61,7 @@ export default async function LayoutRaiz({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: scriptDoTema }} />
       </head>
       <body className="antialiased">
-        <Casca cadernos={cadernos} etiquetas={etiquetas} modelos={modelos}>
+        <Casca cadernos={cadernos} quadros={quadros} etiquetas={etiquetas} modelos={modelos}>
           {children}
         </Casca>
       </body>

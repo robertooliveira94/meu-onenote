@@ -148,6 +148,31 @@ export async function restaurar(id: string): Promise<string> {
   return destino;
 }
 
+/**
+ * Reaponta os itens da lixeira quando uma pasta muda de lugar por fora
+ * (hoje: a migração dos quadros do Kanban). Sem isto, restaurar um item
+ * antigo o devolveria para um caminho que não existe mais.
+ */
+export async function reapontarNaLixeira(de: string, para: string): Promise<void> {
+  await alterar((itens) => {
+    for (const item of itens) {
+      if (item.caminhoOriginal !== de && !item.caminhoOriginal.startsWith(`${de}/`)) continue;
+      item.caminhoOriginal = para + item.caminhoOriginal.slice(de.length);
+
+      const mover = <T>(mapa: Record<string, T>): Record<string, T> => {
+        const novo: Record<string, T> = {};
+        for (const [chave, valor] of Object.entries(mapa)) {
+          const dentro = chave === de || chave.startsWith(`${de}/`);
+          novo[dentro ? para + chave.slice(de.length) : chave] = valor;
+        }
+        return novo;
+      };
+      item.notas = mover(item.notas);
+      item.pastas = mover(item.pastas);
+    }
+  });
+}
+
 /** Apaga um item da lixeira em definitivo. */
 export async function apagarDeVez(id: string): Promise<void> {
   await fs.rm(path.join(PASTA_ITENS, id), { recursive: true, force: true });

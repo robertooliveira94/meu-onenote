@@ -13,7 +13,6 @@ import {
   ListChecks,
   MoreHorizontal,
   MoveRight,
-  NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -224,19 +223,13 @@ export function ColunaSecoes({
       className="relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-superficie"
       style={{ width: largura.largura }}
     >
-      <div className="flex items-center gap-2 px-3.5 py-3">
-        <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5">
-          <span
-            className="transicao-realce flex size-7 shrink-0 items-center justify-center rounded-lg text-[14px] text-white"
-            style={{ background: "var(--realce)" }}
-            aria-hidden
-          >
-            <NotebookPen size={15} />
-          </span>
-          <span className="truncate text-[13.5px] font-bold tracking-[-0.01em]">
-            Meu bloco de anotações
-          </span>
-        </Link>
+      <div className="flex items-center gap-2 px-3.5 py-2.5">
+        {/* O nome do caderno aberto: a coluna das aplicações ao lado mostra
+            qual caderno está selecionado, mas aqui ele vira o título do que
+            se está olhando — as seções logo abaixo são deste caderno. */}
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold tracking-[-0.01em]">
+          {caderno ? caderno.nome : "Anotações"}
+        </span>
         <BotaoIcone rotulo="Recolher seções" onClick={() => colunas.alternar("secoes")}>
           <PanelLeftClose size={14} />
         </BotaoIcone>

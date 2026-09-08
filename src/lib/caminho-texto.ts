@@ -103,6 +103,16 @@ export function ehPastaInterna(nome: string): boolean {
   return nome.startsWith("_");
 }
 
+/**
+ * Tudo do Kanban mora em `_kanban/<Quadro>/<Coluna>/<Tarefa>.md`, fora dos
+ * cadernos — as duas aplicações são independentes. Versões antigas do app
+ * guardavam em `<Caderno>/_kanban/`, por isso a segunda checagem: o índice
+ * pode ainda ter caminhos daquele formato antes da migração rodar.
+ */
+export function ehTarefaKanban(relativo: string): boolean {
+  return relativo.startsWith("_kanban/") || relativo.includes("/_kanban/");
+}
+
 /** Só entram na aplicação arquivos de texto. */
 export function ehArquivoDeNota(nome: string): boolean {
   const extensao = nome.slice(nome.lastIndexOf(".") + 1).toLowerCase();

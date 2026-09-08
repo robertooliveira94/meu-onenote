@@ -18,7 +18,7 @@ import {
 } from "@/app/acoes";
 import { lerCaminhoDeSecao, trazSecao } from "@/lib/arrastar";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
-import { cadernoDaUrl, urlDaSecao, urlDoKanban } from "@/lib/rotas";
+import { cadernoDaUrl, urlDaSecao } from "@/lib/rotas";
 import type { Caderno } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoCor, DialogoIcone, DialogoNome } from "./dialogos";
@@ -38,20 +38,12 @@ async function baixarCaderno(caminho: string): Promise<void> {
 }
 
 /**
- * A tira de cadernos no topo da tela — o nível "de cima" que troca tudo
- * abaixo dele. Ao contrário de seção e página, um caderno nunca fica
- * aninhado dentro de outra coisa (é sempre o topo), então aqui não tem
- * árvore nenhuma: só uma lista horizontal, igual ao seletor de cadernos do
- * OneNote de verdade.
+ * A lista de cadernos da aplicação Anotações, na coluna da esquerda. Ao
+ * contrário de seção e página, um caderno nunca fica aninhado dentro de
+ * outra coisa (é sempre o topo), então aqui não tem árvore nenhuma: só a
+ * lista, e as seções do caderno aberto aparecem na coluna ao lado.
  */
-export function SeletorDeCadernos({
-  cadernos,
-  appAtual,
-}: {
-  cadernos: Caderno[];
-  /** Em modo Kanban, cada chip abre o quadro do caderno em vez das seções dele. */
-  appAtual: "notas" | "kanban";
-}) {
+export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
   const caminhoAtual = usePathname();
   const roteador = useRouter();
   const [acao, definirAcao] = useState<Acao>(null);
@@ -66,25 +58,30 @@ export function SeletorDeCadernos({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="Cadernos">
-      {cadernos.map((caderno) => (
-        <ChipCaderno
-          key={caderno.caminho}
-          caderno={caderno}
-          ativo={caderno.nome === nomeAtivo}
-          appAtual={appAtual}
-          aoAgir={definirAcao}
-        />
-      ))}
+    <>
+      <div className="flex items-center justify-between px-3 pt-1 pb-1.5">
+        <span className="text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">Cadernos</span>
+        <BotaoIcone rotulo="Novo caderno" onClick={() => definirCriando(true)} className="size-6">
+          <Plus size={13} />
+        </BotaoIcone>
+      </div>
 
-      <button
-        type="button"
-        onClick={() => definirCriando(true)}
-        className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
-      >
-        <Plus size={14} />
-        Novo caderno
-      </button>
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2" aria-label="Cadernos">
+        {cadernos.length === 0 ? (
+          <p className="px-2 py-3 text-[11.5px] leading-relaxed text-tinta-3">
+            Nenhum caderno ainda. Use o “+” acima para criar o primeiro.
+          </p>
+        ) : (
+          cadernos.map((caderno) => (
+            <LinhaCaderno
+              key={caderno.caminho}
+              caderno={caderno}
+              ativo={caderno.nome === nomeAtivo}
+              aoAgir={definirAcao}
+            />
+          ))
+        )}
+      </nav>
 
       <DialogoNome
         aberto={criando}
@@ -145,7 +142,7 @@ export function SeletorDeCadernos({
       <DialogoConfirmar
         aberto={acao?.tipo === "excluir"}
         titulo={`Excluir ${alvo?.nome ?? ""}?`}
-        descricao="O caderno e tudo que está dentro (seções e páginas) vão para a lixeira. Dá para restaurar depois."
+        descricao="O caderno e tudo que está dentro (seções e páginas) vão para a lixeira. Dá para restaurar depois. Um quadro de mesmo nome no Kanban não é afetado."
         textoBotao="Mandar para a lixeira"
         aoFechar={fechar}
         aoConfirmar={async () => {
@@ -159,30 +156,25 @@ export function SeletorDeCadernos({
           return null;
         }}
       />
-    </div>
+    </>
   );
 }
 
-function ChipCaderno({
+function LinhaCaderno({
   caderno,
   ativo,
-  appAtual,
   aoAgir,
 }: {
   caderno: Caderno;
   ativo: boolean;
-  appAtual: "notas" | "kanban";
   aoAgir: (acao: Acao) => void;
 }) {
   const roteador = useRouter();
   const caminhoAtual = usePathname();
   const [sobrevoo, definirSobrevoo] = useState(false);
-  // Em modo Kanban, o chip abre o quadro deste caderno — trocar de caderno
-  // não deveria te tirar da aplicação em que você está. Em modo Anotações,
-  // leva pra primeira seção dele (ou pro próprio caderno, se ainda não
-  // tiver nenhuma, o que já convida a criar uma).
-  const endereco =
-    appAtual === "kanban" ? urlDoKanban(caderno.caminho) : urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
+  // Abrir o caderno leva pra primeira seção dele — se ainda não tiver
+  // nenhuma, cai na tela do próprio caderno, que já convida a criar uma.
+  const endereco = urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
 
   return (
     <div
@@ -209,15 +201,25 @@ function ChipCaderno({
         }
       }}
       className={clsx(
-        "group flex shrink-0 items-center gap-1 rounded-lg pr-1 transition-colors",
+        "group relative flex items-center gap-0.5 rounded-lg pr-1 transition-colors",
         ativo || sobrevoo ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
-      <Link href={endereco} className="flex items-center gap-1.5 py-1.5 pl-2.5">
+      {ativo ? (
+        <span
+          className="barra-ativa absolute top-1.5 bottom-1.5 left-0 w-[2.5px] rounded-full"
+          style={{ background: caderno.cor }}
+          aria-hidden
+        />
+      ) : null}
+
+      <Link href={endereco} className="flex min-w-0 flex-1 items-center gap-2 py-[6px] pl-2.5">
         <span className="text-[14px] leading-none" aria-hidden>
           {caderno.icone}
         </span>
-        <span className={clsx("text-[12.5px] whitespace-nowrap", ativo ? "font-medium text-tinta" : "text-tinta-2")}>
+        <span
+          className={clsx("truncate text-[12.5px]", ativo ? "font-medium text-tinta" : "text-tinta-2")}
+        >
           {caderno.nome}
         </span>
       </Link>
@@ -278,7 +280,7 @@ function ChipCaderno({
                   roteador.refresh();
                 }}
               >
-                Mover para a esquerda
+                Subir
               </ItemMenu>
               <ItemMenu
                 icone={<ArrowDown size={14} />}
@@ -288,7 +290,7 @@ function ChipCaderno({
                   roteador.refresh();
                 }}
               >
-                Mover para a direita
+                Descer
               </ItemMenu>
               <SeparadorMenu />
               <ItemMenu

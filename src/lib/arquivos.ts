@@ -8,6 +8,7 @@ import {
   RAIZ,
   ehArquivoDeNota,
   ehPastaInterna,
+  ehTarefaKanban,
   extensaoDe,
   formatoDe,
   garantirForaDoSistema,
@@ -601,10 +602,19 @@ export async function reordenarPastasPara(ordemDosCaminhos: string[]): Promise<v
   });
 }
 
+/**
+ * Só o que é das Anotações. Tarefa do Kanban também mora no índice (ganha
+ * data e ordem de graça), mas é de outra aplicação — não pode aparecer nos
+ * recentes, nos favoritos nem na busca daqui.
+ */
+function caminhosDeNota(indice: Indice): string[] {
+  return Object.keys(indice.notas).filter((caminho) => !ehTarefaKanban(caminho));
+}
+
 export async function notasRecentes(limite = 8): Promise<ResumoNota[]> {
   await sincronizarIndice();
   const indice = await lerIndice();
-  const caminhos = Object.keys(indice.notas)
+  const caminhos = caminhosDeNota(indice)
     .sort((a, b) => indice.notas[b].atualizadoEm.localeCompare(indice.notas[a].atualizadoEm))
     .slice(0, limite);
   return Promise.all(caminhos.map((caminho) => montarResumo(caminho, indice)));
@@ -613,7 +623,7 @@ export async function notasRecentes(limite = 8): Promise<ResumoNota[]> {
 export async function notasFavoritas(): Promise<ResumoNota[]> {
   await sincronizarIndice();
   const indice = await lerIndice();
-  const caminhos = Object.keys(indice.notas).filter((caminho) => indice.notas[caminho].favorita);
+  const caminhos = caminhosDeNota(indice).filter((caminho) => indice.notas[caminho].favorita);
   const resumos = await Promise.all(caminhos.map((caminho) => montarResumo(caminho, indice)));
   return resumos.sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
 }
@@ -621,7 +631,7 @@ export async function notasFavoritas(): Promise<ResumoNota[]> {
 export async function notasComEtiqueta(etiqueta: string): Promise<ResumoNota[]> {
   await sincronizarIndice();
   const indice = await lerIndice();
-  const caminhos = Object.keys(indice.notas).filter((caminho) =>
+  const caminhos = caminhosDeNota(indice).filter((caminho) =>
     indice.notas[caminho].etiquetas.includes(etiqueta),
   );
   const resumos = await Promise.all(caminhos.map((caminho) => montarResumo(caminho, indice)));
@@ -645,7 +655,7 @@ export async function buscar(termo: string, etiqueta?: string): Promise<Resultad
   const indice = await lerIndice();
   const resultados: ResultadoBusca[] = [];
 
-  for (const caminho of Object.keys(indice.notas)) {
+  for (const caminho of caminhosDeNota(indice)) {
     const entrada = indice.notas[caminho];
     if (etiqueta && !entrada.etiquetas.includes(etiqueta)) continue;
 

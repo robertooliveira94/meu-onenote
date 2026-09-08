@@ -1,17 +1,16 @@
 "use client";
 
-import clsx from "clsx";
-import { FileText, Hash } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
 import { acaoCriarPagina } from "@/app/acoes";
-import type { Formato, Modelo } from "@/lib/tipos";
+import type { Modelo } from "@/lib/tipos";
 
 import { Aviso, Botao, Campo, Dialogo, Rotulo } from "./ui";
 
 /**
- * A escolha do formato acontece aqui, na criação — é o momento em que a pessoa
- * sabe se aquilo vai ser um rascunho solto ou um texto estruturado.
+ * Toda página nasce em markdown — não há mais escolha de formato aqui. Os
+ * `.txt` antigos continuam abrindo, mas criar um novo só adicionava uma
+ * decisão sem ganho na hora de começar a escrever.
  */
 export function DialogoNovaPagina({
   aberto,
@@ -23,12 +22,10 @@ export function DialogoNovaPagina({
   aberto: boolean;
   pasta: string;
   nomeDaPasta: string;
-  /** Só entra na escolha quando o formato é markdown — texto simples não herda modelo. */
   modelos?: Modelo[];
   aoFechar: () => void;
 }) {
   const [titulo, definirTitulo] = useState("");
-  const [formato, definirFormato] = useState<Formato>("md");
   const [modeloId, definirModeloId] = useState("");
   const [erro, definirErro] = useState<string | null>(null);
   const [criando, iniciarCriacao] = useTransition();
@@ -49,7 +46,7 @@ export function DialogoNovaPagina({
     iniciarCriacao(async () => {
       try {
         // A ação redireciona para a página nova, já em modo de edição.
-        await acaoCriarPagina(pasta, titulo.trim(), formato, formato === "md" ? modeloId : undefined);
+        await acaoCriarPagina(pasta, titulo.trim(), modeloId || undefined);
         aoFechar();
       } catch (falha) {
         // O redirecionamento do Next passa por aqui como exceção; só erro real interessa.
@@ -58,21 +55,6 @@ export function DialogoNovaPagina({
       }
     });
   }
-
-  const opcoes: { valor: Formato; titulo: string; descricao: string; icone: React.ReactNode }[] = [
-    {
-      valor: "md",
-      titulo: "Markdown",
-      descricao: "Títulos, listas de tarefas e tabelas. Abre formatado para ler.",
-      icone: <Hash size={15} />,
-    },
-    {
-      valor: "txt",
-      titulo: "Texto simples",
-      descricao: "Só o texto, sem formatação. Igual ao Bloco de Notas.",
-      icone: <FileText size={15} />,
-    },
-  ];
 
   return (
     <Dialogo
@@ -97,35 +79,7 @@ export function DialogoNovaPagina({
         />
       </label>
 
-      <div className="mt-3">
-        <Rotulo>Formato do arquivo</Rotulo>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {opcoes.map((opcao) => (
-            <button
-              key={opcao.valor}
-              type="button"
-              onClick={() => definirFormato(opcao.valor)}
-              aria-pressed={formato === opcao.valor}
-              className={clsx(
-                "rounded-lg border p-2.5 text-left transition-colors",
-                formato === opcao.valor
-                  ? "border-[var(--realce)] bg-realce-fraco"
-                  : "border-linha bg-superficie-alta hover:border-linha-forte",
-              )}
-            >
-              <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
-                <span style={{ color: "var(--realce)" }}>{opcao.icone}</span>
-                {opcao.titulo}
-              </span>
-              <span className="mt-1 block text-[11.5px] leading-snug text-tinta-2">
-                {opcao.descricao}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {formato === "md" && modelos && modelos.length > 0 ? (
+      {modelos && modelos.length > 0 ? (
         <label className="mt-3 block">
           <Rotulo>Começar de um modelo (opcional)</Rotulo>
           <select

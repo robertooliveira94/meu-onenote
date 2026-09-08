@@ -278,19 +278,22 @@ export function ListaPaginas({
                       >
                         Mover para…
                       </ItemMenu>
-                      <ItemMenu
-                        icone={<ArrowLeftRight size={14} />}
-                        onClick={async () => {
-                          fecharMenu();
-                          const destino = nota.formato === "md" ? "txt" : "md";
-                          const resposta = await acaoConverterFormato(nota.caminho, destino);
-                          if (resposta.ok && resposta.mensagem) {
-                            roteador.push(urlDaNota(resposta.mensagem));
-                          }
-                        }}
-                      >
-                        {nota.formato === "md" ? "Converter para texto" : "Converter para markdown"}
-                      </ItemMenu>
+                      {/* Só o caminho de volta: o app não cria mais .txt, mas
+                          quem já tem um pode passá-lo para markdown. */}
+                      {nota.formato === "txt" ? (
+                        <ItemMenu
+                          icone={<ArrowLeftRight size={14} />}
+                          onClick={async () => {
+                            fecharMenu();
+                            const resposta = await acaoConverterFormato(nota.caminho, "md");
+                            if (resposta.ok && resposta.mensagem) {
+                              roteador.push(urlDaNota(resposta.mensagem));
+                            }
+                          }}
+                        >
+                          Converter para markdown
+                        </ItemMenu>
+                      ) : null}
                       <SeparadorMenu />
                       <ItemMenu
                         icone={<ArrowUp size={14} />}

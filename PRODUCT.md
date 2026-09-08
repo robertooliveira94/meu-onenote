@@ -48,8 +48,11 @@ separado (`npm run dev`, porta diferente), documentado no README.
 As anotações ficam em `dados/`, dentro da pasta do projeto: cadernos são
 pastas de primeiro nível, seções são subpastas deles (nunca aninhadas entre
 si — uma seção nunca tem outra seção dentro), páginas são arquivos `.md`
-(markdown) ou `.txt` (texto puro) sempre dentro de uma seção, nunca soltas
-direto no caderno — a pessoa escolhe o formato ao criar cada página.
+sempre dentro de uma seção, nunca soltas direto no caderno. Página nova é
+sempre markdown; os `.txt` de versões anteriores continuam abrindo e
+editando normalmente, e o menu deles oferece converter para markdown.
+O Kanban é outra aplicação, com pastas próprias em `dados/_kanban/` — ver
+"aplicações independentes" abaixo.
 Metadados que não cabem num arquivo de texto
 (etiquetas, favoritos, ordem manual, cor/ícone do caderno) ficam num índice
 à parte (`dados/_sistema/indice.json`), para as notas em si continuarem
@@ -75,15 +78,15 @@ limpas e abríveis em qualquer editor.
   prefere não arrastar.
 - Página em markdown abre em modo leitura por padrão (renderizado, com
   realce de sintaxe); um botão "Editar" abre a edição lado a lado
-  (texto cru + prévia ao vivo). Página em texto puro abre direto no editor,
-  com uma barra de formatação limitada ao que um `.txt` de fato suporta
-  (caixa alta, título sublinhado, lista, recuo, separador) — sem negrito
-  nem cor, porque o formato não guarda isso.
+  (texto cru + prévia ao vivo). Os `.txt` que sobraram de versões
+  anteriores continuam abrindo no editor de texto puro, com a barra de
+  formatação limitada ao que o formato suporta — mas o app não cria mais
+  nenhum: página nova é sempre markdown.
 - Etiquetas cadastráveis com cor, aplicáveis a qualquer página, que
   atravessam cadernos.
 - Modelos de página cadastráveis (nome, descrição, conteúdo em markdown) —
-  na hora de criar uma página em markdown, um menu opcional deixa começar
-  já com o modelo escolhido em vez de em branco.
+  na hora de criar uma página, um menu opcional deixa começar já com o
+  modelo escolhido em vez de em branco.
 - Captura rápida (`Ctrl+Shift+N`) e a nota do dia (`Ctrl+Shift+D`, sempre a
   mesma página por data) caem na seção "Geral" do caderno "Entrada" — um
   caderno de verdade, visível e renomeável na tira de cadernos como
@@ -117,25 +120,24 @@ limpas e abríveis em qualquer editor.
   navegador que recorta a página aberta (título, endereço e o texto
   selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
   nenhuma para instalar.
-- **Anotações e Kanban são duas aplicações independentes**, alternadas por
-  um seletor no topo da tela — numa única barra junto com a tira de
-  cadernos e o botão de tema claro/escuro (visível nos dois modos, não só
-  em Anotações). Em modo Kanban, a coluna inteira de navegação das
-  anotações (busca, captura rápida, seções, os atalhos fixos) some da
-  tela; só ficam essa barra do topo e o quadro em si — os chips de caderno
-  passam a abrir o quadro de cada um, não as seções. Trocar de aplicação
-  preserva o caderno atual quando dá — vai da seção aberta pro quadro
-  daquele mesmo caderno, e volta pra primeira seção dele.
-- Kanban por caderno (`/kanban/<Caderno>`):
-  um quadro independente das anotações, com 4 colunas fixas — Backlog,
-  Fazendo, Impedido, Feito. Cada tarefa é um arquivo `.md` de verdade
-  (`<Caderno>/_kanban/<Coluna>/<Tarefa>.md`); arrastar entre colunas move o
-  arquivo de pasta, exatamente como mover uma página entre seções. Clicar
-  numa tarefa abre um editor pequeno (título + corpo em markdown, com
-  prévia ao lado) — dá pra descrever, fazer um checklist, o que quiser.
-  Exclusão vai para a mesma lixeira das páginas. As tarefas do Kanban não
-  aparecem no painel `/tarefas` (o quadro já cumpre esse papel) nem na
-  árvore de seções (a pasta `_kanban` é interna, como `_sistema`).
+- **O app é um hub de aplicações independentes** — hoje Anotações e Kanban.
+  A coluna mais à esquerda diz qual está aberta e lista o que é dela:
+  cadernos numa, quadros na outra. As listas não se misturam em nada:
+  excluir o quadro "Trabalho" não encosta no caderno "Trabalho", e
+  vice-versa. Em modo Kanban, a coluna de navegação das anotações (busca,
+  captura rápida, seções, atalhos fixos) some da tela; sobram a coluna de
+  quadros e o quadro em si. O botão de tema claro/escuro fica no rodapé
+  dessa coluna, visível nos dois modos.
+- Kanban (`/kanban/<Quadro>`): quadros próprios, guardados em
+  `dados/_kanban/<Quadro>/<Coluna>/<Tarefa>.md` — fora dos cadernos, porque
+  não são anotação. Cada tarefa é um arquivo `.md` de verdade; arrastar
+  entre colunas move o arquivo de pasta, exatamente como mover uma página
+  entre seções. Quadros criados numa versão anterior (quando o quadro vivia
+  dentro do caderno) são migrados sozinhos na primeira abertura: viram um
+  quadro com o nome do caderno de onde saíram, com índice, dependências e
+  itens da lixeira reapontados. Exclusão vai para a mesma lixeira das
+  páginas. As tarefas do Kanban não aparecem em nada das Anotações (busca,
+  recentes, favoritos, painel `/tarefas`, árvore de cadernos).
   - **Etiquetas do Kanban** (`/kanban/etiquetas`): cadastro à parte das
     etiquetas de anotações — mesma interface, mas vale só para tarefas, em
     qualquer quadro. O editor de tarefa tem seu próprio seletor, que já
@@ -146,12 +148,12 @@ limpas e abríveis em qualquer editor.
     conclusão enquanto sobrar alguma pendente é recusado, com um aviso
     explicando quais faltam. Mover ou renomear uma tarefa da qual outras
     dependem atualiza a referência sozinho, sem quebrar o vínculo.
-  - **Colunas configuráveis por caderno**: as 4 colunas padrão (Backlog,
+  - **Colunas configuráveis por quadro**: as 4 colunas padrão (Backlog,
     Fazendo, Impedido, Feito) são só o ponto de partida — dá pra criar,
     renomear, reordenar e excluir coluna (só vazia) pelo menu de três
     pontos no cabeçalho de cada uma. Uma delas é marcada como "coluna de
     conclusão" (Feito, por padrão) — é ela que o bloqueio de dependências
-    usa. Guardado em `<Caderno>/_kanban/config.json`.
+    usa. Guardado em `_kanban/<Quadro>/config.json`.
   - **Prioridade** (Baixa/Média/Alta/Urgente, com cor) e **prazo** (data
     opcional, cartão destaca em vermelho quando atrasado e a tarefa ainda
     não está na coluna de conclusão) por tarefa.
@@ -165,15 +167,27 @@ limpas e abríveis em qualquer editor.
     outra coluna, mudar prioridade, duplicar tarefa (etiqueta/prioridade/
     prazo vêm junto, dependências não), favoritar e excluir — sem precisar
     abrir o editor da tarefa pra nada disso.
-  - **Renomear com dois cliques**: dois cliques no título — do cartão ou do
-    editor aberto — trocam ele por um campo de texto na hora (Enter ou sair
-    do campo confirma, Esc cancela). Um clique só não faz nada, pra não se
-    confundir com abrir o cartão.
+  - **Subtarefas**: checklist da tarefa, no editor — digitar e dar Enter
+    cria a próxima sem tirar a mão do teclado, e marcar é um clique. O
+    cartão fechado mostra o progresso ("1/4") e uma barrinha aparece no
+    editor. Ficam no índice, não no corpo em markdown: assim a contagem não
+    depende de a pessoa ter escrito as caixinhas num formato específico.
+  - **Impedimento com motivo**: marcar a tarefa como impedida e escrever o
+    porquê. O cartão pequeno ganha uma faixa vermelha com o motivo e a
+    borda vermelha, então dá para achar o que está travado varrendo o
+    quadro de longe. Diferente de "Bloqueado por", que é dependência de
+    outra tarefa: aqui o bloqueio é externo (esperando terceiro, faltando
+    informação).
+  - **Data de criação** visível no rodapé de cada cartão.
+  - **Renomear com dois cliques** no título — só com o cartão aberto. No
+    cartão pequeno do quadro, o clique é sempre "abrir": a área é apertada
+    demais para disputar com um duplo clique.
   - **Editor da tarefa**: título editável no topo, descrição em markdown
     que abre só com a caixa de edição (sem prévia lado a lado) — um botão
     "Salvar" embaixo dela grava e troca pra visualização renderizada; um
-    "Editar" volta pra caixa de texto. Prioridade, prazo, sprint, etiquetas
-    e "Bloqueado por" ficam numa coluna à direita, separados do conteúdo.
+    "Editar" volta pra caixa de texto. Abaixo dela, as subtarefas.
+    Impedimento, prioridade, prazo, sprint, etiquetas e "Bloqueado por"
+    ficam numa coluna à direita, separados do conteúdo.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app

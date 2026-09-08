@@ -8,6 +8,14 @@ import {
   editarEtiquetaKanban,
   excluirEtiquetaKanban,
 } from "@/lib/etiquetas-kanban";
+import {
+  criarQuadro,
+  definirCorQuadro,
+  definirIconeQuadro,
+  excluirQuadro,
+  renomearQuadro,
+  reordenarQuadrosPara,
+} from "@/lib/quadros";
 import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban";
 import { PRIORIDADES } from "@/lib/tipos";
 import {
@@ -16,9 +24,11 @@ import {
   definirColunaConcluida,
   definirDependencias,
   definirEtiquetasDaTarefa,
+  definirImpedimento,
   definirPrazo,
   definirPrioridade,
   definirSprintDaTarefa,
+  definirSubtarefas,
   duplicarTarefa,
   excluirColuna,
   excluirTarefa,
@@ -31,7 +41,7 @@ import {
   reordenarTarefasPara,
   salvarTarefa,
 } from "@/lib/kanban";
-import type { ColunaKanban, Quadro } from "@/lib/tipos";
+import type { ColunaKanban, Quadro, Subtarefa } from "@/lib/tipos";
 
 import type { Resposta } from "./acoes";
 
@@ -57,13 +67,13 @@ function atualizarTudo(): void {
   revalidatePath("/", "layout");
 }
 
-export async function acaoListarQuadro(caderno: string): Promise<Quadro> {
-  return listarQuadro(caminhoValido.parse(caderno));
+export async function acaoListarQuadro(quadro: string): Promise<Quadro> {
+  return listarQuadro(caminhoValido.parse(quadro));
 }
 
-export async function acaoCriarTarefa(caderno: string, coluna: ColunaKanban, titulo: string): Promise<Resposta> {
+export async function acaoCriarTarefa(quadro: string, coluna: ColunaKanban, titulo: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await criarTarefa(caminhoValido.parse(caderno), colunaValida.parse(coluna), z.string().max(200).parse(titulo));
+    await criarTarefa(caminhoValido.parse(quadro), colunaValida.parse(coluna), z.string().max(200).parse(titulo));
   });
   atualizarTudo();
   return resposta;
@@ -107,7 +117,7 @@ export async function acaoDuplicarTarefa(caminho: string): Promise<Resposta> {
   return resposta;
 }
 
-/** `pastaColuna` é o caminho da pasta da coluna (ex.: "Caderno/_kanban/Backlog"), só para validar. */
+/** `pastaColuna` é o caminho da pasta da coluna (ex.: "_kanban/Meu quadro/Backlog"), só para validar. */
 export async function acaoReordenarTarefasPara(pastaColuna: string, ordem: string[]): Promise<Resposta> {
   const resposta = await tentar(async () => {
     const pastaValidada = caminhoValido.parse(pastaColuna);
@@ -179,20 +189,103 @@ export async function acaoDefinirSprintDaTarefa(caminho: string, sprintId: strin
   return resposta;
 }
 
-// --------------------------------------------------------------- colunas
+const subtarefaValida = z.object({
+  id: z.string().max(60),
+  texto: z.string().max(200),
+  feita: z.boolean(),
+});
 
-export async function acaoCriarColuna(caderno: string, nome: string): Promise<Resposta> {
+export async function acaoDefinirSubtarefas(caminho: string, subtarefas: Subtarefa[]): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await criarColuna(caminhoValido.parse(caderno), z.string().min(1).max(40).parse(nome));
+    const validado = caminhoValido.parse(caminho);
+    const lista = z.array(subtarefaValida).max(100).parse(subtarefas);
+    await definirSubtarefas(validado, lista);
   });
   atualizarTudo();
   return resposta;
 }
 
-export async function acaoRenomearColuna(caderno: string, nomeAtual: string, novoNome: string): Promise<Resposta> {
+export async function acaoDefinirImpedimento(caminho: string, motivo: string | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const valor = motivo === null ? null : z.string().max(200).parse(motivo);
+    await definirImpedimento(validado, valor);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// ---------------------------------------------------------------- quadros
+
+export async function acaoCriarQuadro(nome: string): Promise<Resposta> {
+  try {
+    const criado = await criarQuadro(z.string().min(1).max(120).parse(nome));
+    atualizarTudo();
+    return { ok: true, mensagem: criado };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para criar o quadro" };
+  }
+}
+
+export async function acaoRenomearQuadro(nome: string, novoNome: string): Promise<Resposta> {
+  try {
+    const alvo = await renomearQuadro(
+      z.string().min(1).max(120).parse(nome),
+      z.string().min(1).max(120).parse(novoNome),
+    );
+    atualizarTudo();
+    return { ok: true, mensagem: alvo };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para renomear o quadro" };
+  }
+}
+
+export async function acaoExcluirQuadro(nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await excluirQuadro(z.string().min(1).max(120).parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirCorQuadro(nome: string, cor: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await definirCorQuadro(z.string().min(1).max(120).parse(nome), z.string().max(40).parse(cor));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirIconeQuadro(nome: string, icone: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await definirIconeQuadro(z.string().min(1).max(120).parse(nome), z.string().max(8).parse(icone));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoReordenarQuadrosPara(nomes: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await reordenarQuadrosPara(z.array(z.string().min(1).max(120)).max(200).parse(nomes));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+// --------------------------------------------------------------- colunas
+
+export async function acaoCriarColuna(quadro: string, nome: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await criarColuna(caminhoValido.parse(quadro), z.string().min(1).max(40).parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoRenomearColuna(quadro: string, nomeAtual: string, novoNome: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
     await renomearColuna(
-      caminhoValido.parse(caderno),
+      caminhoValido.parse(quadro),
       colunaValida.parse(nomeAtual),
       z.string().min(1).max(40).parse(novoNome),
     );
@@ -201,25 +294,25 @@ export async function acaoRenomearColuna(caderno: string, nomeAtual: string, nov
   return resposta;
 }
 
-export async function acaoExcluirColuna(caderno: string, nome: string): Promise<Resposta> {
+export async function acaoExcluirColuna(quadro: string, nome: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await excluirColuna(caminhoValido.parse(caderno), colunaValida.parse(nome));
+    await excluirColuna(caminhoValido.parse(quadro), colunaValida.parse(nome));
   });
   atualizarTudo();
   return resposta;
 }
 
-export async function acaoReordenarColunas(caderno: string, novaOrdem: string[]): Promise<Resposta> {
+export async function acaoReordenarColunas(quadro: string, novaOrdem: string[]): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await reordenarColunas(caminhoValido.parse(caderno), z.array(colunaValida).max(30).parse(novaOrdem));
+    await reordenarColunas(caminhoValido.parse(quadro), z.array(colunaValida).max(30).parse(novaOrdem));
   });
   atualizarTudo();
   return resposta;
 }
 
-export async function acaoDefinirColunaConcluida(caderno: string, nome: string): Promise<Resposta> {
+export async function acaoDefinirColunaConcluida(quadro: string, nome: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await definirColunaConcluida(caminhoValido.parse(caderno), colunaValida.parse(nome));
+    await definirColunaConcluida(caminhoValido.parse(quadro), colunaValida.parse(nome));
   });
   atualizarTudo();
   return resposta;

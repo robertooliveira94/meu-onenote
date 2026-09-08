@@ -20,9 +20,12 @@ export function urlDaEtiqueta(id: string): string {
   return `/etiquetas/${encodeURIComponent(id)}`;
 }
 
-/** O quadro Kanban de um caderno — um por caderno, nunca por seção. */
-export function urlDoKanban(caderno: string): string {
-  return `/kanban/${codificar(caderno)}`;
+/**
+ * Um quadro do Kanban. Quadro é da aplicação Kanban, não das anotações — o
+ * nome aqui não tem nada a ver com um caderno de mesmo nome.
+ */
+export function urlDoQuadro(quadro: string): string {
+  return `/kanban/${codificar(quadro)}`;
 }
 
 /** Onde uma imagem colada numa nota fica servível — ver src/app/midia. */
@@ -33,12 +36,23 @@ export function urlDaMidia(caminho: string): string {
 /**
  * Nome do caderno implícito no endereço atual (`/secao/...` ou `/nota/...`),
  * ou `null` fora dessas rotas (início, etiquetas, grafo...) — decide qual
- * caderno aparece "aberto" na tira de cadernos no topo da tela.
+ * caderno aparece "aberto" na coluna das anotações. As rotas do Kanban não
+ * entram aqui: lá o que está aberto é um quadro, ver `quadroDaUrl`.
  */
 export function cadernoDaUrl(pathname: string): string | null {
-  const semPrefixo = decodeURIComponent(pathname).replace(/^\/(nota|secao|kanban)\//, "");
+  const semPrefixo = decodeURIComponent(pathname).replace(/^\/(nota|secao)\//, "");
   if (semPrefixo === pathname) return null;
   return semPrefixo.split("/")[0] || null;
+}
+
+/** Nome do quadro aberto (`/kanban/<Quadro>`), ou `null` fora dele. */
+export function quadroDaUrl(pathname: string): string | null {
+  const semPrefixo = decodeURIComponent(pathname).replace(/^\/kanban\//, "");
+  if (semPrefixo === pathname) return null;
+  const nome = semPrefixo.split("/")[0] || null;
+  // `/kanban/etiquetas` é a tela de cadastro, não um quadro chamado
+  // "etiquetas" — a rota literal ganha do segmento dinâmico no Next.
+  return nome === "etiquetas" ? null : nome;
 }
 
 /**

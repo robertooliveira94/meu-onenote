@@ -73,20 +73,18 @@ export async function acaoCriarSecao(pai: string, nome: string): Promise<Respost
   return resposta;
 }
 
-export async function acaoCriarPagina(
-  pasta: string,
-  titulo: string,
-  formato: "md" | "txt",
-  modeloId?: string,
-): Promise<void> {
-  // Texto simples não tem modelo (a marcação do modelo é markdown); um id
-  // vindo de um formato trocado na hora H simplesmente não se aplica.
-  const conteudoInicial =
-    formato === "md" && modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
+/**
+ * Página nova é sempre markdown. Os `.txt` que já existem continuam
+ * abrindo e editando normalmente (e dá para converter pelo menu deles),
+ * mas o app não cria mais nenhum — um formato só é uma coisa a menos para
+ * decidir na hora de escrever.
+ */
+export async function acaoCriarPagina(pasta: string, titulo: string, modeloId?: string): Promise<void> {
+  const conteudoInicial = modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
   const caminho = await criarNota(
     caminhoValido.parse(pasta),
     z.string().max(120).parse(titulo),
-    formatoValido.parse(formato),
+    "md",
     conteudoInicial,
   );
   atualizarTudo();

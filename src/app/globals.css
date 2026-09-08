@@ -154,6 +154,22 @@ textarea:focus {
   font-size: calc(15.5px * var(--escala-texto));
   line-height: 1.72;
   color: var(--tinta);
+  /* Sem isto, uma URL comprida ou uma palavra sem espaço estoura a largura
+     do container e empurra o texto para fora da tela — some com a barra de
+     rolagem lateral inteira em vez de quebrar a linha. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Tabela larga e bloco de código rolam dentro deles mesmos, sem arrastar a
+   página junto. */
+.prosa pre {
+  overflow-x: auto;
+}
+.prosa table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .prosa > * + * {

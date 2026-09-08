@@ -1,7 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -47,7 +48,16 @@ export function GerenciadorEtiquetasKanban({
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-[25px] leading-tight font-extrabold tracking-[-0.03em]">Etiquetas do Kanban</h1>
+        <Link
+          href="/kanban"
+          className="inline-flex items-center gap-1.5 rounded-md py-1 pr-2 text-[12.5px] text-tinta-2 transition-colors hover:text-tinta"
+        >
+          <ArrowLeft size={14} />
+          Voltar ao quadro
+        </Link>
+        <h1 className="mt-1.5 text-[25px] leading-tight font-extrabold tracking-[-0.03em]">
+          Etiquetas do Kanban
+        </h1>
         <p className="mt-1 text-[13px] text-tinta-2">
           Cadastro à parte das etiquetas de anotações — essas aqui só valem para tarefas, em
           qualquer quadro.

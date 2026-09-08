@@ -4,6 +4,7 @@ import {
   CaminhoInvalido,
   ehArquivoDeNota,
   ehPastaInterna,
+  ehTarefaKanban,
   extensaoDe,
   formatoDe,
   juntar,
@@ -53,10 +54,11 @@ export const PASTA_ENTRADA = "Entrada";
  */
 export const PASTA_GERAL = "Geral";
 /**
- * Pasta interna dentro de cada caderno com o quadro Kanban dele. Começa com
- * "_" como `_sistema`, então já fica fora da lista de seções sem precisar
- * de filtro extra. Um quadro por caderno, nunca por seção — o Kanban é
- * pensado como um espaço à parte das anotações, não uma seção disfarçada.
+ * Onde mora o Kanban inteiro: `_kanban/<Quadro>/<Coluna>/<Tarefa>.md`, na
+ * raiz dos dados e não dentro de um caderno. Começa com "_" como
+ * `_sistema`, então fica fora da árvore de cadernos sem precisar de filtro
+ * extra — as duas aplicações (Anotações e Kanban) têm listas próprias e
+ * independentes, e excluir um quadro nunca mexe num caderno de mesmo nome.
  */
 export const PASTA_KANBAN = "_kanban";
 
@@ -64,6 +66,7 @@ export {
   CaminhoInvalido,
   ehArquivoDeNota,
   ehPastaInterna,
+  ehTarefaKanban,
   extensaoDe,
   formatoDe,
   juntar,
