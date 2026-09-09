@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, Download, MoreHorizontal, Palette, Pencil, Plus, Smile, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   acaoCriarCaderno,
@@ -15,8 +15,16 @@ import {
   acaoMover,
   acaoRenomear,
   acaoReordenar,
+  acaoReordenarCadernosPara,
 } from "@/app/acoes";
-import { lerCaminhoDeSecao, trazSecao } from "@/lib/arrastar";
+import {
+  calcularNovaOrdem,
+  iniciarArrastoDeCaderno,
+  lerCaminhoDeSecao,
+  lerNomeDeCaderno,
+  trazCaderno,
+  trazSecao,
+} from "@/lib/arrastar";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import { cadernoDaUrl, urlDaSecao } from "@/lib/rotas";
 import type { Caderno } from "@/lib/tipos";
@@ -53,8 +61,32 @@ export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
   const fechar = () => definirAcao(null);
   const alvo = acao?.caderno ?? null;
 
+  // Ordem local, para o arraste responder na hora — mesmo padrão das seções
+  // e páginas: a ordem "de verdade" só volta depois de um round-trip com o
+  // servidor.
+  const [ordemLocal, definirOrdemLocal] = useState(() => cadernos.map((caderno) => caderno.caminho));
+  const [sobrevoo, definirSobrevoo] = useState<{ caminho: string; antes: boolean } | null>(null);
+  useEffect(() => {
+    definirOrdemLocal(cadernos.map((caderno) => caderno.caminho));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cadernos.map((caderno) => caderno.caminho).join("|")]);
+
+  const cadernosOrdenados = ordemLocal
+    .map((caminho) => cadernos.find((caderno) => caderno.caminho === caminho))
+    .filter((caderno): caderno is Caderno => Boolean(caderno));
+
   function atualizar(): void {
     roteador.refresh();
+  }
+
+  function aoSoltarCaderno(origem: string, alvoCaminho: string, antes: boolean) {
+    definirSobrevoo(null);
+    const nova = calcularNovaOrdem(ordemLocal, origem, alvoCaminho, antes);
+    if (!nova) return;
+    definirOrdemLocal(nova);
+    acaoReordenarCadernosPara(nova).then((resposta) => {
+      if (!resposta.ok) atualizar();
+    });
   }
 
   return (
@@ -67,17 +99,21 @@ export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
       </div>
 
       <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2" aria-label="Cadernos">
-        {cadernos.length === 0 ? (
+        {cadernosOrdenados.length === 0 ? (
           <p className="px-2 py-3 text-[11.5px] leading-relaxed text-tinta-3">
             Nenhum caderno ainda. Use o “+” acima para criar o primeiro.
           </p>
         ) : (
-          cadernos.map((caderno) => (
+          cadernosOrdenados.map((caderno) => (
             <LinhaCaderno
               key={caderno.caminho}
               caderno={caderno}
               ativo={caderno.nome === nomeAtivo}
               aoAgir={definirAcao}
+              sobrevoo={sobrevoo?.caminho === caderno.caminho ? sobrevoo : null}
+              aoPassarPorCima={(antes) => definirSobrevoo({ caminho: caderno.caminho, antes })}
+              aoSairDeCima={() => definirSobrevoo((atual) => (atual?.caminho === caderno.caminho ? null : atual))}
+              aoSoltarCaderno={(origem, antes) => aoSoltarCaderno(origem, caderno.caminho, antes)}
             />
           ))
         )}
@@ -164,31 +200,58 @@ function LinhaCaderno({
   caderno,
   ativo,
   aoAgir,
+  sobrevoo,
+  aoPassarPorCima,
+  aoSairDeCima,
+  aoSoltarCaderno,
 }: {
   caderno: Caderno;
   ativo: boolean;
   aoAgir: (acao: Acao) => void;
+  sobrevoo: { caminho: string; antes: boolean } | null;
+  aoPassarPorCima: (antes: boolean) => void;
+  aoSairDeCima: () => void;
+  aoSoltarCaderno: (origem: string, antes: boolean) => void;
 }) {
   const roteador = useRouter();
   const caminhoAtual = usePathname();
-  const [sobrevoo, definirSobrevoo] = useState(false);
+  const [sobrevooDeSecao, definirSobrevooDeSecao] = useState(false);
   // Abrir o caderno leva pra primeira seção dele — se ainda não tiver
   // nenhuma, cai na tela do próprio caderno, que já convida a criar uma.
   const endereco = urlDaSecao(caderno.secoes[0]?.caminho ?? caderno.caminho);
 
   return (
     <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeCaderno(evento, caderno.caminho)}
       onDragOver={(evento) => {
+        if (trazCaderno(evento)) {
+          evento.preventDefault();
+          evento.dataTransfer.dropEffect = "move";
+          const retangulo = evento.currentTarget.getBoundingClientRect();
+          aoPassarPorCima(evento.clientY < retangulo.top + retangulo.height / 2);
+          return;
+        }
         if (!trazSecao(evento)) return;
         evento.preventDefault();
         evento.dataTransfer.dropEffect = "move";
-        definirSobrevoo(true);
+        definirSobrevooDeSecao(true);
       }}
-      onDragLeave={() => definirSobrevoo(false)}
+      onDragLeave={() => {
+        aoSairDeCima();
+        definirSobrevooDeSecao(false);
+      }}
       onDrop={async (evento) => {
+        if (trazCaderno(evento)) {
+          evento.preventDefault();
+          const retangulo = evento.currentTarget.getBoundingClientRect();
+          const antes = evento.clientY < retangulo.top + retangulo.height / 2;
+          aoSoltarCaderno(lerNomeDeCaderno(evento), antes);
+          return;
+        }
         if (!trazSecao(evento)) return;
         evento.preventDefault();
-        definirSobrevoo(false);
+        definirSobrevooDeSecao(false);
         const origem = lerCaminhoDeSecao(evento);
         if (!origem) return;
         const resposta = await acaoMover(origem, caderno.caminho);
@@ -201,14 +264,22 @@ function LinhaCaderno({
         }
       }}
       className={clsx(
-        "group relative flex items-center gap-0.5 rounded-lg pr-1 transition-colors",
-        ativo || sobrevoo ? "bg-realce-medio" : "hover:bg-realce-fraco",
+        "group relative flex cursor-grab items-center gap-0.5 rounded-lg pr-1 transition-colors active:cursor-grabbing",
+        ativo || sobrevooDeSecao ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
       {ativo ? (
         <span
           className="barra-ativa absolute top-1.5 bottom-1.5 left-0 w-[2.5px] rounded-full"
           style={{ background: caderno.cor }}
+          aria-hidden
+        />
+      ) : null}
+
+      {sobrevoo ? (
+        <span
+          className="pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full"
+          style={{ background: "var(--realce)", [sobrevoo.antes ? "top" : "bottom"]: 0 }}
           aria-hidden
         />
       ) : null}

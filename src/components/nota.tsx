@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import {
   ArrowLeftRight,
   Check,
@@ -7,6 +8,8 @@ import {
   History,
   Link2,
   Loader2,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Star,
   ZoomIn,
@@ -101,6 +104,29 @@ export function PaginaNota({
   // prévia cara ainda disparava no meio da digitação.
   const conteudoPreVisualizado = useDeferredValue(conteudo);
   const [editando, definirEditando] = useState(editandoInicial || !ehMarkdown);
+  // Lembrado entre sessões (é preferência de quem edita, não desta nota em
+  // particular) — quem já sabe o que está escrevendo prefere o texto cru
+  // ocupando a tela toda em vez de dividir espaço com a prévia.
+  const [previaVisivel, definirPreviaVisivel] = useState(true);
+  useEffect(() => {
+    try {
+      const salva = localStorage.getItem("previa-visivel");
+      if (salva !== null) definirPreviaVisivel(salva === "1");
+    } catch {
+      // Sem armazenamento: fica visível pela sessão inteira.
+    }
+  }, []);
+  function alternarPrevia() {
+    definirPreviaVisivel((atual) => {
+      const proximo = !atual;
+      try {
+        localStorage.setItem("previa-visivel", proximo ? "1" : "0");
+      } catch {
+        // Sem armazenamento: o ajuste vale só para esta sessão.
+      }
+      return proximo;
+    });
+  }
   const [estado, definirEstado] = useState<Estado>("salvo");
   const [historicoAberto, definirHistoricoAberto] = useState(false);
   const [favorita, definirFavorita] = useState(nota.favorita);
@@ -370,7 +396,14 @@ export function PaginaNota({
                 conteudo={conteudo}
                 aoMudar={definirConteudo}
                 extra={
-                  ehMarkdown ? null : (
+                  ehMarkdown ? (
+                    <BotaoIcone
+                      rotulo={previaVisivel ? "Esconder a prévia" : "Mostrar a prévia"}
+                      onClick={alternarPrevia}
+                    >
+                      {previaVisivel ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                    </BotaoIcone>
+                  ) : (
                     // Texto puro não guarda negrito; quem precisa disso quer markdown.
                     <button
                       type="button"
@@ -397,7 +430,7 @@ export function PaginaNota({
               ) : null}
 
               <div className="flex min-h-0 flex-1">
-                {ehMarkdown ? (
+                {ehMarkdown && previaVisivel ? (
                   // Envoltório à parte, sem rolagem própria: é o que faz a
                   // alça de redimensionar (posicionada em relação a ele)
                   // ficar sempre na borda visível, em vez de rolar junto
@@ -424,6 +457,8 @@ export function PaginaNota({
                     />
                   </div>
                 ) : (
+                  // Prévia escondida (ou nota em texto puro, que não tem
+                  // prévia): o texto cru ocupa a largura toda.
                   <div className="min-w-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
                     <textarea
                       ref={area}
@@ -432,13 +467,20 @@ export function PaginaNota({
                       onKeyDown={aoTeclarNoCampo}
                       onPaste={aoColarNoCampo}
                       spellCheck
-                      placeholder="Escreva à vontade."
-                      className="editor-simples min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none"
+                      placeholder={
+                        ehMarkdown
+                          ? "Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
+                          : "Escreva à vontade."
+                      }
+                      className={clsx(
+                        ehMarkdown ? "editor-texto" : "editor-simples",
+                        "min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none",
+                      )}
                     />
                   </div>
                 )}
 
-                {ehMarkdown ? (
+                {ehMarkdown && previaVisivel ? (
                   <div
                     className="min-w-0 flex-1 overflow-y-auto border-l border-linha bg-superficie px-8 py-5"
                     ref={zoom.refRolagem}

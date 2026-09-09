@@ -10,12 +10,15 @@ import {
   Copy,
   Flag,
   FlagOff,
+  GripVertical,
   ListChecks,
   Lock,
+  MessageSquare,
   MoreHorizontal,
   OctagonAlert,
   Pencil,
   Plus,
+  Send,
   Square,
   Star,
   Trash2,
@@ -26,6 +29,7 @@ import { useRouter } from "next/navigation";
 
 import { acaoAlternarFavorita } from "@/app/acoes";
 import {
+  acaoAdicionarComentario,
   acaoCriarColuna,
   acaoCriarSprint,
   acaoCriarTarefa,
@@ -38,6 +42,7 @@ import {
   acaoDefinirSubtarefas,
   acaoDuplicarTarefa,
   acaoExcluirColuna,
+  acaoExcluirComentario,
   acaoExcluirSprint,
   acaoExcluirTarefa,
   acaoLerTarefa,
@@ -50,8 +55,11 @@ import {
 } from "@/app/acoes-kanban";
 import {
   calcularNovaOrdem,
+  iniciarArrastoDeSubtarefa,
   iniciarArrastoDeTarefa,
   lerCaminhoDeTarefa,
+  lerIdDeSubtarefa,
+  trazSubtarefa,
   trazTarefa,
 } from "@/lib/arrastar";
 import { juntar } from "@/lib/caminho-texto";
@@ -60,6 +68,7 @@ import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
 import { PRIORIDADES, RUBRICA_PRIORIDADE } from "@/lib/tipos";
 import type {
   ColunaKanban,
+  Comentario,
   EtiquetaKanban,
   Prioridade,
   Quadro,
@@ -289,6 +298,24 @@ export function QuadroKanban({
   async function definirSubtarefasAção(caminho: string, subtarefas: Subtarefa[]) {
     definirMapa((atual) => ({ ...atual, [caminho]: { ...atual[caminho], subtarefas } }));
     await acaoDefinirSubtarefas(caminho, subtarefas);
+  }
+
+  async function adicionarComentarioAção(caminho: string, texto: string): Promise<string | null> {
+    const resposta = await acaoAdicionarComentario(caminho, texto);
+    if (!resposta.ok) return resposta.erro;
+    definirMapa((atual) => ({
+      ...atual,
+      [caminho]: { ...atual[caminho], comentarios: [...atual[caminho].comentarios, resposta.comentario] },
+    }));
+    return null;
+  }
+
+  async function excluirComentarioAção(caminho: string, id: string) {
+    definirMapa((atual) => ({
+      ...atual,
+      [caminho]: { ...atual[caminho], comentarios: atual[caminho].comentarios.filter((item) => item.id !== id) },
+    }));
+    await acaoExcluirComentario(caminho, id);
   }
 
   async function moverColuna(nome: string, direcao: -1 | 1) {
@@ -597,6 +624,8 @@ export function QuadroKanban({
           aoRenomear={(novoTitulo) => renomearTarefaAção(tarefaAberta, novoTitulo)}
           aoDefinirImpedimento={(motivo) => definirImpedimentoAção(tarefaAberta, motivo)}
           aoDefinirSubtarefas={(subtarefas) => definirSubtarefasAção(tarefaAberta, subtarefas)}
+          aoAdicionarComentario={(texto) => adicionarComentarioAção(tarefaAberta, texto)}
+          aoExcluirComentario={(id) => excluirComentarioAção(tarefaAberta, id)}
           aoAtualizar={(patch) =>
             definirMapa((atual) => ({ ...atual, [tarefaAberta]: { ...atual[tarefaAberta], ...patch } }))
           }
@@ -952,7 +981,11 @@ function CartaoTarefa({
             </span>
           ) : null}
         </div>
-        {etiquetasDaTarefa.length > 0 || tarefa.prazo || sprint || tarefa.subtarefas.length > 0 ? (
+        {etiquetasDaTarefa.length > 0 ||
+        tarefa.prazo ||
+        sprint ||
+        tarefa.subtarefas.length > 0 ||
+        tarefa.comentarios.length > 0 ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {tarefa.subtarefas.length > 0 ? (
               <span
@@ -962,6 +995,16 @@ function CartaoTarefa({
               >
                 <CheckSquare size={10} />
                 {feitas}/{tarefa.subtarefas.length}
+              </span>
+            ) : null}
+            {tarefa.comentarios.length > 0 ? (
+              <span
+                className="pastilha text-tinta-2"
+                style={{ background: "var(--realce-fraco)" }}
+                title={`${tarefa.comentarios.length} ${tarefa.comentarios.length === 1 ? "comentário" : "comentários"}`}
+              >
+                <MessageSquare size={10} />
+                {tarefa.comentarios.length}
               </span>
             ) : null}
             {tarefa.prazo ? (
@@ -1162,6 +1205,8 @@ function DialogoTarefa({
   aoRenomear,
   aoDefinirImpedimento,
   aoDefinirSubtarefas,
+  aoAdicionarComentario,
+  aoExcluirComentario,
 }: {
   tarefa: TarefaKanban;
   /** Todas as tarefas do quadro (qualquer coluna) — pra escolher dependência. */
@@ -1175,6 +1220,9 @@ function DialogoTarefa({
   aoRenomear: (novoTitulo: string) => Promise<string | null>;
   aoDefinirImpedimento: (motivo: string | null) => void;
   aoDefinirSubtarefas: (subtarefas: Subtarefa[]) => void;
+  /** Devolve a mensagem de erro, ou `null` quando deu certo. */
+  aoAdicionarComentario: (texto: string) => Promise<string | null>;
+  aoExcluirComentario: (id: string) => void;
 }) {
   const caminho = tarefa.caminho;
   const [carregando, definirCarregando] = useState(true);
@@ -1314,6 +1362,12 @@ function DialogoTarefa({
               )}
 
               <ListaSubtarefas subtarefas={tarefa.subtarefas} aoMudar={aoDefinirSubtarefas} />
+
+              <MuralComentarios
+                comentarios={tarefa.comentarios}
+                aoAdicionar={aoAdicionarComentario}
+                aoExcluir={aoExcluirComentario}
+              />
 
               <Aviso>{erro}</Aviso>
             </div>
@@ -1540,10 +1594,11 @@ function DialogoTarefa({
 }
 
 /**
- * A checklist da tarefa: marcar é um clique, criar é digitar e dar Enter —
- * o campo continua aberto para a próxima, que é como se escreve uma lista
- * de subtarefas de verdade (várias seguidas, sem parar para clicar em
- * "adicionar" toda vez).
+ * A checklist da tarefa: marcar é um clique, renomear é dois cliques no
+ * texto, criar é digitar e dar Enter (o campo continua aberto para a
+ * próxima, que é como se escreve uma lista de verdade — várias seguidas,
+ * sem parar para clicar em "adicionar" toda vez), e reordenar é arrastar
+ * pela alcinha que aparece ao passar o mouse.
  */
 function ListaSubtarefas({
   subtarefas,
@@ -1553,19 +1608,34 @@ function ListaSubtarefas({
   aoMudar: (subtarefas: Subtarefa[]) => void;
 }) {
   const [nova, definirNova] = useState("");
+  const [sobrevoo, definirSobrevoo] = useState<{ id: string; antes: boolean } | null>(null);
   const feitas = subtarefas.filter((item) => item.feita).length;
+  const campoNovo = useRef<HTMLInputElement>(null);
 
   function adicionar() {
     const texto = nova.trim();
     if (!texto) return;
     aoMudar([...subtarefas, { id: crypto.randomUUID(), texto, feita: false }]);
     definirNova("");
+    campoNovo.current?.focus();
+  }
+
+  function aoSoltarPertoDe(origemId: string, alvoId: string, antes: boolean) {
+    definirSobrevoo(null);
+    if (origemId === alvoId) return;
+    const ids = subtarefas.map((item) => item.id);
+    const novaOrdem = calcularNovaOrdem(ids, origemId, alvoId, antes);
+    if (!novaOrdem) return;
+    aoMudar(novaOrdem.map((id) => subtarefas.find((item) => item.id === id)!));
   }
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Subtarefas</p>
+    <div className="mt-4 rounded-lg border border-linha bg-superficie p-2.5">
+      <div className="flex items-center justify-between px-0.5">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+          <CheckSquare size={12} />
+          Subtarefas
+        </p>
         {subtarefas.length > 0 ? (
           <span className="text-[11.5px] text-tinta-3 tabular-nums">
             {feitas}/{subtarefas.length}
@@ -1587,39 +1657,21 @@ function ListaSubtarefas({
 
       <ul className="mt-1.5 space-y-0.5">
         {subtarefas.map((item) => (
-          <li key={item.id} className="group/sub flex items-center gap-2 rounded-md px-1 py-[3px] hover:bg-realce-fraco">
-            <button
-              type="button"
-              onClick={() =>
-                aoMudar(subtarefas.map((atual) => (atual.id === item.id ? { ...atual, feita: !atual.feita } : atual)))
-              }
-              aria-pressed={item.feita}
-              aria-label={item.feita ? `Desmarcar ${item.texto}` : `Marcar ${item.texto} como feita`}
-              className="shrink-0 text-tinta-3 transition-colors hover:text-tinta"
-            >
-              {item.feita ? (
-                <CheckSquare size={14} style={{ color: "var(--realce)" }} />
-              ) : (
-                <Square size={14} />
-              )}
-            </button>
-            <span
-              className={clsx(
-                "min-w-0 flex-1 text-[12.5px] break-words",
-                item.feita ? "text-tinta-3 line-through" : "text-tinta-2",
-              )}
-            >
-              {item.texto}
-            </span>
-            <button
-              type="button"
-              onClick={() => aoMudar(subtarefas.filter((atual) => atual.id !== item.id))}
-              aria-label={`Excluir a subtarefa ${item.texto}`}
-              className="shrink-0 rounded-md p-0.5 text-tinta-3 opacity-0 transition-opacity hover:text-perigo group-hover/sub:opacity-100"
-            >
-              <X size={12} />
-            </button>
-          </li>
+          <LinhaSubtarefa
+            key={item.id}
+            item={item}
+            sobrevoo={sobrevoo?.id === item.id ? sobrevoo : null}
+            aoPassarPorCima={(antes) => definirSobrevoo({ id: item.id, antes })}
+            aoSairDeCima={() => definirSobrevoo((atual) => (atual?.id === item.id ? null : atual))}
+            aoSoltar={(origemId, antes) => aoSoltarPertoDe(origemId, item.id, antes)}
+            aoAlternar={() =>
+              aoMudar(subtarefas.map((atual) => (atual.id === item.id ? { ...atual, feita: !atual.feita } : atual)))
+            }
+            aoRenomear={(texto) =>
+              aoMudar(subtarefas.map((atual) => (atual.id === item.id ? { ...atual, texto } : atual)))
+            }
+            aoExcluir={() => aoMudar(subtarefas.filter((atual) => atual.id !== item.id))}
+          />
         ))}
       </ul>
 
@@ -1628,17 +1680,254 @@ function ListaSubtarefas({
           evento.preventDefault();
           adicionar();
         }}
-        className="mt-1 flex items-center gap-1.5 px-1"
+        className="mt-1.5 flex items-center gap-1.5 rounded-md border border-dashed border-linha-forte px-2 py-1 focus-within:border-[var(--realce)]"
       >
         <Plus size={13} className="shrink-0 text-tinta-3" aria-hidden />
         <input
+          ref={campoNovo}
           value={nova}
           onChange={(evento) => definirNova(evento.target.value)}
           placeholder="Adicionar subtarefa…"
           maxLength={200}
           className="min-w-0 flex-1 bg-transparent py-[3px] text-[12.5px] text-tinta placeholder:text-tinta-3 focus:outline-none"
         />
+        {nova.trim() ? (
+          <button
+            type="submit"
+            aria-label="Adicionar subtarefa"
+            className="shrink-0 rounded-md p-1 text-tinta-3 hover:bg-realce-medio hover:text-tinta"
+          >
+            <Plus size={13} />
+          </button>
+        ) : null}
       </form>
+    </div>
+  );
+}
+
+/** Uma linha da checklist — arrastável pela alça, com o texto editável em dois cliques. */
+function LinhaSubtarefa({
+  item,
+  sobrevoo,
+  aoPassarPorCima,
+  aoSairDeCima,
+  aoSoltar,
+  aoAlternar,
+  aoRenomear,
+  aoExcluir,
+}: {
+  item: Subtarefa;
+  sobrevoo: { id: string; antes: boolean } | null;
+  aoPassarPorCima: (antes: boolean) => void;
+  aoSairDeCima: () => void;
+  aoSoltar: (origemId: string, antes: boolean) => void;
+  aoAlternar: () => void;
+  aoRenomear: (texto: string) => void;
+  aoExcluir: () => void;
+}) {
+  const [editando, definirEditando] = useState(false);
+  const [valor, definirValor] = useState(item.texto);
+  const campo = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editando) return;
+    definirValor(item.texto);
+    campo.current?.focus();
+    campo.current?.select();
+  }, [editando, item.texto]);
+
+  function confirmar() {
+    const limpo = valor.trim();
+    if (limpo && limpo !== item.texto) aoRenomear(limpo);
+    definirEditando(false);
+  }
+
+  return (
+    <li
+      draggable={!editando}
+      onDragStart={(evento) => iniciarArrastoDeSubtarefa(evento, item.id)}
+      onDragOver={(evento) => {
+        if (!trazSubtarefa(evento)) return;
+        evento.preventDefault();
+        evento.dataTransfer.dropEffect = "move";
+        const retangulo = evento.currentTarget.getBoundingClientRect();
+        aoPassarPorCima(evento.clientY < retangulo.top + retangulo.height / 2);
+      }}
+      onDragLeave={aoSairDeCima}
+      onDrop={(evento) => {
+        if (!trazSubtarefa(evento)) return;
+        evento.preventDefault();
+        const retangulo = evento.currentTarget.getBoundingClientRect();
+        const antes = evento.clientY < retangulo.top + retangulo.height / 2;
+        aoSoltar(lerIdDeSubtarefa(evento), antes);
+      }}
+      className={clsx(
+        "group/sub relative flex items-center gap-1 rounded-md py-[3px] pr-1 pl-0.5 hover:bg-realce-fraco",
+        sobrevoo ? "cursor-grabbing" : "cursor-default",
+      )}
+    >
+      {sobrevoo ? (
+        <span
+          className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full"
+          style={{ background: "var(--realce)", [sobrevoo.antes ? "top" : "bottom"]: "-2px" }}
+          aria-hidden
+        />
+      ) : null}
+
+      <GripVertical
+        size={12}
+        className="shrink-0 cursor-grab text-tinta-3 opacity-0 transition-opacity group-hover/sub:opacity-100 active:cursor-grabbing"
+        aria-hidden
+      />
+
+      <button
+        type="button"
+        onClick={aoAlternar}
+        aria-pressed={item.feita}
+        aria-label={item.feita ? `Desmarcar ${item.texto}` : `Marcar ${item.texto} como feita`}
+        className="shrink-0 text-tinta-3 transition-colors hover:text-tinta"
+      >
+        {item.feita ? <CheckSquare size={14} style={{ color: "var(--realce)" }} /> : <Square size={14} />}
+      </button>
+
+      {editando ? (
+        <input
+          ref={campo}
+          value={valor}
+          onChange={(evento) => definirValor(evento.target.value)}
+          onBlur={confirmar}
+          onKeyDown={(evento) => {
+            evento.stopPropagation();
+            if (evento.key === "Enter") confirmar();
+            if (evento.key === "Escape") definirEditando(false);
+          }}
+          maxLength={200}
+          className="min-w-0 flex-1 border-b border-[var(--realce)] bg-transparent text-[12.5px] text-tinta focus:outline-none"
+        />
+      ) : (
+        <span
+          onDoubleClick={() => definirEditando(true)}
+          title="Clique duas vezes para renomear"
+          className={clsx(
+            "min-w-0 flex-1 text-[12.5px] break-words",
+            item.feita ? "text-tinta-3 line-through" : "text-tinta-2",
+          )}
+        >
+          {item.texto}
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={aoExcluir}
+        aria-label={`Excluir a subtarefa ${item.texto}`}
+        className="shrink-0 rounded-md p-0.5 text-tinta-3 opacity-0 transition-opacity hover:text-perigo group-hover/sub:opacity-100"
+      >
+        <X size={12} />
+      </button>
+    </li>
+  );
+}
+
+/**
+ * Mural de recados da tarefa — histórico cronológico e só de acréscimo:
+ * escrever manda pro fim da lista com data e hora, e a única edição possível
+ * é apagar um recado errado, nunca corrigir o texto (é um registro, não uma
+ * descrição viva).
+ */
+function MuralComentarios({
+  comentarios,
+  aoAdicionar,
+  aoExcluir,
+}: {
+  comentarios: Comentario[];
+  aoAdicionar: (texto: string) => Promise<string | null>;
+  aoExcluir: (id: string) => void;
+}) {
+  const [texto, definirTexto] = useState("");
+  const [enviando, definirEnviando] = useState(false);
+  const [erro, definirErro] = useState<string | null>(null);
+
+  async function enviar() {
+    const limpo = texto.trim();
+    if (!limpo) return;
+    definirEnviando(true);
+    const falha = await aoAdicionar(limpo);
+    definirEnviando(false);
+    if (falha) {
+      definirErro(falha);
+      return;
+    }
+    definirTexto("");
+    definirErro(null);
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-linha bg-superficie p-2.5">
+      <p className="flex items-center gap-1.5 px-0.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+        <MessageSquare size={12} />
+        Comentários
+      </p>
+
+      {comentarios.length > 0 ? (
+        <ul className="mt-1.5 max-h-56 space-y-1 overflow-y-auto">
+          {comentarios.map((item) => (
+            <li
+              key={item.id}
+              className="group/com flex items-start gap-1.5 rounded-md px-1 py-1 hover:bg-realce-fraco"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] break-words whitespace-pre-wrap text-tinta-2">{item.texto}</p>
+                <p className="mt-0.5 text-[10.5px] text-tinta-3" title={formatarDataHora(item.criadoEm)}>
+                  {formatarDataCurta(item.criadoEm)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => aoExcluir(item.id)}
+                aria-label="Excluir comentário"
+                className="shrink-0 rounded-md p-0.5 text-tinta-3 opacity-0 transition-opacity hover:text-perigo group-hover/com:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1.5 px-0.5 text-[12px] text-tinta-3">Nenhum recado ainda.</p>
+      )}
+
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          enviar();
+        }}
+        className="mt-2 flex items-end gap-1.5"
+      >
+        <textarea
+          value={texto}
+          onChange={(evento) => definirTexto(evento.target.value)}
+          onKeyDown={(evento) => {
+            if (evento.key === "Enter" && !evento.shiftKey) {
+              evento.preventDefault();
+              enviar();
+            }
+          }}
+          placeholder="Escrever um recado… (Enter envia, Shift+Enter quebra linha)"
+          rows={1}
+          maxLength={2000}
+          className="min-w-0 flex-1 resize-none rounded-md border border-linha bg-superficie-alta px-2 py-1.5 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={!texto.trim() || enviando}
+          aria-label="Comentar"
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta disabled:pointer-events-none disabled:opacity-40"
+        >
+          <Send size={14} />
+        </button>
+      </form>
+      <Aviso>{erro}</Aviso>
     </div>
   );
 }

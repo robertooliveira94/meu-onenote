@@ -104,6 +104,22 @@ export async function acaoCriarPagina(pasta: string, modeloId?: string): Promise
   redirect(`${urlDaNota(caminho)}?editando=1`);
 }
 
+/**
+ * Mesma criação instantânea de `acaoCriarPagina`, mas sem navegar — usada
+ * pela janela flutuante, que edita a página por cima da tela atual em vez
+ * de tomar conta dela.
+ */
+export async function acaoCriarPaginaFlutuante(pasta: string): Promise<Resposta> {
+  try {
+    const pastaValidada = caminhoValido.parse(pasta);
+    const caminho = await criarNota(pastaValidada, `${nomeDe(pastaValidada)} ${carimboDeAgora()}`, "md", "");
+    atualizarTudo();
+    return { ok: true, mensagem: caminho };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para criar a página" };
+  }
+}
+
 /** Captura rápida: uma folha em branco no caderno de entrada, com data no nome. */
 export async function acaoCapturaRapida(): Promise<void> {
   const agora = new Date();
@@ -216,6 +232,22 @@ export async function acaoReordenarSecoesPara(caderno: string, ordem: string[]):
     const lista = z.array(caminhoValido).max(500).parse(ordem);
     if (lista.some((caminho) => pastaDe(caminho) !== cadernoValidado)) {
       throw new Error("Uma das seções não é deste caderno");
+    }
+    await reordenarPastasPara(lista);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+/**
+ * Mesma ideia, para os próprios cadernos (arrastar um chip na lista da
+ * esquerda) — cada caminho aqui é de 1º nível, sem "/" nenhum.
+ */
+export async function acaoReordenarCadernosPara(ordem: string[]): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const lista = z.array(caminhoValido).max(500).parse(ordem);
+    if (lista.some((caminho) => caminho.includes("/"))) {
+      throw new Error("Um dos itens não é um caderno de primeiro nível");
     }
     await reordenarPastasPara(lista);
   });

@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, MoreHorizontal, Palette, Pencil, Plus, Smile, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   acaoCriarQuadro,
@@ -14,6 +14,7 @@ import {
   acaoRenomearQuadro,
   acaoReordenarQuadrosPara,
 } from "@/app/acoes-kanban";
+import { calcularNovaOrdem, iniciarArrastoDeQuadro, lerNomeDeQuadro, trazQuadro } from "@/lib/arrastar";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import { quadroDaUrl, urlDoQuadro } from "@/lib/rotas";
 import type { ResumoQuadro } from "@/lib/tipos";
@@ -39,14 +40,37 @@ export function ListaQuadros({ quadros }: { quadros: ResumoQuadro[] }) {
   const fechar = () => definirAcao(null);
   const alvo = acao?.quadro ?? null;
 
+  // Ordem local, para o arraste responder na hora — mesmo padrão dos cadernos.
+  const [ordemLocal, definirOrdemLocal] = useState(() => quadros.map((quadro) => quadro.nome));
+  const [sobrevoo, definirSobrevoo] = useState<{ nome: string; antes: boolean } | null>(null);
+  useEffect(() => {
+    definirOrdemLocal(quadros.map((quadro) => quadro.nome));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quadros.map((quadro) => quadro.nome).join("|")]);
+
+  const quadrosOrdenados = ordemLocal
+    .map((nome) => quadros.find((quadro) => quadro.nome === nome))
+    .filter((quadro): quadro is ResumoQuadro => Boolean(quadro));
+
   async function mover(nome: string, direcao: -1 | 1) {
-    const posicao = quadros.findIndex((item) => item.nome === nome);
+    const posicao = ordemLocal.indexOf(nome);
     const destino = posicao + direcao;
-    if (posicao < 0 || destino < 0 || destino >= quadros.length) return;
-    const nomes = quadros.map((item) => item.nome);
+    if (posicao < 0 || destino < 0 || destino >= ordemLocal.length) return;
+    const nomes = [...ordemLocal];
     [nomes[posicao], nomes[destino]] = [nomes[destino], nomes[posicao]];
+    definirOrdemLocal(nomes);
     const resposta = await acaoReordenarQuadrosPara(nomes);
     if (resposta.ok) roteador.refresh();
+  }
+
+  function aoSoltarQuadro(origem: string, alvoNome: string, antes: boolean) {
+    definirSobrevoo(null);
+    const nova = calcularNovaOrdem(ordemLocal, origem, alvoNome, antes);
+    if (!nova) return;
+    definirOrdemLocal(nova);
+    acaoReordenarQuadrosPara(nova).then((resposta) => {
+      if (resposta.ok) roteador.refresh();
+    });
   }
 
   return (
@@ -59,18 +83,22 @@ export function ListaQuadros({ quadros }: { quadros: ResumoQuadro[] }) {
       </div>
 
       <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2" aria-label="Quadros">
-        {quadros.length === 0 ? (
+        {quadrosOrdenados.length === 0 ? (
           <p className="px-2 py-3 text-[11.5px] leading-relaxed text-tinta-3">
             Nenhum quadro ainda. Use o “+” acima para criar o primeiro.
           </p>
         ) : (
-          quadros.map((quadro) => (
+          quadrosOrdenados.map((quadro) => (
             <LinhaQuadro
               key={quadro.caminho}
               quadro={quadro}
               ativo={quadro.nome === nomeAtivo}
               aoAgir={definirAcao}
               aoMover={mover}
+              sobrevoo={sobrevoo?.nome === quadro.nome ? sobrevoo : null}
+              aoPassarPorCima={(antes) => definirSobrevoo({ nome: quadro.nome, antes })}
+              aoSairDeCima={() => definirSobrevoo((atual) => (atual?.nome === quadro.nome ? null : atual))}
+              aoSoltarQuadro={(origem, antes) => aoSoltarQuadro(origem, quadro.nome, antes)}
             />
           ))
         )}
@@ -162,16 +190,41 @@ function LinhaQuadro({
   ativo,
   aoAgir,
   aoMover,
+  sobrevoo,
+  aoPassarPorCima,
+  aoSairDeCima,
+  aoSoltarQuadro,
 }: {
   quadro: ResumoQuadro;
   ativo: boolean;
   aoAgir: (acao: Acao) => void;
   aoMover: (nome: string, direcao: -1 | 1) => void;
+  sobrevoo: { nome: string; antes: boolean } | null;
+  aoPassarPorCima: (antes: boolean) => void;
+  aoSairDeCima: () => void;
+  aoSoltarQuadro: (origem: string, antes: boolean) => void;
 }) {
   return (
     <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeQuadro(evento, quadro.nome)}
+      onDragOver={(evento) => {
+        if (!trazQuadro(evento)) return;
+        evento.preventDefault();
+        evento.dataTransfer.dropEffect = "move";
+        const retangulo = evento.currentTarget.getBoundingClientRect();
+        aoPassarPorCima(evento.clientY < retangulo.top + retangulo.height / 2);
+      }}
+      onDragLeave={aoSairDeCima}
+      onDrop={(evento) => {
+        if (!trazQuadro(evento)) return;
+        evento.preventDefault();
+        const retangulo = evento.currentTarget.getBoundingClientRect();
+        const antes = evento.clientY < retangulo.top + retangulo.height / 2;
+        aoSoltarQuadro(lerNomeDeQuadro(evento), antes);
+      }}
       className={clsx(
-        "group relative flex items-center gap-0.5 rounded-lg pr-1 transition-colors",
+        "group relative flex cursor-grab items-center gap-0.5 rounded-lg pr-1 transition-colors active:cursor-grabbing",
         ativo ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
@@ -179,6 +232,14 @@ function LinhaQuadro({
         <span
           className="barra-ativa absolute top-1.5 bottom-1.5 left-0 w-[2.5px] rounded-full"
           style={{ background: quadro.cor }}
+          aria-hidden
+        />
+      ) : null}
+
+      {sobrevoo ? (
+        <span
+          className="pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full"
+          style={{ background: "var(--realce)", [sobrevoo.antes ? "top" : "bottom"]: 0 }}
           aria-hidden
         />
       ) : null}

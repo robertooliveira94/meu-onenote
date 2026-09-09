@@ -18,6 +18,7 @@ import { atualizarIndice, entradaDaNota, lerIndice, reapontar } from "./indice";
 import { COLUNAS_KANBAN_PADRAO } from "./tipos";
 import type {
   ColunaKanban,
+  Comentario,
   ConfigQuadro,
   Indice,
   Prioridade,
@@ -162,6 +163,7 @@ export async function listarQuadro(quadro: string): Promise<Quadro> {
         prazo: meta?.prazoKanban ?? null,
         sprintId: meta?.sprintKanban ?? null,
         subtarefas: meta?.subtarefasKanban ?? [],
+        comentarios: meta?.comentariosKanban ?? [],
         impedimento: meta?.impedimentoKanban ?? null,
       });
     }
@@ -358,6 +360,29 @@ export async function definirSubtarefas(caminho: string, subtarefas: Subtarefa[]
     .filter((item) => item.texto.length > 0);
   await atualizarIndice((indice) => {
     entradaDaNota(indice, caminho).subtarefasKanban = limpas;
+  });
+}
+
+/**
+ * Acrescenta um recado ao mural da tarefa — diferente da descrição, que é o
+ * texto principal: aqui é histórico, cada entrada com seu horário, e não dá
+ * para editar depois de escrita (só apagar). `texto` vazio não entra.
+ */
+export async function adicionarComentario(caminho: string, texto: string): Promise<Comentario | null> {
+  const limpo = texto.trim().slice(0, 2000);
+  if (!limpo) return null;
+  const comentario: Comentario = { id: crypto.randomUUID(), texto: limpo, criadoEm: new Date().toISOString() };
+  await atualizarIndice((indice) => {
+    const entrada = entradaDaNota(indice, caminho);
+    entrada.comentariosKanban = [...(entrada.comentariosKanban ?? []), comentario];
+  });
+  return comentario;
+}
+
+export async function excluirComentario(caminho: string, id: string): Promise<void> {
+  await atualizarIndice((indice) => {
+    const entrada = entradaDaNota(indice, caminho);
+    entrada.comentariosKanban = (entrada.comentariosKanban ?? []).filter((item) => item.id !== id);
   });
 }
 

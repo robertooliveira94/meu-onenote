@@ -17,6 +17,12 @@ export const FORMATO_SECAO = "application/x-meu-onenote-secao";
 export const FORMATO_PAGINA = "application/x-meu-onenote-pagina";
 /** Uma tarefa do Kanban, arrastada entre colunas (Backlog, Fazendo...). */
 export const FORMATO_TAREFA = "application/x-meu-onenote-tarefa";
+/** Um caderno, arrastado na lista da aplicação Anotações para reordenar. */
+export const FORMATO_CADERNO = "application/x-meu-onenote-caderno";
+/** Um quadro, arrastado na lista da aplicação Kanban para reordenar. */
+export const FORMATO_QUADRO = "application/x-meu-onenote-quadro";
+/** Uma subtarefa, arrastada dentro da checklist de uma tarefa para reordenar. */
+export const FORMATO_SUBTAREFA = "application/x-meu-onenote-subtarefa";
 
 export function iniciarArrastoDeSecao(evento: React.DragEvent, caminho: string): void {
   evento.dataTransfer.setData(FORMATO_SECAO, caminho);
@@ -33,6 +39,21 @@ export function iniciarArrastoDeTarefa(evento: React.DragEvent, caminho: string)
   evento.dataTransfer.effectAllowed = "move";
 }
 
+export function iniciarArrastoDeCaderno(evento: React.DragEvent, nome: string): void {
+  evento.dataTransfer.setData(FORMATO_CADERNO, nome);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
+export function iniciarArrastoDeQuadro(evento: React.DragEvent, nome: string): void {
+  evento.dataTransfer.setData(FORMATO_QUADRO, nome);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
+export function iniciarArrastoDeSubtarefa(evento: React.DragEvent, id: string): void {
+  evento.dataTransfer.setData(FORMATO_SUBTAREFA, id);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
 export function trazSecao(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_SECAO);
 }
@@ -45,6 +66,18 @@ export function trazTarefa(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_TAREFA);
 }
 
+export function trazCaderno(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_CADERNO);
+}
+
+export function trazQuadro(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_QUADRO);
+}
+
+export function trazSubtarefa(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_SUBTAREFA);
+}
+
 export function lerCaminhoDeSecao(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_SECAO);
 }
@@ -55,6 +88,18 @@ export function lerCaminhoDePagina(evento: React.DragEvent): string {
 
 export function lerCaminhoDeTarefa(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_TAREFA);
+}
+
+export function lerNomeDeCaderno(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_CADERNO);
+}
+
+export function lerNomeDeQuadro(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_QUADRO);
+}
+
+export function lerIdDeSubtarefa(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_SUBTAREFA);
 }
 
 /** Tira um item de uma posição e insere em outra, sem mexer no resto da ordem. */

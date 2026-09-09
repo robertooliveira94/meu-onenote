@@ -29,13 +29,18 @@
   --tinta-3: #5e6d85;
   --linha: #e4e9f0;
   --linha-forte: #c9d2df;
+  /* Borda própria de cartão — mais forte que --linha. No claro, um cartão
+     branco (--superficie-alta) sobre o papel (--papel) quase se confundia
+     com o fundo com a borda fraca; no escuro o cartão já contrasta pela cor
+     de fundo, então aqui é só --linha mesmo (ver override abaixo). */
+  --borda-cartao: #cdd6e3;
   --realce: #0ea47c;
   --realce-fraco: #0ea47c14;
   --realce-medio: #0ea47c26;
   --perigo: #e5484d;
   --sombra: 0 2px 4px #16202e0d, 0 16px 40px #16202e1a;
-  --sombra-cartao: 0 1px 2px #16202e0a;
-  --sombra-cartao-alta: 0 2px 4px #16202e0d, 0 8px 20px #16202e14;
+  --sombra-cartao: 0 1px 2px #16202e14, 0 1px 1px #16202e0a;
+  --sombra-cartao-alta: 0 2px 4px #16202e12, 0 8px 20px #16202e18;
 
   /* Zoom do texto de uma página (leitura, prévia, editor) — preferência da
      pessoa, não da nota; ver src/lib/zoom.ts. */
@@ -53,6 +58,9 @@
   --tinta-3: #7a8ba1;
   --linha: #243044;
   --linha-forte: #35455e;
+  /* No escuro, o cartão (--superficie-alta) já contrasta bem contra o papel
+     (--papel) — a borda normal basta, sem precisar de uma mais forte. */
+  --borda-cartao: var(--linha);
   --realce-fraco: #0ea47c26;
   --realce-medio: #0ea47c3d;
   --perigo: #ff6369;
@@ -69,6 +77,7 @@
   --color-tinta-2: var(--tinta-2);
   --color-tinta-3: var(--tinta-3);
   --color-linha: var(--linha);
+  --color-borda-cartao: var(--borda-cartao);
   --color-linha-forte: var(--linha-forte);
   --color-realce: var(--realce);
   --color-realce-fraco: var(--realce-fraco);
@@ -421,7 +430,7 @@ textarea:focus {
 /* Cartão padrão: branco, borda visível e cantos generosos. */
 .cartao {
   background: var(--superficie-alta);
-  border: 1px solid var(--linha);
+  border: 1px solid var(--borda-cartao);
   border-radius: 12px;
   box-shadow: var(--sombra-cartao);
   transition:

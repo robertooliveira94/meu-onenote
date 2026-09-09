@@ -19,6 +19,7 @@ import {
 import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban";
 import { PRIORIDADES } from "@/lib/tipos";
 import {
+  adicionarComentario,
   criarColuna,
   criarTarefa,
   definirColunaConcluida,
@@ -31,6 +32,7 @@ import {
   definirSubtarefas,
   duplicarTarefa,
   excluirColuna,
+  excluirComentario,
   excluirTarefa,
   lerTarefa,
   listarQuadro,
@@ -41,7 +43,7 @@ import {
   reordenarTarefasPara,
   salvarTarefa,
 } from "@/lib/kanban";
-import type { ColunaKanban, Quadro, Subtarefa } from "@/lib/tipos";
+import type { ColunaKanban, Comentario, Quadro, Subtarefa } from "@/lib/tipos";
 
 import type { Resposta } from "./acoes";
 
@@ -203,6 +205,31 @@ export async function acaoDefinirSubtarefas(caminho: string, subtarefas: Subtare
     const validado = caminhoValido.parse(caminho);
     const lista = z.array(subtarefaValida).max(100).parse(subtarefas);
     await definirSubtarefas(validado, lista);
+  });
+}
+
+/**
+ * Devolve o comentário criado (não só ok/erro) — o mural mostra o horário
+ * exato, decidido no servidor, sem esperar um refresh pra saber qual foi.
+ */
+export async function acaoAdicionarComentario(
+  caminho: string,
+  texto: string,
+): Promise<{ ok: true; comentario: Comentario } | { ok: false; erro: string }> {
+  try {
+    const validado = caminhoValido.parse(caminho);
+    const limpo = z.string().min(1).max(2000).parse(texto);
+    const comentario = await adicionarComentario(validado, limpo);
+    if (!comentario) return { ok: false, erro: "Escreva alguma coisa antes de comentar" };
+    return { ok: true, comentario };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para comentar" };
+  }
+}
+
+export async function acaoExcluirComentario(caminho: string, id: string): Promise<Resposta> {
+  return tentar(async () => {
+    await excluirComentario(caminhoValido.parse(caminho), z.string().max(60).parse(id));
   });
 }
 

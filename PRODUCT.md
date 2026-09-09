@@ -92,6 +92,16 @@ limpas e abríveis em qualquer editor.
 - As colunas de seções e de páginas se recolhem numa faixa fina, e a faixa
   continua dizendo onde a pessoa está: o nome da seção aberta e o da página
   aberta, escritos de cima para baixo. Clicar no nome abre a coluna de volta.
+- **Janela flutuante**: um botão na lista de páginas cria a página e abre
+  ela numa janela por cima da tela atual, em vez de navegar pra longe —
+  arrastável pela barra do topo, redimensionável pelo canto, posição e
+  tamanho lembrados entre usos. Fechar não perde nada (o autosave já
+  gravou); um botão "expandir" leva pra tela cheia quando a nota crescer
+  além do que cabe flutuando.
+- **Esconder a prévia** na edição lado a lado: um botão na barra de
+  formatação tira a coluna da prévia e deixa o texto cru ocupar a largura
+  toda — para quem já sabe o que está escrevendo e não precisa ver
+  renderizado enquanto digita. Lembrado entre sessões.
 - Etiquetas cadastráveis com cor, aplicáveis a qualquer página, que
   atravessam cadernos.
 - Modelos de página cadastráveis (nome, descrição, conteúdo em markdown) —
@@ -137,7 +147,9 @@ limpas e abríveis em qualquer editor.
   vice-versa. Em modo Kanban, a coluna de navegação das anotações (busca,
   captura rápida, seções, atalhos fixos) some da tela; sobram a coluna de
   quadros e o quadro em si. O botão de tema claro/escuro fica no rodapé
-  dessa coluna, visível nos dois modos.
+  dessa coluna, visível nos dois modos. No topo da coluna só existem os
+  dois botões de aplicação (Anotações, Kanban) — sem nome ou logo do app
+  por cima deles. Abrir o app cai direto em Anotações.
 - Kanban (`/kanban/<Quadro>`): quadros próprios, guardados em
   `dados/_kanban/<Quadro>/<Coluna>/<Tarefa>.md` — fora dos cadernos, porque
   não são anotação. Cada tarefa é um arquivo `.md` de verdade; arrastar
@@ -177,11 +189,18 @@ limpas e abríveis em qualquer editor.
     outra coluna, mudar prioridade, duplicar tarefa (etiqueta/prioridade/
     prazo vêm junto, dependências não), favoritar e excluir — sem precisar
     abrir o editor da tarefa pra nada disso.
-  - **Subtarefas**: checklist da tarefa, no editor — digitar e dar Enter
-    cria a próxima sem tirar a mão do teclado, e marcar é um clique. O
-    cartão fechado mostra o progresso ("1/4") e uma barrinha aparece no
-    editor. Ficam no índice, não no corpo em markdown: assim a contagem não
-    depende de a pessoa ter escrito as caixinhas num formato específico.
+  - **Subtarefas**: checklist da tarefa, numa caixa própria no editor —
+    digitar e dar Enter cria a próxima sem tirar a mão do teclado, marcar é
+    um clique, renomear é dois cliques no texto (igual ao título da
+    tarefa), e reordenar é arrastar pela alcinha que aparece ao passar o
+    mouse. O cartão fechado mostra o progresso ("1/4") e uma barrinha
+    aparece no editor. Ficam no índice, não no corpo em markdown: assim a
+    contagem não depende de a pessoa ter escrito as caixinhas num formato
+    específico.
+  - **Comentários**: mural de recados da tarefa, separado da descrição —
+    cada entrada carimbada com data e hora, só de acréscimo (a única edição
+    possível é apagar um recado errado, nunca corrigir o texto de um já
+    escrito). O cartão fechado mostra quantos tem.
   - **Impedimento com motivo**: marcar a tarefa como impedida e escrever o
     porquê. O cartão pequeno ganha uma faixa vermelha com o motivo e a
     borda vermelha, então dá para achar o que está travado varrendo o
@@ -195,9 +214,13 @@ limpas e abríveis em qualquer editor.
   - **Editor da tarefa**: título editável no topo, descrição em markdown
     que abre só com a caixa de edição (sem prévia lado a lado) — um botão
     "Salvar" embaixo dela grava e troca pra visualização renderizada; um
-    "Editar" volta pra caixa de texto. Abaixo dela, as subtarefas.
-    Impedimento, prioridade, prazo, sprint, etiquetas e "Bloqueado por"
-    ficam numa coluna à direita, separados do conteúdo.
+    "Editar" volta pra caixa de texto. Abaixo dela, as subtarefas e o mural
+    de comentários. Impedimento, prioridade, prazo, sprint, etiquetas e
+    "Bloqueado por" ficam numa coluna à direita, separados do conteúdo.
+- **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
+  seção/página, na lista da coluna esquerda. O primeiro da lista é o que
+  abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de
+  outro lugar do app.
 - Histórico de versões automático durante a edição (restaurável) e lixeira
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app
@@ -205,6 +228,12 @@ limpas e abríveis em qualquer editor.
   abertura — o disco manda, não o app. A varredura que reconcilia disco e
   índice vale por 1 segundo: uma tela que lê a árvore, os favoritos e os
   recentes de uma vez varre o disco uma vez só, em vez de três.
+- **Cartão tem borda própria** (`--borda-cartao`), mais forte que a borda
+  comum (`--linha`) só no tema claro — um cartão branco sobre o fundo
+  levemente frio do papel quase se confundia com o fundo. No tema escuro é
+  a mesma borda de sempre, porque ali o cartão já contrasta pela cor de
+  fundo. Vale para os dois tipos de cartão do app: página nas Anotações e
+  tarefa no Kanban.
 - **O campo de edição da nota não é controlado pelo React** (`defaultValue`,
   não `value`): quem manda no texto escrito é o DOM. Num campo controlado,
   uma renderização concorrente interrompida podia repor no DOM o texto de

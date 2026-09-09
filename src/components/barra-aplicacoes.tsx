@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { KanbanSquare, NotebookPen, NotebookText, Tag } from "lucide-react";
+import { KanbanSquare, NotebookText, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -46,18 +46,7 @@ export function BarraAplicacoes({
 
   return (
     <aside className="flex w-[214px] shrink-0 flex-col overflow-hidden border-r border-linha bg-superficie">
-      <Link href="/" className="flex items-center gap-2.5 px-3.5 pt-3 pb-2.5">
-        <span
-          className="transicao-realce flex size-7 shrink-0 items-center justify-center rounded-lg text-white"
-          style={{ background: "var(--realce)" }}
-          aria-hidden
-        >
-          <NotebookPen size={15} />
-        </span>
-        <span className="truncate text-[13px] font-bold tracking-[-0.01em]">Meu bloco</span>
-      </Link>
-
-      <div className="space-y-0.5 px-2 pb-2.5">
+      <div className="space-y-0.5 px-2 pt-3 pb-2.5">
         <BotaoApp
           ativo={appAtual === "notas"}
           icone={<NotebookText size={14} />}

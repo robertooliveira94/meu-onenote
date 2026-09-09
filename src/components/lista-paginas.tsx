@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  AppWindow,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
@@ -33,6 +34,7 @@ import {
 } from "@/app/acoes";
 import { calcularNovaOrdem, iniciarArrastoDePagina, lerCaminhoDePagina, trazPagina } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
+import { useJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataCurta, urlDaNota } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, ResumoNota } from "@/lib/tipos";
@@ -74,6 +76,7 @@ export function ListaPaginas({
     maxima: 520,
   });
   const colunas = useColunas();
+  const janelaFlutuante = useJanelaFlutuante();
   const [, iniciarCriacaoDePagina] = useTransition();
 
   // Ordem local, pro arraste responder na hora — igual à coluna de seções:
@@ -151,6 +154,9 @@ export function ListaPaginas({
               <LayoutTemplate size={14} />
             </BotaoIcone>
           ) : null}
+          <BotaoIcone rotulo="Nova página em janela flutuante" onClick={() => janelaFlutuante.abrir(pasta)}>
+            <AppWindow size={14} />
+          </BotaoIcone>
           <BotaoIcone rotulo="Recolher páginas" onClick={() => colunas.alternar("paginas")}>
             <PanelLeftClose size={14} />
           </BotaoIcone>
