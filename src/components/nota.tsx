@@ -145,8 +145,12 @@ export function PaginaNota({
   const concluirEdicao = useCallback(() => {
     if (!ehMarkdown) return;
     definirEditando(false);
-    if (conteudo !== nota.conteudo) salvar(conteudo);
-  }, [conteudo, ehMarkdown, nota.conteudo, salvar]);
+    if (conteudo === nota.conteudo) return;
+    // Só aqui a casca se atualiza: o salvamento automático não revalida nada
+    // (ver `acaoSalvarNota`), então é ao sair da edição que a lista de
+    // páginas pega o trecho novo e a data nova.
+    salvar(conteudo).then(() => roteador.refresh());
+  }, [conteudo, ehMarkdown, nota.conteudo, roteador, salvar]);
 
   useEffect(() => {
     function aoTeclar(evento: KeyboardEvent) {

@@ -83,12 +83,15 @@ export async function acaoLerTarefa(caminho: string): Promise<{ titulo: string; 
   return lerTarefa(caminhoValido.parse(caminho));
 }
 
+/**
+ * Não revalida a casca de propósito, como `acaoSalvarNota`: quem salva já
+ * tem o texto na tela, e remontar a lista de quadros inteira a cada
+ * gravação só deixaria o editor lento à toa.
+ */
 export async function acaoSalvarTarefa(caminho: string, conteudo: string): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     await salvarTarefa(caminhoValido.parse(caminho), z.string().max(50_000).parse(conteudo));
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoRenomearTarefa(caminho: string, novoTitulo: string): Promise<Resposta> {
@@ -139,54 +142,54 @@ export async function acaoExcluirTarefa(caminho: string): Promise<Resposta> {
   return resposta;
 }
 
+/*
+ * As ações daqui até `acaoDefinirImpedimento` mexem só em metadado de uma
+ * tarefa (etiqueta, prioridade, prazo, sprint, subtarefa, impedimento) e
+ * nenhuma delas revalida a casca de propósito: o quadro já atualiza o
+ * cartão na hora, no cliente, e revalidar remontava a lista de quadros e a
+ * árvore inteira a cada clique numa caixinha de subtarefa — ~26 KB e uns
+ * 270 ms por marcação, para desenhar exatamente a mesma tela. As outras
+ * telas são dinâmicas e leem tudo de novo ao serem abertas.
+ */
+
 export async function acaoDefinirEtiquetasDaTarefa(caminho: string, etiquetas: string[]): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const lista = z.array(z.string().max(60)).max(20).parse(etiquetas);
     await definirEtiquetasDaTarefa(validado, lista);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoDefinirDependencias(caminho: string, dependeDe: string[]): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const lista = z.array(caminhoValido).max(50).parse(dependeDe);
     await definirDependencias(validado, lista);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoDefinirPrioridade(caminho: string, prioridade: string | null): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const valor = prioridade === null ? null : prioridadeValida.parse(prioridade);
     await definirPrioridade(validado, valor);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoDefinirPrazo(caminho: string, prazo: string | null): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const valor = prazo === null ? null : z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(prazo);
     await definirPrazo(validado, valor);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoDefinirSprintDaTarefa(caminho: string, sprintId: string | null): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const valor = sprintId === null ? null : z.string().max(60).parse(sprintId);
     await definirSprintDaTarefa(validado, valor);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 const subtarefaValida = z.object({
@@ -196,23 +199,19 @@ const subtarefaValida = z.object({
 });
 
 export async function acaoDefinirSubtarefas(caminho: string, subtarefas: Subtarefa[]): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const lista = z.array(subtarefaValida).max(100).parse(subtarefas);
     await definirSubtarefas(validado, lista);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 export async function acaoDefinirImpedimento(caminho: string, motivo: string | null): Promise<Resposta> {
-  const resposta = await tentar(async () => {
+  return tentar(async () => {
     const validado = caminhoValido.parse(caminho);
     const valor = motivo === null ? null : z.string().max(200).parse(motivo);
     await definirImpedimento(validado, valor);
   });
-  atualizarTudo();
-  return resposta;
 }
 
 // ---------------------------------------------------------------- quadros

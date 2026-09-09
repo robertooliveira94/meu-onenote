@@ -202,7 +202,19 @@ limpas e abríveis em qualquer editor.
   para pastas e páginas excluídas.
 - Se um arquivo `.md`/`.txt` for criado ou editado por fora do app
   (Explorador de Arquivos, outro editor), o app adota a mudança na próxima
-  abertura — o disco manda, não o app.
+  abertura — o disco manda, não o app. A varredura que reconcilia disco e
+  índice vale por 1 segundo: uma tela que lê a árvore, os favoritos e os
+  recentes de uma vez varre o disco uma vez só, em vez de três.
+- **Regra de desempenho:** o que acontece enquanto se digita (salvamento
+  automático da nota e da tarefa) e o que é clique repetido (marcar
+  subtarefa, trocar prioridade, prazo, sprint, etiqueta, impedimento) não
+  revalida a casca do app. Essas ações já aparecem na tela na hora, pelo
+  estado local; revalidar remontava a árvore inteira e mandava ~30 KB de
+  volta a cada pausa na digitação — além de deixar lento, isso re-renderizava
+  o campo de texto no meio da escrita e fazia sumir letra em rajada rápida.
+  Quem revalida é o que muda a estrutura (criar, renomear, mover, excluir) e
+  o fim da edição (`Concluir`/`Esc`), que é quando a lista de páginas precisa
+  do trecho novo.
 - Restrição de ambiente conhecida: o Smart App Control do Windows bloqueia
   o compilador nativo do Next.js, então builds caem para um modo mais lento
   em WASM; documentado, sem solução automática (desativar o Smart App

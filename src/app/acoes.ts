@@ -250,11 +250,22 @@ export async function acaoDefinirCorCaderno(caminho: string, cor: string): Promi
 
 // -------------------------------------------------------------------- notas
 
+/**
+ * Salvamento automático — de propósito, o único que NÃO revalida nada.
+ *
+ * Ele roda a cada pausa na digitação, e `revalidatePath("/", "layout")` aqui
+ * custava caro em dobro: o servidor remontava a casca inteira (árvore de
+ * cadernos, quadros, etiquetas, modelos) e mandava de volta uns 35 KB, e o
+ * React re-renderizava a página no meio da digitação — o que fazia o campo
+ * de texto perder letra em rajada rápida, porque um campo controlado pode ser
+ * reposto pelo valor de uma renderização já vencida.
+ *
+ * O que a tela mostra do conteúdo (o trecho na lista de páginas) se atualiza
+ * quando a edição termina: `concluirEdicao` chama `roteador.refresh()`.
+ */
 export async function acaoSalvarNota(caminho: string, conteudo: string): Promise<Resposta> {
   try {
     await escreverNota(caminhoValido.parse(caminho), z.string().parse(conteudo));
-    // A lista de páginas mostra um trecho do conteúdo, então precisa acompanhar.
-    revalidatePath("/", "layout");
     return { ok: true };
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para salvar" };

@@ -132,12 +132,37 @@ async function migrarPaginasSoltas(): Promise<void> {
 }
 
 /**
+ * Quanto tempo uma sincronização vale antes de valer a pena varrer o disco
+ * de novo. Uma só renderização de tela chama isto várias vezes (a casca lê a
+ * árvore, a tela lê favoritas e recentes, a busca lê tudo de novo) — sem
+ * esta janela, era uma varredura completa em cada chamada, para um disco que
+ * não mudou no meio delas. Um segundo é curto o bastante para um arquivo
+ * mexido por fora (Explorador, outro editor) aparecer sem ninguém notar a
+ * espera.
+ */
+const VALIDADE_DA_SINCRONIA = 1000;
+let ultimaSincronia = 0;
+let sincroniaEmAndamento: Promise<void> | null = null;
+
+/**
  * Reconcilia o índice com o disco: adota arquivos que apareceram por fora
- * (você copiou um .txt para a pasta pelo Explorador) e descarta metadados de
- * quem sumiu. Roda a cada leitura da árvore, então mexer nos arquivos na mão
- * nunca deixa o aplicativo inconsistente.
+ * (você copiou um .md para a pasta pelo Explorador) e descarta metadados de
+ * quem sumiu. Chamadas seguidas dentro da janela acima reaproveitam a
+ * varredura anterior, e chamadas simultâneas esperam a mesma passada em vez
+ * de cada uma varrer o disco por conta.
  */
 export async function sincronizarIndice(): Promise<void> {
+  if (sincroniaEmAndamento) return sincroniaEmAndamento;
+  if (Date.now() - ultimaSincronia < VALIDADE_DA_SINCRONIA) return;
+
+  sincroniaEmAndamento = varrerEReconciliar().finally(() => {
+    ultimaSincronia = Date.now();
+    sincroniaEmAndamento = null;
+  });
+  return sincroniaEmAndamento;
+}
+
+async function varrerEReconciliar(): Promise<void> {
   await garantirEstrutura();
   await migrarPaginasSoltas();
   const notas: string[] = [];

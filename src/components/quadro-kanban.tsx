@@ -913,7 +913,10 @@ function CartaoTarefa({
       >
         {impedida ? (
           <div
-            className="-mx-3 -mt-2.5 mb-2 flex items-center gap-1.5 px-3 py-1"
+            // O cartão tem `pr-7` (espaço do menu de três pontos), então a
+            // faixa precisa puxar essa margem também — só `-mx-3` deixava um
+            // pedaço sem cor no canto direito.
+            className="-mt-2.5 -mr-7 -ml-3 mb-2 flex items-center gap-1.5 py-1 pr-7 pl-3"
             style={{ background: "color-mix(in srgb, var(--perigo) 12%, transparent)" }}
           >
             <OctagonAlert size={11} className="shrink-0 text-perigo" aria-hidden />
