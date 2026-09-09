@@ -30,6 +30,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   acaoAbrirNotaDoDia,
   acaoCapturaRapida,
+  acaoCriarPagina,
   acaoCriarSecao,
   acaoExcluir,
   acaoExportarSecao,
@@ -53,13 +54,13 @@ import { urlDaNota, urlDaSecao } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, Secao } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
-import { DialogoNovaPagina } from "./dialogo-nova-pagina";
+import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
 import { PaletaBusca } from "./paleta-busca";
 import { AlcaRedimensionar, BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
 type Alvo = { caminho: string; nome: string };
 type Acao = {
-  tipo: "nova-secao" | "nova-pagina" | "renomear" | "mover" | "excluir";
+  tipo: "nova-secao" | "modelo-pagina" | "renomear" | "mover" | "excluir";
   alvo: Alvo;
 } | null;
 
@@ -120,6 +121,7 @@ export function ColunaSecoes({
   const [capturando, iniciarCaptura] = useTransition();
   const [indoParaHoje, iniciarIdaParaHoje] = useTransition();
   const [exportando, iniciarExportacao] = useTransition();
+  const [, iniciarCriacaoDePagina] = useTransition();
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
     padrao: 220,
     minima: 170,
@@ -143,11 +145,30 @@ export function ColunaSecoes({
     .map((caminho) => secoesDoCaderno.find((secao) => secao.caminho === caminho))
     .filter((secao): secao is Secao => Boolean(secao));
 
+  // Mesma regra do destaque na lista: a seção aberta é a da URL, seja pela
+  // tela da seção ou por uma página dentro dela.
+  const secaoAtiva = secoesOrdenadas.find(
+    (secao) =>
+      caminhoAtual === urlDaSecao(secao.caminho) ||
+      decodeURIComponent(caminhoAtual).startsWith(`/nota/${secao.caminho}/`),
+  );
+
   const fechar = () => definirAcao(null);
   const alvo = acao?.alvo ?? null;
 
   function atualizar(): void {
     roteador.refresh();
+  }
+
+  /**
+   * Página nova não pergunta nada: nasce com o nome da seção + data e hora e
+   * já abre em edição, onde o título pode ser trocado com dois cliques. A
+   * ação redireciona sozinha.
+   */
+  function criarPagina(secao: string): void {
+    iniciarCriacaoDePagina(async () => {
+      await acaoCriarPagina(secao);
+    });
   }
 
   /** A página aberta está dentro da seção prestes a ser excluída (ou movida)? */
@@ -214,6 +235,26 @@ export function ColunaSecoes({
         <BotaoIcone rotulo="Mostrar seções e atalhos" onClick={() => colunas.alternar("secoes")}>
           <PanelLeftOpen size={15} />
         </BotaoIcone>
+        {/* Recolhida, a coluna ainda precisa dizer onde a pessoa está — o
+            nome da seção aberta, escrito de cima para baixo, é o que cabe
+            nesta faixa. Clicar nele abre a coluna de volta. */}
+        {secaoAtiva ? (
+          <button
+            type="button"
+            onClick={() => colunas.alternar("secoes")}
+            title={`Seção aberta: ${secaoAtiva.nome} (clique para mostrar as seções)`}
+            className="flex min-h-0 flex-1 flex-col items-center gap-2 pb-3"
+          >
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: caderno?.cor ?? "var(--realce)" }}
+              aria-hidden
+            />
+            <span className="texto-vertical min-h-0 text-[11.5px] font-medium text-tinta-2">
+              {secaoAtiva.nome}
+            </span>
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -288,6 +329,8 @@ export function ColunaSecoes({
                   secao={secao}
                   caminhoAtual={caminhoAtual}
                   aoAgir={definirAcao}
+                  aoCriarPagina={criarPagina}
+                  temModelos={modelos.length > 0}
                   sobrevoo={sobrevoo?.caminho === secao.caminho ? sobrevoo : null}
                   aoPassarPorCima={(antes, tipo) => definirSobrevoo({ caminho: secao.caminho, antes, tipo })}
                   aoSairDeCima={() => definirSobrevoo((atual) => (atual?.caminho === secao.caminho ? null : atual))}
@@ -438,8 +481,8 @@ export function ColunaSecoes({
         }}
       />
 
-      <DialogoNovaPagina
-        aberto={acao?.tipo === "nova-pagina"}
+      <DialogoModeloDePagina
+        aberto={acao?.tipo === "modelo-pagina"}
         pasta={alvo?.caminho ?? ""}
         nomeDaPasta={alvo?.nome ?? ""}
         modelos={modelos}
@@ -531,6 +574,8 @@ function LinhaSecao({
   secao,
   caminhoAtual,
   aoAgir,
+  aoCriarPagina,
+  temModelos,
   sobrevoo,
   aoPassarPorCima,
   aoSairDeCima,
@@ -541,6 +586,9 @@ function LinhaSecao({
   secao: Secao;
   caminhoAtual: string;
   aoAgir: (acao: Acao) => void;
+  /** Cria já com nome automático e abre em edição — sem perguntar título. */
+  aoCriarPagina: (secao: string) => void;
+  temModelos: boolean;
   sobrevoo: Sobrevoo;
   aoPassarPorCima: (antes: boolean, tipo: "secao" | "pagina") => void;
   aoSairDeCima: () => void;
@@ -625,7 +673,7 @@ function LinhaSecao({
       <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <BotaoIcone
           rotulo={`Nova página em ${secao.nome}`}
-          onClick={() => aoAgir({ tipo: "nova-pagina", alvo })}
+          onClick={() => aoCriarPagina(secao.caminho)}
           className="size-6"
         >
           <Plus size={13} />
@@ -644,11 +692,22 @@ function LinhaSecao({
                 icone={<FilePlus2 size={14} />}
                 onClick={() => {
                   fechar();
-                  aoAgir({ tipo: "nova-pagina", alvo });
+                  aoCriarPagina(secao.caminho);
                 }}
               >
                 Nova página
               </ItemMenu>
+              {temModelos ? (
+                <ItemMenu
+                  icone={<LayoutTemplate size={14} />}
+                  onClick={() => {
+                    fechar();
+                    aoAgir({ tipo: "modelo-pagina", alvo });
+                  }}
+                >
+                  Começar de um modelo…
+                </ItemMenu>
+              ) : null}
               <SeparadorMenu />
               <ItemMenu
                 icone={<Pencil size={14} />}

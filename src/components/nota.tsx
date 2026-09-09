@@ -16,7 +16,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
-import { acaoAlternarFavorita, acaoColarImagem, acaoConverterFormato, acaoSalvarNota } from "@/app/acoes";
+import {
+  acaoAlternarFavorita,
+  acaoColarImagem,
+  acaoConverterFormato,
+  acaoRenomear,
+  acaoSalvarNota,
+} from "@/app/acoes";
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
@@ -28,6 +34,7 @@ import { useZoomTexto } from "@/lib/zoom";
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
+import { TituloEditavel } from "./titulo-editavel";
 import { AlcaRedimensionar, Botao, BotaoIcone } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
@@ -246,8 +253,21 @@ export function PaginaNota({
         </div>
 
         <div className="flex items-start gap-3">
-          <h1 className="min-w-0 flex-1 text-[24px] leading-tight font-extrabold tracking-[-0.03em]">
-            {nota.titulo}
+          <h1 className="min-w-0 flex-1">
+            <TituloEditavel
+              titulo={nota.titulo}
+              className="block text-[24px] leading-tight font-extrabold tracking-[-0.03em]"
+              aoRenomear={async (novoTitulo) => {
+                const resposta = await acaoRenomear(nota.caminho, novoTitulo);
+                if (!resposta.ok) return resposta.erro;
+                // O endereço tem o nome do arquivo: sem trocar, a página
+                // aberta apontaria para um arquivo que não existe mais.
+                if (resposta.mensagem) {
+                  roteador.replace(`${urlDaNota(resposta.mensagem)}${editando ? "?editando=1" : ""}`);
+                }
+                return null;
+              }}
+            />
           </h1>
 
           <div className="flex shrink-0 items-center gap-1">

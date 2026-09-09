@@ -161,6 +161,27 @@ textarea:focus {
   word-break: break-word;
 }
 
+/* Nome escrito de cima para baixo, para caber na barra estreita de uma coluna
+   recolhida sem virar sopa de letras. */
+.texto-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Título ainda sem texto: mostra os próprios "#" em cinza, no corpo do texto
+   comum, em vez de deixar a linha invisível enquanto se digita. */
+.prosa .titulo-vazio {
+  font-family: var(--pilha-mono);
+  font-size: calc(13.5px * var(--escala-texto));
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--tinta-3);
+  margin-top: 0.9em;
+}
+
 /* Tabela larga e bloco de código rolam dentro deles mesmos, sem arrastar a
    página junto. */
 .prosa pre {

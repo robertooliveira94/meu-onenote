@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { LayoutTemplate } from "lucide-react";
+import { useState, useTransition } from "react";
 
 import { acaoCriarPagina } from "@/app/acoes";
 import type { Modelo } from "@/lib/tipos";
 
-import { Aviso, Botao, Campo, Dialogo, Rotulo } from "./ui";
+import { Aviso, Botao, Dialogo } from "./ui";
 
 /**
- * Toda página nasce em markdown — não há mais escolha de formato aqui. Os
- * `.txt` antigos continuam abrindo, mas criar um novo só adicionava uma
- * decisão sem ganho na hora de começar a escrever.
+ * Criar página não pergunta mais nada: o "+" cria na hora, com nome tirado da
+ * seção e da data. Este diálogo só aparece para quem quer começar de um
+ * modelo — a única escolha que o app não tem como adivinhar.
  */
-export function DialogoNovaPagina({
+export function DialogoModeloDePagina({
   aberto,
   pasta,
   nomeDaPasta,
@@ -22,31 +23,17 @@ export function DialogoNovaPagina({
   aberto: boolean;
   pasta: string;
   nomeDaPasta: string;
-  modelos?: Modelo[];
+  modelos: Modelo[];
   aoFechar: () => void;
 }) {
-  const [titulo, definirTitulo] = useState("");
-  const [modeloId, definirModeloId] = useState("");
   const [erro, definirErro] = useState<string | null>(null);
   const [criando, iniciarCriacao] = useTransition();
 
-  useEffect(() => {
-    if (aberto) {
-      definirTitulo("");
-      definirModeloId("");
-      definirErro(null);
-    }
-  }, [aberto]);
-
-  function criar() {
-    if (!titulo.trim()) {
-      definirErro("Dê um título para a página");
-      return;
-    }
+  function criar(modeloId: string) {
     iniciarCriacao(async () => {
       try {
         // A ação redireciona para a página nova, já em modo de edição.
-        await acaoCriarPagina(pasta, titulo.trim(), modeloId || undefined);
+        await acaoCriarPagina(pasta, modeloId);
         aoFechar();
       } catch (falha) {
         // O redirecionamento do Next passa por aqui como exceção; só erro real interessa.
@@ -58,55 +45,39 @@ export function DialogoNovaPagina({
 
   return (
     <Dialogo
-      titulo="Nova página"
-      descricao={`Em ${nomeDaPasta}`}
+      titulo="Começar de um modelo"
+      descricao={`A página nova entra em ${nomeDaPasta}.`}
       aberto={aberto}
       aoFechar={aoFechar}
     >
-    <form
-      onSubmit={(evento) => {
-        evento.preventDefault();
-        criar();
-      }}
-    >
-      <label className="block">
-        <Rotulo>Título</Rotulo>
-        <Campo
-          value={titulo}
-          autoFocus
-          placeholder="Orçamento anual"
-          onChange={(evento) => definirTitulo(evento.target.value)}
-        />
-      </label>
-
-      {modelos && modelos.length > 0 ? (
-        <label className="mt-3 block">
-          <Rotulo>Começar de um modelo (opcional)</Rotulo>
-          <select
-            value={modeloId}
-            onChange={(evento) => definirModeloId(evento.target.value)}
-            className="h-9.5 w-full rounded-lg border border-linha bg-superficie-alta px-3 text-[13px] text-tinta transition-shadow focus:border-[var(--realce)] focus:shadow-[0_0_0_3px_var(--realce-medio)] focus:outline-none"
+      <div className="max-h-[46vh] space-y-1 overflow-y-auto rounded-lg border border-linha bg-superficie-alta p-1">
+        {modelos.map((modelo) => (
+          <button
+            key={modelo.id}
+            type="button"
+            disabled={criando}
+            onClick={() => criar(modelo.id)}
+            className="flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-realce-fraco disabled:opacity-50"
           >
-            <option value="">Página em branco</option>
-            {modelos.map((modelo) => (
-              <option key={modelo.id} value={modelo.id}>
-                {modelo.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+            <LayoutTemplate size={14} className="mt-0.5 shrink-0 text-tinta-3" />
+            <span className="min-w-0">
+              <span className="block text-[12.5px] font-medium">{modelo.nome}</span>
+              {modelo.descricao ? (
+                <span className="mt-0.5 block text-[11.5px] leading-snug text-tinta-2">
+                  {modelo.descricao}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        ))}
+      </div>
 
       <Aviso>{erro}</Aviso>
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex justify-end">
         <Botao variante="sutil" onClick={aoFechar}>
           Cancelar
         </Botao>
-        <Botao type="submit" variante="primario" disabled={criando}>
-          Criar página
-        </Botao>
       </div>
-    </form>
     </Dialogo>
   );
 }

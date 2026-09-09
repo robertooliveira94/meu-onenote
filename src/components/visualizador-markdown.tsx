@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useMemo, useRef } from "react";
+import { Children, memo, useMemo, useRef } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
@@ -14,6 +14,28 @@ import { urlDaMidia, urlDaNota } from "@/lib/rotas";
 // o react-markdown achar que os plugins mudaram e reprocessar tudo à toa.
 const PLUGINS_REMARK = [remarkGfm];
 const PLUGINS_REHYPE = [rehypeHighlight];
+
+/**
+ * Um título sem texto ("### " recém-digitado, antes do título em si) vira um
+ * `<h3></h3>` vazio, que não desenha nada — enquanto se escreve, isso parece
+ * que os "#" foram engolidos pela prévia. Aqui esse caso desenha os próprios
+ * "#" apagadinhos, então a linha nunca some do olho de quem está digitando;
+ * assim que o título ganha texto, vira um título de verdade.
+ */
+function tituloOuMarcaVazia(nivel: 1 | 2 | 3 | 4 | 5 | 6) {
+  const Marcacao = `h${nivel}` as const;
+  return function Titulo({ children }: { children?: React.ReactNode }) {
+    const semTexto = Children.toArray(children).every(
+      (filho) => typeof filho === "string" && filho.trim() === "",
+    );
+    if (!semTexto) return <Marcacao>{children}</Marcacao>;
+    return (
+      <Marcacao className="titulo-vazio" title={`Título de nível ${nivel}, ainda sem texto`}>
+        {"#".repeat(nivel)}
+      </Marcacao>
+    );
+  };
+}
 
 /** "Pessoal/Financeiro/orçamento.md" → "Pessoal › Financeiro › orçamento" */
 function trilhaDoCaminho(caminho: string): string {
@@ -64,6 +86,12 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
 
   const componentes = useMemo<Components>(
     () => ({
+      h1: tituloOuMarcaVazia(1),
+      h2: tituloOuMarcaVazia(2),
+      h3: tituloOuMarcaVazia(3),
+      h4: tituloOuMarcaVazia(4),
+      h5: tituloOuMarcaVazia(5),
+      h6: tituloOuMarcaVazia(6),
       a({ href, children }) {
         if (!href?.startsWith("wikilink:")) {
           // Link comum do markdown — mesmo comportamento de sempre.

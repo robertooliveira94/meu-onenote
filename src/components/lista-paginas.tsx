@@ -5,6 +5,8 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
+  FileText,
+  LayoutTemplate,
   MoreHorizontal,
   MoveRight,
   PanelLeftClose,
@@ -16,11 +18,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
   acaoAlternarFavorita,
   acaoConverterFormato,
+  acaoCriarPagina,
   acaoDestinoAposExcluir,
   acaoExcluir,
   acaoMover,
@@ -35,11 +38,11 @@ import { formatarDataCurta, urlDaNota } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, ResumoNota } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
-import { DialogoNovaPagina } from "./dialogo-nova-pagina";
+import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
 import { AlcaRedimensionar, BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
 type Acao =
-  | { tipo: "nova" }
+  | { tipo: "modelo" }
   | { tipo: "renomear" | "mover" | "excluir"; nota: ResumoNota }
   | null;
 
@@ -71,6 +74,7 @@ export function ListaPaginas({
     maxima: 520,
   });
   const colunas = useColunas();
+  const [, iniciarCriacaoDePagina] = useTransition();
 
   // Ordem local, pro arraste responder na hora — igual à coluna de seções:
   // a ordem "de verdade" só volta depois de um round-trip com o servidor.
@@ -96,11 +100,27 @@ export function ListaPaginas({
   }
 
   if (colunas.recolhida("paginas")) {
+    const paginaAberta = notas.find((nota) => nota.caminho === caminhoAtivo);
     return (
       <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-papel pt-3">
         <BotaoIcone rotulo="Mostrar páginas" onClick={() => colunas.alternar("paginas")}>
           <PanelLeftOpen size={15} />
         </BotaoIcone>
+        {/* Recolhida, a faixa ainda diz qual página está aberta — escrita de
+            cima para baixo, que é o que cabe aqui. Clicar volta a lista. */}
+        {paginaAberta ? (
+          <button
+            type="button"
+            onClick={() => colunas.alternar("paginas")}
+            title={`Página aberta: ${paginaAberta.titulo} (clique para mostrar as páginas)`}
+            className="flex min-h-0 flex-1 flex-col items-center gap-2 pb-3"
+          >
+            <FileText size={12} className="shrink-0 text-tinta-3" aria-hidden />
+            <span className="texto-vertical min-h-0 text-[11.5px] font-medium text-tinta-2">
+              {paginaAberta.titulo}
+            </span>
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -120,9 +140,17 @@ export function ListaPaginas({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <BotaoIcone rotulo="Nova página" onClick={() => definirAcao({ tipo: "nova" })}>
+          <BotaoIcone
+            rotulo="Nova página"
+            onClick={() => iniciarCriacaoDePagina(async () => void (await acaoCriarPagina(pasta)))}
+          >
             <Plus size={15} />
           </BotaoIcone>
+          {modelos.length > 0 ? (
+            <BotaoIcone rotulo="Começar de um modelo" onClick={() => definirAcao({ tipo: "modelo" })}>
+              <LayoutTemplate size={14} />
+            </BotaoIcone>
+          ) : null}
           <BotaoIcone rotulo="Recolher páginas" onClick={() => colunas.alternar("paginas")}>
             <PanelLeftClose size={14} />
           </BotaoIcone>
@@ -132,8 +160,8 @@ export function ListaPaginas({
       <div className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
         {notas.length === 0 ? (
           <p className="px-2 py-4 text-[12px] leading-relaxed text-tinta-3">
-            Seção vazia. Crie a primeira página no “+” — você escolhe entre markdown e texto
-            simples.
+            Seção vazia. O “+” cria a primeira página já aberta para escrever — o título sai da
+            seção e da hora, e muda com dois cliques nele.
           </p>
         ) : null}
 
@@ -335,8 +363,8 @@ export function ListaPaginas({
         })}
       </div>
 
-      <DialogoNovaPagina
-        aberto={acao?.tipo === "nova"}
+      <DialogoModeloDePagina
+        aberto={acao?.tipo === "modelo"}
         pasta={pasta}
         nomeDaPasta={nomeDaPasta}
         modelos={modelos}

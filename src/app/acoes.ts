@@ -20,7 +20,7 @@ import {
   reordenarPastasPara,
   salvarAnexo,
 } from "@/lib/arquivos";
-import { PASTA_ENTRADA, PASTA_GERAL, juntar, limparNome, pastaDe } from "@/lib/caminhos";
+import { PASTA_ENTRADA, PASTA_GERAL, juntar, limparNome, nomeDe, pastaDe } from "@/lib/caminhos";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
 import { exportarSecao, exportarTudo } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
@@ -73,17 +73,29 @@ export async function acaoCriarSecao(pai: string, nome: string): Promise<Respost
   return resposta;
 }
 
+/** "08-09 20-15" — data e hora curtas, seguras como nome de arquivo. */
+function carimboDeAgora(): string {
+  return new Date()
+    .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .replace(/[/:]/g, "-")
+    .replace(", ", " ");
+}
+
 /**
- * Página nova é sempre markdown. Os `.txt` que já existem continuam
- * abrindo e editando normalmente (e dá para converter pelo menu deles),
- * mas o app não cria mais nenhum — um formato só é uma coisa a menos para
- * decidir na hora de escrever.
+ * Página nova é sempre markdown, e nasce sem perguntar nada: o nome sai da
+ * seção + data e hora ("Reuniões 08-09 20-15"), e o título fica editável com
+ * dois cliques na própria página. Perguntar o título antes de escrever era
+ * pedir a decisão mais difícil no pior momento — antes de existir o texto.
+ *
+ * Os `.txt` que já existem continuam abrindo e editando normalmente (e dá
+ * para converter pelo menu deles), mas o app não cria mais nenhum.
  */
-export async function acaoCriarPagina(pasta: string, titulo: string, modeloId?: string): Promise<void> {
+export async function acaoCriarPagina(pasta: string, modeloId?: string): Promise<void> {
+  const pastaValidada = caminhoValido.parse(pasta);
   const conteudoInicial = modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
   const caminho = await criarNota(
-    caminhoValido.parse(pasta),
-    z.string().max(120).parse(titulo),
+    pastaValidada,
+    `${nomeDe(pastaValidada)} ${carimboDeAgora()}`,
     "md",
     conteudoInicial,
   );

@@ -76,17 +76,27 @@ limpas e abríveis em qualquer editor.
   em cima de uma seção na coluna ao lado muda de seção. As setas "Subir" /
   "Descer" e o "Mover para..." do menu continuam existindo, para quem
   prefere não arrastar.
+- Página nova não pergunta nada: o "+" cria na hora, com nome tirado da
+  seção mais a data e a hora ("Reuniões 08-09 21-05"), e já abre em edição.
+  O título muda com dois cliques nele, na própria página — o arquivo é
+  renomeado no disco junto, e o endereço acompanha. Perguntar o título antes
+  era pedir a decisão mais difícil no pior momento: antes de existir texto.
 - Página em markdown abre em modo leitura por padrão (renderizado, com
   realce de sintaxe); um botão "Editar" abre a edição lado a lado
-  (texto cru + prévia ao vivo). Os `.txt` que sobraram de versões
-  anteriores continuam abrindo no editor de texto puro, com a barra de
-  formatação limitada ao que o formato suporta — mas o app não cria mais
+  (texto cru + prévia ao vivo). Um título ainda sem texto ("### " recém
+  digitado) aparece na prévia como os próprios "#" em cinza, em vez de
+  sumir da tela até o título ganhar palavras. Os `.txt` que sobraram de
+  versões anteriores continuam abrindo no editor de texto puro, com a barra
+  de formatação limitada ao que o formato suporta — mas o app não cria mais
   nenhum: página nova é sempre markdown.
+- As colunas de seções e de páginas se recolhem numa faixa fina, e a faixa
+  continua dizendo onde a pessoa está: o nome da seção aberta e o da página
+  aberta, escritos de cima para baixo. Clicar no nome abre a coluna de volta.
 - Etiquetas cadastráveis com cor, aplicáveis a qualquer página, que
   atravessam cadernos.
 - Modelos de página cadastráveis (nome, descrição, conteúdo em markdown) —
-  na hora de criar uma página, um menu opcional deixa começar já com o
-  modelo escolhido em vez de em branco.
+  um botão à parte ("começar de um modelo") cria a página já com o modelo
+  escolhido, só aparecendo quando existe algum modelo cadastrado.
 - Captura rápida (`Ctrl+Shift+N`) e a nota do dia (`Ctrl+Shift+D`, sempre a
   mesma página por data) caem na seção "Geral" do caderno "Entrada" — um
   caderno de verdade, visível e renomeável na tira de cadernos como
