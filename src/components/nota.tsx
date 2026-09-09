@@ -183,6 +183,37 @@ export function PaginaNota({
     return () => window.removeEventListener("beforeunload", aoFechar);
   }, [estado]);
 
+  /**
+   * Escreve no campo e no estado de uma vez.
+   *
+   * O campo de texto é NÃO controlado (`defaultValue`, e não `value`): quem
+   * manda no que está escrito é o DOM, não o React. Isso é o que impede a
+   * letra de sumir enquanto se digita — num campo controlado, uma
+   * renderização concorrente interrompida pode repor no DOM o texto de uma
+   * renderização já vencida (era o caso do "###" que virava "##" e voltava
+   * ao apertar Enter, com a prévia mostrando mais "#" que o editor).
+   *
+   * A contrapartida: mudança feita por código (negrito, imagem colada,
+   * restaurar uma versão) precisa escrever no campo na mão — é o que esta
+   * função faz.
+   */
+  const aplicarNoCampo = useCallback(
+    (texto: string, selecao?: { inicio: number; fim: number }) => {
+      const campo = area.current;
+      if (campo) {
+        campo.value = texto;
+        if (selecao) {
+          requestAnimationFrame(() => {
+            campo.focus();
+            campo.setSelectionRange(selecao.inicio, selecao.fim);
+          });
+        }
+      }
+      definirConteudo(texto);
+    },
+    [],
+  );
+
   /** Ctrl+B e Ctrl+I fazem o mesmo que os botões da barra. */
   function aoTeclarNoCampo(evento: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!ehMarkdown) return;
@@ -192,11 +223,10 @@ export function PaginaNota({
     evento.preventDefault();
     const campo = evento.currentTarget;
     const resultado = envolver(
-      { texto: conteudo, inicio: campo.selectionStart, fim: campo.selectionEnd },
+      { texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd },
       atalho === "negrito" ? "**" : "*",
     );
-    definirConteudo(resultado.texto);
-    requestAnimationFrame(() => campo.setSelectionRange(resultado.inicio, resultado.fim));
+    aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
   }
 
   /** Clicar numa tarefa em modo leitura já grava — sem precisar entrar em edição. */
@@ -233,14 +263,10 @@ export function PaginaNota({
     }
 
     const resultado = inserirBloco(
-      { texto: conteudo, inicio: inicioDaSelecao, fim: fimDaSelecao },
+      { texto: campo.value, inicio: inicioDaSelecao, fim: fimDaSelecao },
       `![](${resposta.mensagem})`,
     );
-    definirConteudo(resultado.texto);
-    requestAnimationFrame(() => {
-      campo.focus();
-      campo.setSelectionRange(resultado.inicio, resultado.fim);
-    });
+    aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
   }
 
   const palavras = useMemo(() => contarPalavras(conteudo), [conteudo]);
@@ -381,7 +407,8 @@ export function PaginaNota({
                     <div className="h-full overflow-y-auto" ref={zoom.refRolagem}>
                       <textarea
                         ref={area}
-                        value={conteudo}
+                        // Não controlado de propósito — ver `aplicarNoCampo`.
+                        defaultValue={conteudo}
                         onChange={(evento) => definirConteudo(evento.target.value)}
                         onKeyDown={aoTeclarNoCampo}
                         onPaste={aoColarNoCampo}
@@ -400,7 +427,7 @@ export function PaginaNota({
                   <div className="min-w-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
                     <textarea
                       ref={area}
-                      value={conteudo}
+                      defaultValue={conteudo}
                       onChange={(evento) => definirConteudo(evento.target.value)}
                       onKeyDown={aoTeclarNoCampo}
                       onPaste={aoColarNoCampo}
@@ -479,7 +506,7 @@ export function PaginaNota({
             caminho={nota.caminho}
             aoFechar={() => definirHistoricoAberto(false)}
             aoRestaurar={(texto) => {
-              definirConteudo(texto);
+              aplicarNoCampo(texto);
               definirEstado("salvo");
             }}
           />

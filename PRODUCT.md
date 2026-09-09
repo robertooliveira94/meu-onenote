@@ -205,6 +205,14 @@ limpas e abríveis em qualquer editor.
   abertura — o disco manda, não o app. A varredura que reconcilia disco e
   índice vale por 1 segundo: uma tela que lê a árvore, os favoritos e os
   recentes de uma vez varre o disco uma vez só, em vez de três.
+- **O campo de edição da nota não é controlado pelo React** (`defaultValue`,
+  não `value`): quem manda no texto escrito é o DOM. Num campo controlado,
+  uma renderização concorrente interrompida podia repor no DOM o texto de
+  uma renderização já vencida — era o "###" que virava "##" e voltava ao
+  apertar Enter, com a prévia chegando a mostrar mais "#" que o editor. A
+  contrapartida é que mudança feita por código (negrito, imagem colada,
+  restaurar versão) precisa escrever no campo na mão, e por isso passa toda
+  por uma função só (`aplicarNoCampo`).
 - **Regra de desempenho:** o que acontece enquanto se digita (salvamento
   automático da nota e da tarefa) e o que é clique repetido (marcar
   subtarefa, trocar prioridade, prazo, sprint, etiqueta, impedimento) não
