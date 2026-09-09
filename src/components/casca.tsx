@@ -3,13 +3,11 @@
 import { usePathname } from "next/navigation";
 
 import { ColunasProvedor } from "@/lib/colunas";
-import { ProvedorJanelaFlutuante } from "@/lib/janela-flutuante";
 import { cadernoDaUrl, quadroDaUrl } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, ResumoQuadro } from "@/lib/tipos";
 
 import { BarraAplicacoes } from "./barra-aplicacoes";
 import { ColunaSecoes } from "./coluna-secoes";
-import { JanelaNotaFlutuante } from "./janela-nota-flutuante";
 
 /**
  * Moldura fixa do aplicativo, da esquerda para a direita: a coluna das
@@ -29,9 +27,7 @@ export function Casca(props: {
 }) {
   return (
     <ColunasProvedor>
-      <ProvedorJanelaFlutuante>
-        <CascaInterna {...props} />
-      </ProvedorJanelaFlutuante>
+      <CascaInterna {...props} />
     </ColunasProvedor>
   );
 }
@@ -70,7 +66,6 @@ function CascaInterna({
         <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
       ) : null}
       <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
-      <JanelaNotaFlutuante />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  AppWindow,
   ArrowLeftRight,
   Check,
   Eye,
@@ -29,8 +30,9 @@ import {
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
+import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import { formatarDataHora, urlDaNota } from "@/lib/rotas";
+import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
 import type { Etiqueta, Nota } from "@/lib/tipos";
 import { useZoomTexto } from "@/lib/zoom";
 
@@ -351,6 +353,13 @@ export function PaginaNota({
               onClick={() => definirHistoricoAberto((valor) => !valor)}
             >
               <History size={15} />
+            </BotaoIcone>
+
+            <BotaoIcone
+              rotulo="Tornar flutuante"
+              onClick={() => abrirJanelaFlutuante(urlDaNotaFlutuante(nota.caminho))}
+            >
+              <AppWindow size={15} />
             </BotaoIcone>
 
             {ehMarkdown ? (

@@ -25,6 +25,7 @@ import {
   acaoAlternarFavorita,
   acaoConverterFormato,
   acaoCriarPagina,
+  acaoCriarPaginaFlutuante,
   acaoDestinoAposExcluir,
   acaoExcluir,
   acaoMover,
@@ -34,9 +35,9 @@ import {
 } from "@/app/acoes";
 import { calcularNovaOrdem, iniciarArrastoDePagina, lerCaminhoDePagina, trazPagina } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
-import { useJanelaFlutuante } from "@/lib/janela-flutuante";
+import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
-import { formatarDataCurta, urlDaNota } from "@/lib/rotas";
+import { formatarDataCurta, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, ResumoNota } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
@@ -76,8 +77,12 @@ export function ListaPaginas({
     maxima: 520,
   });
   const colunas = useColunas();
-  const janelaFlutuante = useJanelaFlutuante();
   const [, iniciarCriacaoDePagina] = useTransition();
+
+  async function abrirNovaPaginaFlutuante() {
+    const resposta = await acaoCriarPaginaFlutuante(pasta);
+    if (resposta.ok && resposta.mensagem) abrirJanelaFlutuante(urlDaNotaFlutuante(resposta.mensagem));
+  }
 
   // Ordem local, pro arraste responder na hora — igual à coluna de seções:
   // a ordem "de verdade" só volta depois de um round-trip com o servidor.
@@ -154,7 +159,7 @@ export function ListaPaginas({
               <LayoutTemplate size={14} />
             </BotaoIcone>
           ) : null}
-          <BotaoIcone rotulo="Nova página em janela flutuante" onClick={() => janelaFlutuante.abrir(pasta)}>
+          <BotaoIcone rotulo="Nova página em janela flutuante" onClick={abrirNovaPaginaFlutuante}>
             <AppWindow size={14} />
           </BotaoIcone>
           <BotaoIcone rotulo="Recolher páginas" onClick={() => colunas.alternar("paginas")}>

@@ -12,6 +12,15 @@ export function urlDaNota(caminho: string): string {
   return `/nota/${codificar(caminho)}`;
 }
 
+/**
+ * Mesma nota, mas na tela enxuta pensada para abrir numa janela separada do
+ * navegador (sem a barra de aplicações nem a coluna de seções) — ver
+ * `abrirJanelaFlutuante` e `src/app/nota-flutuante`.
+ */
+export function urlDaNotaFlutuante(caminho: string): string {
+  return `/nota-flutuante/${codificar(caminho)}`;
+}
+
 export function urlDaSecao(caminho: string): string {
   return `/secao/${codificar(caminho)}`;
 }

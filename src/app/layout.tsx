@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
-import { Casca } from "@/components/casca";
-import { lerArvore } from "@/lib/arquivos";
-import { listarEtiquetas } from "@/lib/etiquetas";
-import { listarModelos } from "@/lib/modelos";
-import { listarQuadros } from "@/lib/quadros";
-
 import "./globals.css";
 
 // Uma sans só, da interface ao texto lido, e monoespaçada para o markdown cru.
@@ -40,14 +34,14 @@ try {
 } catch (e) {}
 `;
 
-export default async function LayoutRaiz({ children }: { children: React.ReactNode }) {
-  const [cadernos, quadros, etiquetas, modelos] = await Promise.all([
-    lerArvore(),
-    listarQuadros(),
-    listarEtiquetas(),
-    listarModelos(),
-  ]);
-
+/**
+ * Casca do documento inteiro — fontes, tema, `<html>`/`<body>`. De propósito
+ * sem a moldura do app (barra de aplicações, coluna de seções): a janela
+ * flutuante da nota (`/nota-flutuante/...`) usa este mesmo layout, mas sem
+ * aquela moldura em volta, porque abre numa janela separada do navegador. A
+ * moldura em si vive em `(app)/layout.tsx`, aplicada só às telas normais.
+ */
+export default function LayoutRaiz({ children }: { children: React.ReactNode }) {
   return (
     // As variáveis de fonte ficam no <html> para que o CSS possa montar as
     // pilhas de fonte já em :root — no <body> elas chegariam tarde demais.
@@ -60,11 +54,7 @@ export default async function LayoutRaiz({ children }: { children: React.ReactNo
       <head>
         <script dangerouslySetInnerHTML={{ __html: scriptDoTema }} />
       </head>
-      <body className="antialiased">
-        <Casca cadernos={cadernos} quadros={quadros} etiquetas={etiquetas} modelos={modelos}>
-          {children}
-        </Casca>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
