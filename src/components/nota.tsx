@@ -9,6 +9,7 @@ import {
   History,
   Link2,
   Loader2,
+  PaintBucket,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -29,6 +30,7 @@ import {
 } from "@/app/acoes";
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
+import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
@@ -40,7 +42,7 @@ import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
 import { TituloEditavel } from "./titulo-editavel";
-import { AlcaRedimensionar, Botao, BotaoIcone } from "./ui";
+import { AlcaRedimensionar, Botao, BotaoIcone, ItemMenu, Menu } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
 type Estado = "salvo" | "pendente" | "salvando" | "erro";
@@ -138,6 +140,7 @@ export function PaginaNota({
   const [avisoImagem, definirAvisoImagem] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const zoom = useZoomTexto();
+  const fundoEditor = useFundoEditor();
   const pastaDaNota = pastaDe(nota.caminho);
   // Largura do texto cru na edição lado a lado — a prévia ocupa o resto.
   // Mesmo padrão das outras colunas ajustáveis do app (barra lateral,
@@ -415,12 +418,41 @@ export function PaginaNota({
                 aoMudar={definirConteudo}
                 extra={
                   ehMarkdown ? (
-                    <BotaoIcone
-                      rotulo={previaVisivel ? "Esconder a prévia" : "Mostrar a prévia"}
-                      onClick={alternarPrevia}
-                    >
-                      {previaVisivel ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-                    </BotaoIcone>
+                    <div className="flex items-center gap-0.5">
+                      <Menu
+                        gatilho={(abrir) => (
+                          <BotaoIcone rotulo="Cor de fundo da escrita" onClick={abrir}>
+                            <PaintBucket size={15} />
+                          </BotaoIcone>
+                        )}
+                      >
+                        {(fechar) =>
+                          fundoEditor.opcoes.map((opcao) => (
+                            <ItemMenu
+                              key={opcao}
+                              icone={
+                                <Check
+                                  size={14}
+                                  className={fundoEditor.fundo === opcao ? undefined : "invisible"}
+                                />
+                              }
+                              onClick={() => {
+                                fundoEditor.mudar(opcao);
+                                fechar();
+                              }}
+                            >
+                              {ROTULO_FUNDO[opcao]}
+                            </ItemMenu>
+                          ))
+                        }
+                      </Menu>
+                      <BotaoIcone
+                        rotulo={previaVisivel ? "Esconder a prévia" : "Mostrar a prévia"}
+                        onClick={alternarPrevia}
+                      >
+                        {previaVisivel ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                      </BotaoIcone>
+                    </div>
                   ) : (
                     // Texto puro não guarda negrito; quem precisa disso quer markdown.
                     <button
@@ -465,7 +497,7 @@ export function PaginaNota({
                         onPaste={aoColarNoCampo}
                         spellCheck
                         placeholder="Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
-                        className="editor-texto min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none"
+                        className="editor-texto min-h-full w-full resize-none px-7 py-5 placeholder:text-tinta-3 focus:outline-none"
                       />
                     </div>
                     <AlcaRedimensionar
@@ -492,7 +524,7 @@ export function PaginaNota({
                       }
                       className={clsx(
                         ehMarkdown ? "editor-texto" : "editor-simples",
-                        "min-h-full w-full resize-none bg-transparent px-7 py-5 text-tinta placeholder:text-tinta-3 focus:outline-none",
+                        "min-h-full w-full resize-none px-7 py-5 placeholder:text-tinta-3 focus:outline-none",
                       )}
                     />
                   </div>

@@ -414,7 +414,33 @@ textarea:focus {
 
 /* ------------------------------------------------------------- utilitários */
 
+/*
+  Fundo da área de escrita — segue o tema por padrão, mas dá para fixar
+  (ver src/lib/fundo-editor.ts). O seletor está no editor de markdown.
+*/
+:root {
+  --fundo-editor: var(--papel);
+  --tinta-editor: var(--tinta);
+}
+[data-fundo-editor="claro"] {
+  --fundo-editor: #ffffff;
+  --tinta-editor: #16202e;
+}
+[data-fundo-editor="escuro"] {
+  --fundo-editor: #0e1420;
+  --tinta-editor: #e9eef6;
+}
+[data-fundo-editor="sepia"] {
+  --fundo-editor: #f4ecd8;
+  --tinta-editor: #453a29;
+}
+
 /* O editor de markdown usa a mesma métrica da prévia, para o olho não brigar. */
+.editor-texto,
+.editor-simples {
+  background: var(--fundo-editor);
+  color: var(--tinta-editor);
+}
 .editor-texto {
   font-family: var(--pilha-mono);
   font-size: calc(13.5px * var(--escala-texto));
