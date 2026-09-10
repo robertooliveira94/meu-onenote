@@ -23,6 +23,10 @@ export const FORMATO_CADERNO = "application/x-meu-onenote-caderno";
 export const FORMATO_QUADRO = "application/x-meu-onenote-quadro";
 /** Uma subtarefa, arrastada dentro da checklist de uma tarefa para reordenar. */
 export const FORMATO_SUBTAREFA = "application/x-meu-onenote-subtarefa";
+/** Um grupo do cofre de senhas, arrastado para dentro de outro grupo. */
+export const FORMATO_GRUPO_SENHA = "application/x-meu-onenote-grupo-senha";
+/** Uma senha, arrastada para dentro de outro grupo do cofre. */
+export const FORMATO_ENTRADA_SENHA = "application/x-meu-onenote-entrada-senha";
 
 export function iniciarArrastoDeSecao(evento: React.DragEvent, caminho: string): void {
   evento.dataTransfer.setData(FORMATO_SECAO, caminho);
@@ -54,6 +58,16 @@ export function iniciarArrastoDeSubtarefa(evento: React.DragEvent, id: string): 
   evento.dataTransfer.effectAllowed = "move";
 }
 
+export function iniciarArrastoDeGrupoSenha(evento: React.DragEvent, id: string): void {
+  evento.dataTransfer.setData(FORMATO_GRUPO_SENHA, id);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
+export function iniciarArrastoDeEntradaSenha(evento: React.DragEvent, id: string): void {
+  evento.dataTransfer.setData(FORMATO_ENTRADA_SENHA, id);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
 export function trazSecao(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_SECAO);
 }
@@ -78,6 +92,14 @@ export function trazSubtarefa(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_SUBTAREFA);
 }
 
+export function trazGrupoSenha(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_GRUPO_SENHA);
+}
+
+export function trazEntradaSenha(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_ENTRADA_SENHA);
+}
+
 export function lerCaminhoDeSecao(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_SECAO);
 }
@@ -100,6 +122,14 @@ export function lerNomeDeQuadro(evento: React.DragEvent): string {
 
 export function lerIdDeSubtarefa(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_SUBTAREFA);
+}
+
+export function lerIdDeGrupoSenha(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_GRUPO_SENHA);
+}
+
+export function lerIdDeEntradaSenha(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_ENTRADA_SENHA);
 }
 
 /** Tira um item de uma posição e insere em outra, sem mexer no resto da ordem. */

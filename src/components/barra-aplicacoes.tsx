@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { KanbanSquare, NotebookText, Tag } from "lucide-react";
+import { KanbanSquare, KeyRound, NotebookText, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -26,7 +26,7 @@ export function BarraAplicacoes({
   cadernos,
   quadros,
 }: {
-  appAtual: "notas" | "kanban";
+  appAtual: "notas" | "kanban" | "senhas";
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
 }) {
@@ -42,6 +42,11 @@ export function BarraAplicacoes({
   function irParaKanban() {
     if (appAtual === "kanban") return;
     roteador.push(quadros[0] ? urlDoQuadro(quadros[0].nome) : "/kanban");
+  }
+
+  function irParaSenhas() {
+    if (appAtual === "senhas") return;
+    roteador.push("/senhas");
   }
 
   return (
@@ -63,6 +68,9 @@ export function BarraAplicacoes({
         >
           Kanban
         </BotaoApp>
+        <BotaoApp ativo={appAtual === "senhas"} icone={<KeyRound size={14} />} onClick={irParaSenhas}>
+          Senhas
+        </BotaoApp>
       </div>
 
       <div className="mx-3 h-px bg-linha" />
@@ -70,9 +78,9 @@ export function BarraAplicacoes({
       <div className="flex min-h-0 flex-1 flex-col pt-2">
         {appAtual === "notas" ? (
           <SeletorDeCadernos cadernos={cadernos} />
-        ) : (
+        ) : appAtual === "kanban" ? (
           <ListaQuadros quadros={quadros} />
-        )}
+        ) : null}
       </div>
 
       <div className="shrink-0 border-t border-linha p-2">
@@ -107,7 +115,8 @@ function BotaoApp({
 }: {
   ativo: boolean;
   icone: React.ReactNode;
-  contagem: number;
+  /** Omitido para uma aplicação sem lista própria contável (ex.: Senhas, cujo conteúdo fica trancado até destrancar). */
+  contagem?: number;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -116,7 +125,7 @@ function BotaoApp({
       type="button"
       onClick={onClick}
       aria-pressed={ativo}
-      aria-label={`${children} (${contagem})`}
+      aria-label={contagem === undefined ? String(children) : `${children} (${contagem})`}
       className={clsx(
         "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[12.5px] font-semibold transition-all",
         ativo
@@ -126,9 +135,11 @@ function BotaoApp({
     >
       {icone}
       <span className="flex-1 text-left">{children}</span>
-      <span className={clsx("text-[10.5px] tabular-nums", ativo ? "text-white/70" : "text-tinta-3")}>
-        {contagem}
-      </span>
+      {contagem !== undefined ? (
+        <span className={clsx("text-[10.5px] tabular-nums", ativo ? "text-white/70" : "text-tinta-3")}>
+          {contagem}
+        </span>
+      ) : null}
     </button>
   );
 }

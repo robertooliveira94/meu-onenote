@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "clsx": "^2.1.1",
+    "kdbxweb": "^2.1.1",
     "lucide-react": "^0.469.0",
     "next": "15.5.23",
     "react": "19.1.0",

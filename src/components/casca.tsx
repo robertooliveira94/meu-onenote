@@ -47,10 +47,14 @@ function CascaInterna({
 }) {
   const caminhoAtual = usePathname();
 
-  // As duas aplicações são independentes: fora de /kanban/..., é sempre
-  // Anotações — mesmo nas telas globais (início, etiquetas, grafo...) que
-  // não têm um caderno "aberto".
-  const appAtual: "notas" | "kanban" = caminhoAtual.startsWith("/kanban") ? "kanban" : "notas";
+  // As três aplicações são independentes: fora de /kanban/... e /senhas,
+  // é sempre Anotações — mesmo nas telas globais (início, etiquetas,
+  // grafo...) que não têm um caderno "aberto".
+  const appAtual: "notas" | "kanban" | "senhas" = caminhoAtual.startsWith("/kanban")
+    ? "kanban"
+    : caminhoAtual.startsWith("/senhas")
+      ? "senhas"
+      : "notas";
 
   const cadernoAtivo = cadernos.find((item) => item.nome === cadernoDaUrl(caminhoAtual)) ?? null;
   const quadroAtivo = quadros.find((item) => item.nome === quadroDaUrl(caminhoAtual)) ?? null;
