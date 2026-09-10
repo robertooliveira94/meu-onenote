@@ -38,6 +38,7 @@ export default async function TelaDaNotaFlutuante({
         iconeDoCaderno=""
         mapaDeLinks={mapaDeLinks}
         backlinks={backlinks}
+        flutuante
       />
     </div>
   );

@@ -132,7 +132,7 @@ export function Dialogo({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-[#1c232b40] p-4 pt-[12vh] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#1c232b40] p-4 py-[6vh] backdrop-blur-[2px]"
       onMouseDown={(evento) => {
         if (evento.target === evento.currentTarget) aoFechar();
       }}
@@ -164,7 +164,13 @@ export function Dialogo({
   );
 }
 
-type PosicaoMenu = { top?: number; bottom?: number; left?: number; right?: number };
+type PosicaoMenu = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  maxHeight?: number;
+};
 
 /**
  * Menu suspenso ancorado num gatilho.
@@ -195,18 +201,25 @@ export function Menu({
     const elemento = gatilhoRef.current;
     if (!elemento) return;
     const retangulo = elemento.getBoundingClientRect();
-    const espacoAbaixo = window.innerHeight - retangulo.bottom;
-    const viraParaCima = espacoAbaixo < 240 && retangulo.top > espacoAbaixo;
+    const margem = 8;
+    const espacoAbaixo = window.innerHeight - retangulo.bottom - margem;
+    const espacoAcima = retangulo.top - margem;
+    // Vira para cima quando embaixo é apertado e em cima sobra mais. O menu
+    // sempre ganha uma altura máxima igual ao espaço do lado escolhido e rola
+    // por dentro se não couber — assim o "..." de um card no fim de uma lista
+    // nunca abre um menu cortado pela borda da tela.
+    const viraParaCima = espacoAbaixo < 260 && espacoAcima > espacoAbaixo;
+    const maxHeight = Math.max(160, viraParaCima ? espacoAcima : espacoAbaixo);
 
     const vertical = viraParaCima
       ? { bottom: window.innerHeight - retangulo.top + 6 }
       : { top: retangulo.bottom + 6 };
     const horizontal =
       alinhamento === "direita"
-        ? { right: window.innerWidth - retangulo.right }
-        : { left: retangulo.left };
+        ? { right: Math.max(margem, window.innerWidth - retangulo.right) }
+        : { left: Math.max(margem, retangulo.left) };
 
-    definirPosicao({ ...vertical, ...horizontal });
+    definirPosicao({ ...vertical, ...horizontal, maxHeight });
   }
 
   function abrir() {
@@ -225,9 +238,13 @@ export function Menu({
     const aoTeclar = (evento: KeyboardEvent) => {
       if (evento.key === "Escape") definirAberto(false);
     };
-    // Fecha ao rolar (o gatilho pode estar dentro de uma lista rolável) em vez
-    // de tentar acompanhar a posição — mais simples e já é o padrão comum.
-    const aoRolar = () => definirAberto(false);
+    // Fecha ao rolar a página (o gatilho pode estar dentro de uma lista
+    // rolável) em vez de tentar acompanhar a posição. Mas ignora a rolagem
+    // de dentro do próprio painel — menus altos rolam por dentro agora.
+    const aoRolar = (evento: Event) => {
+      if (painelRef.current?.contains(evento.target as Node)) return;
+      definirAberto(false);
+    };
 
     document.addEventListener("mousedown", aoClicar);
     document.addEventListener("keydown", aoTeclar);
@@ -249,7 +266,7 @@ export function Menu({
             <div
               ref={painelRef}
               style={{ position: "fixed", ...posicao }}
-              className="surgir z-50 min-w-[190px] rounded-xl border border-linha bg-superficie-alta p-1.5 shadow-[var(--sombra)]"
+              className="surgir z-50 min-w-[190px] overflow-y-auto overscroll-contain rounded-xl border border-linha bg-superficie-alta p-1.5 shadow-[var(--sombra)]"
             >
               {children(() => definirAberto(false))}
             </div>,

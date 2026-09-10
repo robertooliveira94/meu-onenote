@@ -542,7 +542,11 @@ export async function acaoBuscar(termo: string): Promise<ResultadoBusca[]> {
 /** Usada pela lista de páginas depois de excluir: para onde ir agora? */
 export async function acaoDestinoAposExcluir(caminho: string): Promise<string> {
   const pasta = pastaDe(caminho);
-  const restantes = await listarNotas(pasta);
+  // `listarNotas` roda antes da exclusão, então ainda traz a nota que está
+  // saindo — tira ela da conta. Sem isso, excluir a única página de uma
+  // seção mandava a navegação de volta para a própria página recém-apagada,
+  // caindo na tela de "página não existe".
+  const restantes = (await listarNotas(pasta)).filter((nota) => nota.caminho !== caminho);
   if (restantes.length > 0) return urlDaNota(restantes[0].caminho);
   return pasta ? urlDaSecao(pasta) : "/";
 }

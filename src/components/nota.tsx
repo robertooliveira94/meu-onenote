@@ -79,6 +79,7 @@ export function PaginaNota({
   iconeDoCaderno,
   mapaDeLinks,
   backlinks,
+  flutuante = false,
 }: {
   nota: Nota;
   etiquetas: Etiqueta[];
@@ -88,6 +89,8 @@ export function PaginaNota({
   mapaDeLinks: Record<string, string | null>;
   /** Notas que citam `[[EstaNota]]`. */
   backlinks: { caminho: string; titulo: string }[];
+  /** Renderizada dentro da janela flutuante (janela separada do navegador): esconde o botão "Tornar flutuante". */
+  flutuante?: boolean;
 }) {
   const roteador = useRouter();
   const ehMarkdown = nota.formato === "md";
@@ -310,11 +313,15 @@ export function PaginaNota({
           <span className="truncate">{secoes.join(" / ")}</span>
         </div>
 
-        <div className="flex items-start gap-3">
-          <h1 className="min-w-0 flex-1">
+        {/* `flex-wrap`: numa janela estreita (a janela flutuante), o bloco de
+            botões desce para baixo do título em vez de esmagá-lo até o texto
+            quebrar caractere a caractere. O `minWidth` no h1 é o gatilho: quando
+            título + botões não cabem numa linha, são os botões que descem. */}
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+          <h1 className="flex-1" style={{ minWidth: "13rem" }}>
             <TituloEditavel
               titulo={nota.titulo}
-              className="block text-[24px] leading-tight font-extrabold tracking-[-0.03em]"
+              className="block truncate text-[24px] leading-tight font-extrabold tracking-[-0.03em]"
               aoRenomear={async (novoTitulo) => {
                 const resposta = await acaoRenomear(nota.caminho, novoTitulo);
                 if (!resposta.ok) return resposta.erro;
@@ -355,12 +362,14 @@ export function PaginaNota({
               <History size={15} />
             </BotaoIcone>
 
-            <BotaoIcone
-              rotulo="Tornar flutuante"
-              onClick={() => abrirJanelaFlutuante(urlDaNotaFlutuante(nota.caminho))}
-            >
-              <AppWindow size={15} />
-            </BotaoIcone>
+            {flutuante ? null : (
+              <BotaoIcone
+                rotulo="Tornar flutuante"
+                onClick={() => abrirJanelaFlutuante(urlDaNotaFlutuante(nota.caminho))}
+              >
+                <AppWindow size={15} />
+              </BotaoIcone>
+            )}
 
             {ehMarkdown ? (
               editando ? (
