@@ -619,6 +619,7 @@ export function QuadroKanban({
           tarefa={mapa[tarefaAberta]}
           todasTarefas={Object.values(mapa)}
           etiquetasKanban={etiquetasKanban}
+          nomeDoQuadro={quadro.nome}
           sprints={sprints}
           aoFechar={() => definirTarefaAberta(null)}
           aoRenomear={(novoTitulo) => renomearTarefaAção(tarefaAberta, novoTitulo)}
@@ -1198,6 +1199,7 @@ function DialogoTarefa({
   tarefa,
   todasTarefas,
   etiquetasKanban,
+  nomeDoQuadro,
   sprints,
   aoFechar,
   aoAtualizar,
@@ -1212,6 +1214,7 @@ function DialogoTarefa({
   /** Todas as tarefas do quadro (qualquer coluna) — pra escolher dependência. */
   todasTarefas: TarefaKanban[];
   etiquetasKanban: EtiquetaKanban[];
+  nomeDoQuadro: string;
   sprints: SprintKanban[];
   aoFechar: () => void;
   /** Avisa o quadro pra atualizar a tarefa na hora (etiquetas, dependências…), sem esperar um refresh. */
@@ -1478,6 +1481,7 @@ function DialogoTarefa({
               <CampoLateral rotulo="Etiquetas">
                 <SeletorEtiquetasKanban
                   caminho={caminho}
+                  quadro={nomeDoQuadro}
                   etiquetasDaTarefa={tarefa.etiquetas}
                   todasEtiquetas={etiquetasKanban}
                   aoMudar={(etiquetas) => aoAtualizar({ etiquetas })}

@@ -376,12 +376,14 @@ export async function acaoCriarEtiquetaKanban(
   nome: string,
   cor: string,
   descricao: string,
+  quadro?: string,
 ): Promise<Resposta> {
   const resposta = await tentar(async () => {
     await criarEtiquetaKanban(
       z.string().min(1).max(40).parse(nome),
       z.string().parse(cor),
       z.string().max(140).parse(descricao),
+      quadro ? z.string().max(80).parse(quadro) : undefined,
     );
   });
   atualizarTudo();

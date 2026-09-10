@@ -46,6 +46,15 @@ export async function listarEtiquetasKanban(): Promise<EtiquetaKanban[]> {
   return [...lidas].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
+/** As que valem num quadro: as gerais + as daquele quadro. Gerais primeiro. */
+export async function etiquetasVisiveisKanban(quadro: string): Promise<EtiquetaKanban[]> {
+  const todas = await listarEtiquetasKanban();
+  return [
+    ...todas.filter((etiqueta) => !etiqueta.quadro),
+    ...todas.filter((etiqueta) => etiqueta.quadro === quadro),
+  ];
+}
+
 /** "Urgente" → "urgente" */
 function gerarId(nome: string): string {
   return (
@@ -63,13 +72,20 @@ export async function criarEtiquetaKanban(
   nome: string,
   cor: string,
   descricao = "",
+  quadro?: string,
 ): Promise<EtiquetaKanban> {
   return alterar((etiquetas) => {
     const limpo = nome.trim().slice(0, 40);
     if (!limpo) throw new Error("Dê um nome para a etiqueta");
-    if (etiquetas.some((etiqueta) => etiqueta.nome.toLowerCase() === limpo.toLowerCase())) {
-      throw new Error("Já existe uma etiqueta com esse nome");
-    }
+    // Choca com uma etiqueta que apareceria no mesmo lugar: uma geral choca
+    // com qualquer outra geral; uma de quadro choca com as gerais e com as
+    // do próprio quadro (dois quadros podem ter uma "Urgente" cada).
+    const conflita = etiquetas.some(
+      (etiqueta) =>
+        etiqueta.nome.toLowerCase() === limpo.toLowerCase() &&
+        (!etiqueta.quadro || etiqueta.quadro === quadro),
+    );
+    if (conflita) throw new Error("Já existe uma etiqueta com esse nome aqui");
 
     let id = gerarId(limpo);
     let contador = 2;
@@ -83,6 +99,7 @@ export async function criarEtiquetaKanban(
       nome: limpo,
       cor: CORES_ETIQUETA.includes(cor) ? cor : CORES_ETIQUETA[0],
       descricao: descricao.trim().slice(0, 140),
+      ...(quadro ? { quadro } : {}),
     };
     etiquetas.push(nova);
     return nova;
@@ -112,14 +129,29 @@ export async function editarEtiquetaKanban(
 
 /** Some com a etiqueta e a retira de todas as tarefas que a usavam. */
 export async function excluirEtiquetaKanban(id: string): Promise<void> {
+  await removerEtiquetas((etiqueta) => etiqueta.id === id);
+}
+
+/** Chamado ao excluir um quadro: leva junto as etiquetas que eram só dele. */
+export async function excluirEtiquetasDoQuadro(quadro: string): Promise<void> {
+  await removerEtiquetas((etiqueta) => etiqueta.quadro === quadro);
+}
+
+async function removerEtiquetas(alvo: (etiqueta: EtiquetaKanban) => boolean): Promise<void> {
+  const removidas = new Set<string>();
   await alterar((etiquetas) => {
-    const posicao = etiquetas.findIndex((etiqueta) => etiqueta.id === id);
-    if (posicao >= 0) etiquetas.splice(posicao, 1);
+    for (let i = etiquetas.length - 1; i >= 0; i--) {
+      if (alvo(etiquetas[i])) {
+        removidas.add(etiquetas[i].id);
+        etiquetas.splice(i, 1);
+      }
+    }
   });
+  if (removidas.size === 0) return;
   await atualizarIndice((indice) => {
     for (const entrada of Object.values(indice.notas)) {
       if (!entrada.etiquetasKanban) continue;
-      entrada.etiquetasKanban = entrada.etiquetasKanban.filter((etiqueta) => etiqueta !== id);
+      entrada.etiquetasKanban = entrada.etiquetasKanban.filter((etiqueta) => !removidas.has(etiqueta));
     }
   });
 }

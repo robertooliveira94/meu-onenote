@@ -5,7 +5,7 @@ import { KanbanSquare, KeyRound, NotebookText, SquareArrowOutUpRight, Tag } from
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { urlDaSecao, urlDoQuadro } from "@/lib/rotas";
+import { quadroDaUrl, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import type { Caderno, ResumoQuadro } from "@/lib/tipos";
 
 import { ListaQuadros } from "./lista-quadros";
@@ -91,20 +91,29 @@ export function BarraAplicacoes({
       </div>
 
       <div className="shrink-0 border-t border-linha p-2">
-        {appAtual === "kanban" ? (
-          <Link
-            href="/kanban/etiquetas"
-            className={clsx(
-              "flex items-center gap-2.5 rounded-md px-2 py-[5px] text-[12.5px] transition-colors",
-              caminhoAtual === "/kanban/etiquetas"
-                ? "bg-realce-medio font-medium text-tinta"
-                : "text-tinta-2 hover:bg-realce-fraco",
-            )}
-          >
-            <Tag size={14} className="text-tinta-3" />
-            Etiquetas do Kanban
-          </Link>
-        ) : null}
+        {appAtual === "kanban"
+          ? (() => {
+              const quadroAberto = quadroDaUrl(caminhoAtual);
+              return (
+                <Link
+                  href={
+                    quadroAberto
+                      ? `/kanban/etiquetas?quadro=${encodeURIComponent(quadroAberto)}`
+                      : "/kanban/etiquetas"
+                  }
+                  className={clsx(
+                    "flex items-center gap-2.5 rounded-md px-2 py-[5px] text-[12.5px] transition-colors",
+                    caminhoAtual === "/kanban/etiquetas"
+                      ? "bg-realce-medio font-medium text-tinta"
+                      : "text-tinta-2 hover:bg-realce-fraco",
+                  )}
+                >
+                  <Tag size={14} className="text-tinta-3" />
+                  Etiquetas do Kanban
+                </Link>
+              );
+            })()
+          : null}
         <div className="flex items-center justify-end px-1 pt-1">
           <BotaoTema />
         </div>

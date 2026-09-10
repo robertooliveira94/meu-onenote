@@ -16,11 +16,14 @@ import { Etiquetinha, Menu } from "./ui";
  */
 export function SeletorEtiquetasKanban({
   caminho,
+  quadro,
   etiquetasDaTarefa,
   todasEtiquetas,
   aoMudar,
 }: {
   caminho: string;
+  /** Nome do quadro atual — leva o link "cadastrar etiquetas" já pro escopo dele. */
+  quadro: string;
   etiquetasDaTarefa: string[];
   todasEtiquetas: EtiquetaKanban[];
   /** Avisa o editor pra guardar a nova lista localmente, sem esperar um refresh. */
@@ -93,11 +96,11 @@ export function SeletorEtiquetasKanban({
 
             <div className="mt-1 border-t border-linha pt-1">
               <Link
-                href="/kanban/etiquetas"
+                href={`/kanban/etiquetas?quadro=${encodeURIComponent(quadro)}`}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-tinta-2 hover:bg-realce-fraco"
               >
                 <Tag size={13} />
-                Cadastrar etiquetas do Kanban
+                Etiquetas do Kanban
               </Link>
             </div>
           </>

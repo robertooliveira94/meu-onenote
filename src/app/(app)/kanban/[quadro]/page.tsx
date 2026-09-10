@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { QuadroKanban } from "@/components/quadro-kanban";
-import { listarEtiquetasKanban } from "@/lib/etiquetas-kanban";
+import { etiquetasVisiveisKanban } from "@/lib/etiquetas-kanban";
 import { listarQuadro } from "@/lib/kanban";
 import { listarQuadros } from "@/lib/quadros";
 import { listarSprints } from "@/lib/sprints-kanban";
@@ -27,7 +27,7 @@ export default async function TelaDoQuadro({
 
   const [conteudo, etiquetasKanban, sprints] = await Promise.all([
     listarQuadro(nome),
-    listarEtiquetasKanban(),
+    etiquetasVisiveisKanban(nome),
     listarSprints(),
   ]);
 

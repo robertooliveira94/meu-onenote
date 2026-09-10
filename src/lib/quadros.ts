@@ -13,6 +13,7 @@ import {
   resolverCaminho,
 } from "./caminhos";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
+import { excluirEtiquetasDoQuadro } from "./etiquetas-kanban";
 import { atualizarIndice, reapontar } from "./indice";
 import { enviarParaLixeira, reapontarNaLixeira } from "./lixeira";
 import type { Indice, ResumoQuadro } from "./tipos";
@@ -213,6 +214,8 @@ export async function excluirQuadro(nome: string): Promise<void> {
     const posicao = metas.findIndex((item) => item.nome === nome);
     if (posicao >= 0) metas.splice(posicao, 1);
   });
+  // As etiquetas que eram só deste quadro não fazem sentido sem ele.
+  await excluirEtiquetasDoQuadro(nome);
 }
 
 async function definirMeta(nome: string, campo: "cor" | "icone", valor: string): Promise<void> {

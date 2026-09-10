@@ -21,20 +21,32 @@ import { Aviso, Botao, BotaoIcone, Campo, Rotulo } from "./ui";
 export function GerenciadorEtiquetasKanban({
   etiquetas,
   usos,
+  quadro,
 }: {
   etiquetas: EtiquetaKanban[];
   usos: Record<string, number>;
+  /** Quando presente, a tela também mostra e cria etiquetas só deste quadro. */
+  quadro?: string;
 }) {
   const roteador = useRouter();
   const [nome, definirNome] = useState("");
   const [descricao, definirDescricao] = useState("");
   const [cor, definirCor] = useState(CORES_ETIQUETA[0]);
+  const [escopo, definirEscopo] = useState<"geral" | "quadro">(quadro ? "quadro" : "geral");
   const [erro, definirErro] = useState<string | null>(null);
   const [emEdicao, definirEmEdicao] = useState<string | null>(null);
   const [paraExcluir, definirParaExcluir] = useState<EtiquetaKanban | null>(null);
 
+  const gerais = etiquetas.filter((etiqueta) => !etiqueta.quadro);
+  const doQuadro = etiquetas.filter((etiqueta) => etiqueta.quadro);
+
   async function criar() {
-    const resposta = await acaoCriarEtiquetaKanban(nome, cor, descricao);
+    const resposta = await acaoCriarEtiquetaKanban(
+      nome,
+      cor,
+      descricao,
+      quadro && escopo === "quadro" ? quadro : undefined,
+    );
     if (!resposta.ok) {
       definirErro(resposta.erro);
       return;
@@ -49,18 +61,25 @@ export function GerenciadorEtiquetasKanban({
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto max-w-3xl">
         <Link
-          href="/kanban"
+          href={quadro ? `/kanban/${encodeURIComponent(quadro)}` : "/kanban"}
           className="inline-flex items-center gap-1.5 rounded-md py-1 pr-2 text-[12.5px] text-tinta-2 transition-colors hover:text-tinta"
         >
           <ArrowLeft size={14} />
-          Voltar ao quadro
+          {quadro ? `Voltar a ${quadro}` : "Voltar ao Kanban"}
         </Link>
         <h1 className="mt-1.5 text-[25px] leading-tight font-extrabold tracking-[-0.03em]">
           Etiquetas do Kanban
         </h1>
         <p className="mt-1 text-[13px] text-tinta-2">
-          Cadastro à parte das etiquetas de anotações — essas aqui só valem para tarefas, em
-          qualquer quadro.
+          Cadastro à parte das etiquetas de anotações — só valem para tarefas. As{" "}
+          <strong>gerais</strong> aparecem em todos os quadros;{" "}
+          {quadro ? (
+            <>
+              as <strong>de {quadro}</strong> só nesse quadro.
+            </>
+          ) : (
+            "as de um quadro específico se cadastram abrindo aquele quadro."
+          )}
         </p>
 
         <form
@@ -91,6 +110,34 @@ export function GerenciadorEtiquetasKanban({
             </label>
           </div>
 
+          {quadro ? (
+            <div className="mt-3">
+              <Rotulo>Onde vale</Rotulo>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ["quadro", `Só em ${quadro}`],
+                    ["geral", "Todos os quadros"],
+                  ] as const
+                ).map(([valor, rotulo]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => definirEscopo(valor)}
+                    className={clsx(
+                      "rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                      escopo === valor
+                        ? "border-[var(--realce)] bg-realce-fraco text-tinta"
+                        : "border-linha text-tinta-2 hover:border-linha-forte",
+                    )}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-3">
             <Rotulo>Cor</Rotulo>
             <div className="flex flex-wrap items-center gap-2">
@@ -119,42 +166,33 @@ export function GerenciadorEtiquetasKanban({
           <Aviso>{erro}</Aviso>
         </form>
 
-        <section className="mt-7">
-          {etiquetas.length === 0 ? (
-            <p className="py-8 text-center text-[13px] text-tinta-3">
-              Nenhuma etiqueta ainda. Comece por uma bem larga, tipo “urgente” ou “bloqueado”.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[var(--linha)] overflow-hidden rounded-xl border border-linha bg-superficie">
-              {etiquetas.map((etiqueta) =>
-                emEdicao === etiqueta.id ? (
-                  <li key={etiqueta.id} className="p-3">
-                    <FormularioEdicao etiqueta={etiqueta} aoFechar={() => definirEmEdicao(null)} />
-                  </li>
-                ) : (
-                  <li key={etiqueta.id} className="flex items-center gap-3 p-3">
-                    <span className="size-3 shrink-0 rounded-full" style={{ background: etiqueta.cor }} />
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[13px] font-medium">{etiqueta.nome}</span>
-                      {etiqueta.descricao ? (
-                        <p className="truncate text-[12px] text-tinta-2">{etiqueta.descricao}</p>
-                      ) : null}
-                    </div>
-                    <span className="shrink-0 text-[11.5px] text-tinta-3">
-                      {usos[etiqueta.id] ?? 0} {usos[etiqueta.id] === 1 ? "tarefa" : "tarefas"}
-                    </span>
-                    <BotaoIcone rotulo="Editar" onClick={() => definirEmEdicao(etiqueta.id)}>
-                      <Pencil size={14} />
-                    </BotaoIcone>
-                    <BotaoIcone rotulo="Excluir" onClick={() => definirParaExcluir(etiqueta)}>
-                      <Trash2 size={14} />
-                    </BotaoIcone>
-                  </li>
-                ),
-              )}
-            </ul>
-          )}
-        </section>
+        {etiquetas.length === 0 ? (
+          <p className="mt-7 py-8 text-center text-[13px] text-tinta-3">
+            Nenhuma etiqueta ainda. Comece por uma bem larga, tipo “urgente” ou “bloqueado”.
+          </p>
+        ) : (
+          <>
+            <ListaEtiquetas
+              titulo="Gerais"
+              lista={gerais}
+              usos={usos}
+              emEdicao={emEdicao}
+              aoEditar={definirEmEdicao}
+              aoExcluir={definirParaExcluir}
+            />
+            {quadro ? (
+              <ListaEtiquetas
+                titulo={`Só em ${quadro}`}
+                vazio={`Nenhuma etiqueta só de ${quadro} ainda.`}
+                lista={doQuadro}
+                usos={usos}
+                emEdicao={emEdicao}
+                aoEditar={definirEmEdicao}
+                aoExcluir={definirParaExcluir}
+              />
+            ) : null}
+          </>
+        )}
       </div>
 
       <DialogoConfirmar
@@ -171,6 +209,64 @@ export function GerenciadorEtiquetasKanban({
         }}
       />
     </div>
+  );
+}
+
+function ListaEtiquetas({
+  titulo,
+  vazio,
+  lista,
+  usos,
+  emEdicao,
+  aoEditar,
+  aoExcluir,
+}: {
+  titulo: string;
+  vazio?: string;
+  lista: EtiquetaKanban[];
+  usos: Record<string, number>;
+  emEdicao: string | null;
+  aoEditar: (id: string | null) => void;
+  aoExcluir: (etiqueta: EtiquetaKanban) => void;
+}) {
+  return (
+    <section className="mt-7">
+      <h2 className="mb-2 text-[11px] font-bold tracking-wider text-tinta-3 uppercase">{titulo}</h2>
+      {lista.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-linha px-3 py-4 text-center text-[12.5px] text-tinta-3">
+          {vazio ?? "Nenhuma aqui ainda."}
+        </p>
+      ) : (
+        <ul className="divide-y divide-[var(--linha)] overflow-hidden rounded-xl border border-linha bg-superficie">
+          {lista.map((etiqueta) =>
+            emEdicao === etiqueta.id ? (
+              <li key={etiqueta.id} className="p-3">
+                <FormularioEdicao etiqueta={etiqueta} aoFechar={() => aoEditar(null)} />
+              </li>
+            ) : (
+              <li key={etiqueta.id} className="flex items-center gap-3 p-3">
+                <span className="size-3 shrink-0 rounded-full" style={{ background: etiqueta.cor }} />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[13px] font-medium">{etiqueta.nome}</span>
+                  {etiqueta.descricao ? (
+                    <p className="truncate text-[12px] text-tinta-2">{etiqueta.descricao}</p>
+                  ) : null}
+                </div>
+                <span className="shrink-0 text-[11.5px] text-tinta-3">
+                  {usos[etiqueta.id] ?? 0} {usos[etiqueta.id] === 1 ? "tarefa" : "tarefas"}
+                </span>
+                <BotaoIcone rotulo="Editar" onClick={() => aoEditar(etiqueta.id)}>
+                  <Pencil size={14} />
+                </BotaoIcone>
+                <BotaoIcone rotulo="Excluir" onClick={() => aoExcluir(etiqueta)}>
+                  <Trash2 size={14} />
+                </BotaoIcone>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
+    </section>
   );
 }
 
