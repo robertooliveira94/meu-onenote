@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  Check,
   Copy,
   Download,
   Eye,
@@ -29,6 +30,7 @@ import {
   acaoCriarEntrada,
   acaoCriarGrupo,
   acaoDestrancar,
+  acaoExcluirCofre,
   acaoExcluirEntrada,
   acaoExcluirGrupo,
   acaoExportarCsv,
@@ -58,6 +60,21 @@ import { Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMen
 const ESPERA_LIMPAR_AREA_DE_TRANSFERENCIA = 20_000;
 /** De quanto em quanto tempo confere se o cofre ainda está destrancado (o timeout é controlado pelo servidor). */
 const INTERVALO_VERIFICAR_TRANCA = 30_000;
+
+/** Copia e agenda a limpeza sozinha da área de transferência — usado tanto no atalho da lista quanto no editor da senha. */
+function copiarComLimpeza(texto: string): Promise<void> {
+  return navigator.clipboard
+    .writeText(texto)
+    .then(() => {
+      setTimeout(() => {
+        navigator.clipboard.writeText("").catch(() => {});
+      }, ESPERA_LIMPAR_AREA_DE_TRANSFERENCIA);
+    })
+    .catch(() => {
+      // Sem permissão de área de transferência: nada a fazer além de deixar
+      // a pessoa selecionar e copiar o campo na mão.
+    });
+}
 
 type Tela = "carregando" | "sem-cofre" | "trancado" | { arvore: GrupoSenhas };
 
@@ -99,7 +116,9 @@ export function AppSenhas() {
     return <TelaTranca modo="destrancar" aoEntrar={(arvore) => definirTela({ arvore })} />;
   }
 
-  return <CofreAberto arvoreInicial={tela.arvore} aoTrancar={() => definirTela("trancado")} />;
+  return (
+    <CofreAberto arvoreInicial={tela.arvore} aoTrancar={() => definirTela("trancado")} aoExcluirCofre={carregar} />
+  );
 }
 
 function TelaTranca({
@@ -111,6 +130,7 @@ function TelaTranca({
 }) {
   const [senha, definirSenha] = useState("");
   const [confirmacao, definirConfirmacao] = useState("");
+  const [mostrarSenha, definirMostrarSenha] = useState(false);
   const [erro, definirErro] = useState<string | null>(null);
   const [enviando, definirEnviando] = useState(false);
 
@@ -149,26 +169,35 @@ function TelaTranca({
         </div>
 
         <Rotulo>Senha mestra</Rotulo>
-        <Campo
-          type="password"
-          autoFocus
-          value={senha}
-          onChange={(evento) => definirSenha(evento.target.value)}
-          placeholder="••••••••"
-        />
+        <div className="relative">
+          <Campo
+            type={mostrarSenha ? "text" : "password"}
+            autoFocus
+            value={senha}
+            onChange={(evento) => definirSenha(evento.target.value)}
+            placeholder="••••••••"
+            className="pr-9"
+          />
+          <button
+            type="button"
+            onClick={() => definirMostrarSenha((valor) => !valor)}
+            title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-tinta-3 hover:text-tinta"
+          >
+            {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
 
         {modo === "criar" ? (
-          <>
-            <div className="mt-3">
-              <Rotulo>Confirme a senha mestra</Rotulo>
-              <Campo
-                type="password"
-                value={confirmacao}
-                onChange={(evento) => definirConfirmacao(evento.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
-          </>
+          <div className="mt-3">
+            <Rotulo>Confirme a senha mestra</Rotulo>
+            <Campo
+              type={mostrarSenha ? "text" : "password"}
+              value={confirmacao}
+              onChange={(evento) => definirConfirmacao(evento.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
         ) : null}
 
         {erro ? <p className="mt-2 text-[12.5px] text-perigo">{erro}</p> : null}
@@ -207,9 +236,11 @@ function encontrarGrupo(raiz: GrupoSenhas, id: string): GrupoSenhas | null {
 function CofreAberto({
   arvoreInicial,
   aoTrancar,
+  aoExcluirCofre,
 }: {
   arvoreInicial: GrupoSenhas;
   aoTrancar: () => void;
+  aoExcluirCofre: () => void;
 }) {
   const [arvore, definirArvore] = useState(arvoreInicial);
   const [grupoAtivoId, definirGrupoAtivoId] = useState(arvoreInicial.grupos[0]?.id ?? arvoreInicial.id);
@@ -218,6 +249,7 @@ function CofreAberto({
     null,
   );
   const [trocandoSenha, definirTrocandoSenha] = useState(false);
+  const [excluindoCofre, definirExcluindoCofre] = useState(false);
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
   // de tempos em tempos se ele já trancou sozinho, para voltar pra tela de
@@ -307,6 +339,17 @@ function CofreAberto({
                 >
                   Trocar senha mestra
                 </ItemMenu>
+                <SeparadorMenu />
+                <ItemMenu
+                  icone={<Trash2 size={14} />}
+                  perigo
+                  onClick={() => {
+                    fechar();
+                    definirExcluindoCofre(true);
+                  }}
+                >
+                  Excluir cofre
+                </ItemMenu>
               </>
             )}
           </Menu>
@@ -326,6 +369,12 @@ function CofreAberto({
           onExcluir={(grupo) => definirAcaoGrupo({ tipo: "excluir", grupo })}
           onMoverGrupo={async (id, idNovoPai) => aplicarResposta(await acaoMoverGrupo(id, idNovoPai))}
           onMoverEntrada={async (id, idNovoGrupo) => aplicarResposta(await acaoMoverEntrada(id, idNovoGrupo))}
+          onRenomear={async (id, nome) => {
+            const resposta = await acaoRenomearGrupo(id, nome);
+            if (!resposta.ok) return resposta.erro;
+            definirArvore(resposta.arvore);
+            return null;
+          }}
         />
 
         <ColunaEntradas
@@ -380,6 +429,17 @@ function CofreAberto({
       ) : null}
 
       {trocandoSenha ? <DialogoTrocarSenha aoFechar={() => definirTrocandoSenha(false)} /> : null}
+
+      {excluindoCofre ? (
+        <DialogoExcluirCofre
+          aoFechar={() => definirExcluindoCofre(false)}
+          aoConfirmar={async () => {
+            await acaoExcluirCofre();
+            definirExcluindoCofre(false);
+            aoExcluirCofre();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -392,6 +452,7 @@ function ColunaGrupos({
   onExcluir,
   onMoverGrupo,
   onMoverEntrada,
+  onRenomear,
 }: {
   raiz: GrupoSenhas;
   grupoAtivoId: string;
@@ -400,6 +461,7 @@ function ColunaGrupos({
   onExcluir: (grupo: GrupoSenhas) => void;
   onMoverGrupo: (id: string, idNovoPai: string) => void;
   onMoverEntrada: (id: string, idNovoGrupo: string) => void;
+  onRenomear: (id: string, nome: string) => Promise<string | null>;
 }) {
   return (
     <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-linha bg-papel">
@@ -426,6 +488,7 @@ function ColunaGrupos({
               onExcluir={onExcluir}
               onMoverGrupo={onMoverGrupo}
               onMoverEntrada={onMoverEntrada}
+              onRenomear={onRenomear}
             />
           ))
         )}
@@ -443,6 +506,7 @@ function NoGrupo({
   onExcluir,
   onMoverGrupo,
   onMoverEntrada,
+  onRenomear,
 }: {
   grupo: GrupoSenhas;
   profundidade: number;
@@ -452,14 +516,20 @@ function NoGrupo({
   onExcluir: (grupo: GrupoSenhas) => void;
   onMoverGrupo: (id: string, idNovoPai: string) => void;
   onMoverEntrada: (id: string, idNovoGrupo: string) => void;
+  onRenomear: (id: string, nome: string) => Promise<string | null>;
 }) {
   const [sobre, definirSobre] = useState(false);
+  const [renomeando, definirRenomeando] = useState(false);
   const ativo = grupo.id === grupoAtivoId;
 
   return (
     <div>
       <div
-        draggable
+        // Desligado durante a edição do nome: um elemento arrastável engole
+        // o duplo clique do mouse antes dele virar um `dblclick` de
+        // verdade, então com `draggable` sempre ligado o clique duplo para
+        // renomear simplesmente não fazia nada.
+        draggable={!renomeando}
         onDragStart={(evento) => iniciarArrastoDeGrupoSenha(evento, grupo.id)}
         onDragOver={(evento) => {
           if (!trazGrupoSenha(evento) && !trazEntradaSenha(evento)) return;
@@ -492,10 +562,8 @@ function NoGrupo({
         <div className="min-w-0 flex-1 truncate">
           <TituloEditavel
             titulo={grupo.nome}
-            aoRenomear={async (novoNome) => {
-              const resposta = await acaoRenomearGrupo(grupo.id, novoNome);
-              return resposta.ok ? null : resposta.erro;
-            }}
+            aoAlternarEdicao={definirRenomeando}
+            aoRenomear={(novoNome) => onRenomear(grupo.id, novoNome)}
           />
         </div>
         <span className="shrink-0 text-[10px] text-tinta-3 tabular-nums opacity-0 group-hover:opacity-100">
@@ -554,6 +622,7 @@ function NoGrupo({
               onExcluir={onExcluir}
               onMoverGrupo={onMoverGrupo}
               onMoverEntrada={onMoverEntrada}
+              onRenomear={onRenomear}
             />
           ))}
         </div>
@@ -599,24 +668,50 @@ function ColunaEntradas({
           </div>
         ) : (
           grupo.entradas.map((entrada) => (
-            <div
-              key={entrada.id}
-              draggable
-              onDragStart={(evento) => iniciarArrastoDeEntradaSenha(evento, entrada.id)}
-              onClick={() => onAbrir(entrada)}
-              className="cartao flex cursor-pointer items-center gap-3 px-3.5 py-2.5"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
-                <KeyRound size={14} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-tinta">{entrada.titulo}</p>
-                <p className="truncate text-[11.5px] text-tinta-3">{entrada.usuario || "sem usuário"}</p>
-              </div>
-            </div>
+            <LinhaEntrada key={entrada.id} entrada={entrada} onAbrir={() => onAbrir(entrada)} />
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function LinhaEntrada({ entrada, onAbrir }: { entrada: EntradaSenha; onAbrir: () => void }) {
+  const [copiado, definirCopiado] = useState(false);
+
+  async function copiar(evento: React.MouseEvent) {
+    // Não pode abrir o editor por trás — é justamente o atalho para NÃO
+    // precisar abrir a senha para copiar ela.
+    evento.stopPropagation();
+    await copiarComLimpeza(entrada.senha);
+    definirCopiado(true);
+    setTimeout(() => definirCopiado(false), 1500);
+  }
+
+  return (
+    <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeEntradaSenha(evento, entrada.id)}
+      onClick={onAbrir}
+      className="cartao group flex cursor-pointer items-center gap-3 px-3.5 py-2.5"
+    >
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
+        <KeyRound size={14} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-tinta">{entrada.titulo}</p>
+        <p className="truncate text-[11.5px] text-tinta-3">{entrada.usuario || "sem usuário"}</p>
+      </div>
+      <BotaoIcone
+        rotulo={copiado ? "Copiada!" : "Copiar senha"}
+        onClick={copiar}
+        className={clsx(
+          "shrink-0 opacity-0 group-hover:opacity-100",
+          copiado && "pointer-events-none text-[var(--realce)] opacity-100",
+        )}
+      >
+        {copiado ? <Check size={14} /> : <Copy size={14} />}
+      </BotaoIcone>
     </div>
   );
 }
@@ -644,25 +739,17 @@ function DialogoEntrada({
   const [mostrarSenha, definirMostrarSenha] = useState(!entrada);
   const [salvando, definirSalvando] = useState(false);
   const [copiado, definirCopiado] = useState(false);
-  const limparCopia = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const limparIndicador = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
-    if (limparCopia.current) clearTimeout(limparCopia.current);
+    if (limparIndicador.current) clearTimeout(limparIndicador.current);
   }, []);
 
   async function copiarSenha() {
-    try {
-      await navigator.clipboard.writeText(campos.senha);
-      definirCopiado(true);
-      if (limparCopia.current) clearTimeout(limparCopia.current);
-      limparCopia.current = setTimeout(() => {
-        navigator.clipboard.writeText("").catch(() => {});
-        definirCopiado(false);
-      }, ESPERA_LIMPAR_AREA_DE_TRANSFERENCIA);
-    } catch {
-      // Sem permissão de área de transferência: nada a fazer além de deixar
-      // a pessoa selecionar e copiar o campo na mão.
-    }
+    await copiarComLimpeza(campos.senha);
+    definirCopiado(true);
+    if (limparIndicador.current) clearTimeout(limparIndicador.current);
+    limparIndicador.current = setTimeout(() => definirCopiado(false), ESPERA_LIMPAR_AREA_DE_TRANSFERENCIA);
   }
 
   async function enviar(evento: React.FormEvent) {
@@ -937,6 +1024,51 @@ function DialogoExcluirGrupo({
         <Botao variante="perigo-solido" onClick={aoConfirmar}>
           <Trash2 size={13} />
           Excluir
+        </Botao>
+      </div>
+    </Dialogo>
+  );
+}
+
+const PALAVRA_CONFIRMACAO = "excluir";
+
+function DialogoExcluirCofre({
+  aoFechar,
+  aoConfirmar,
+}: {
+  aoFechar: () => void;
+  aoConfirmar: () => Promise<void>;
+}) {
+  const [confirmacao, definirConfirmacao] = useState("");
+  const [excluindo, definirExcluindo] = useState(false);
+  const liberado = confirmacao.trim().toLowerCase() === PALAVRA_CONFIRMACAO;
+
+  async function confirmar() {
+    definirExcluindo(true);
+    await aoConfirmar();
+  }
+
+  return (
+    <Dialogo
+      titulo="Excluir o cofre inteiro?"
+      descricao="Todas as senhas guardadas são apagadas para sempre — sem lixeira, sem desfazer. Se você tem uma cópia baixada do .kdbx, ela continua valendo; qualquer outra coisa se perde."
+      aberto
+      aoFechar={aoFechar}
+    >
+      <Rotulo>
+        Digite <span className="font-mono text-tinta">{PALAVRA_CONFIRMACAO}</span> para confirmar
+      </Rotulo>
+      <Campo
+        autoFocus
+        value={confirmacao}
+        onChange={(evento) => definirConfirmacao(evento.target.value)}
+        placeholder={PALAVRA_CONFIRMACAO}
+      />
+      <div className="mt-4 flex justify-end gap-2">
+        <Botao onClick={aoFechar}>Cancelar</Botao>
+        <Botao variante="perigo-solido" disabled={!liberado || excluindo} onClick={confirmar}>
+          {excluindo ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+          Excluir cofre
         </Botao>
       </div>
     </Dialogo>

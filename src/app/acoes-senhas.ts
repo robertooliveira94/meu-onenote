@@ -34,6 +34,11 @@ export async function acaoTrancar(): Promise<void> {
   senhas.trancar();
 }
 
+export async function acaoExcluirCofre(): Promise<Resposta> {
+  await senhas.excluirCofre();
+  return { ok: true };
+}
+
 export async function acaoTrocarSenhaMestra(senhaAtual: string, senhaNova: string): Promise<Resposta> {
   if (senhaNova.length < 8) return { ok: false, erro: "Use pelo menos 8 caracteres na nova senha." };
   try {

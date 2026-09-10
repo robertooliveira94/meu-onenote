@@ -102,6 +102,16 @@ export async function cofreExiste(): Promise<boolean> {
   }
 }
 
+/**
+ * Apaga o cofre inteiro — sem lixeira, sem "desfazer": o `.kdbx` some do
+ * disco de verdade. É por isso que a tela exige digitar uma palavra de
+ * confirmação antes de chamar isto, em vez de só um clique.
+ */
+export async function excluirCofre(): Promise<void> {
+  trancar();
+  await fs.rm(CAMINHO_COFRE, { force: true });
+}
+
 async function salvarNoDisco(db: kdbxweb.Kdbx): Promise<void> {
   const bytes = await db.save();
   await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });

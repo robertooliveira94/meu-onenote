@@ -12,11 +12,19 @@ import { useEffect, useRef, useState } from "react";
 export function TituloEditavel({
   titulo,
   aoRenomear,
+  aoAlternarEdicao,
   className,
 }: {
   titulo: string;
   /** Devolve a mensagem de erro, ou `null` quando deu certo. */
   aoRenomear: (novoTitulo: string) => Promise<string | null>;
+  /**
+   * Avisa quando a edição começa/termina — quem envolve este título numa
+   * linha `draggable` (a lista de grupos do cofre, por exemplo) precisa
+   * desligar o arraste enquanto edita: um elemento arrastável engole o
+   * duplo clique do mouse antes dele virar um `dblclick` de verdade.
+   */
+  aoAlternarEdicao?: (editando: boolean) => void;
   className?: string;
 }) {
   const [editando, definirEditando] = useState(false);
@@ -26,11 +34,13 @@ export function TituloEditavel({
   const campo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    aoAlternarEdicao?.(editando);
     if (!editando) return;
     definirValor(titulo);
     definirErro(null);
     campo.current?.focus();
     campo.current?.select();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editando, titulo]);
 
   async function confirmar() {
