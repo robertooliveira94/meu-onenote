@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
-  PASTA_ENTRADA,
   PASTA_GERAL,
   PASTA_SISTEMA,
   RAIZ,
@@ -40,10 +39,9 @@ import type { Caderno, Formato, Indice, Nota, ResultadoBusca, ResumoNota, Secao 
 
 export async function garantirEstrutura(): Promise<void> {
   await fs.mkdir(path.join(RAIZ, PASTA_SISTEMA), { recursive: true });
-  // Uma página nunca fica solta direto no caderno — por isso já nasce com a
-  // seção "Geral" pronta, que é para onde a captura rápida e a nota do dia
-  // escrevem.
-  await fs.mkdir(path.join(RAIZ, PASTA_ENTRADA, PASTA_GERAL), { recursive: true });
+  // Nenhum caderno é obrigatório — nem o "Entrada", que antes era recriado
+  // aqui para a captura rápida cair nele. Sem essas funções, o "Entrada"
+  // virou um caderno comum: dá para renomear e excluir como qualquer outro.
 }
 
 async function existe(absoluto: string): Promise<boolean> {

@@ -4,7 +4,6 @@ import clsx from "clsx";
 import {
   ArrowDown,
   ArrowUp,
-  CalendarDays,
   Download,
   FilePlus2,
   GitBranch,
@@ -21,15 +20,12 @@ import {
   Search,
   Tag,
   Trash2,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import {
-  acaoAbrirNotaDoDia,
-  acaoCapturaRapida,
   acaoCriarPagina,
   acaoCriarSecao,
   acaoExcluir,
@@ -118,8 +114,6 @@ export function ColunaSecoes({
   const [acao, definirAcao] = useState<Acao>(null);
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const [buscaAberta, definirBuscaAberta] = useState(false);
-  const [capturando, iniciarCaptura] = useTransition();
-  const [indoParaHoje, iniciarIdaParaHoje] = useTransition();
   const [exportando, iniciarExportacao] = useTransition();
   const [, iniciarCriacaoDePagina] = useTransition();
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
@@ -212,18 +206,6 @@ export function ColunaSecoes({
         evento.preventDefault();
         definirBuscaAberta(true);
       }
-      if (combinando && evento.shiftKey && evento.key.toLowerCase() === "n") {
-        evento.preventDefault();
-        iniciarCaptura(async () => {
-          await acaoCapturaRapida();
-        });
-      }
-      if (combinando && evento.shiftKey && evento.key.toLowerCase() === "d") {
-        evento.preventDefault();
-        iniciarIdaParaHoje(async () => {
-          await acaoAbrirNotaDoDia();
-        });
-      }
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
@@ -283,18 +265,6 @@ export function ColunaSecoes({
           onClick={() => definirBuscaAberta(true)}
         >
           Buscar
-        </BotaoDaBarra>
-        <BotaoDaBarra
-          icone={<Zap size={14} />}
-          atalho="Ctrl ⇧ N"
-          disabled={capturando}
-          onClick={() =>
-            iniciarCaptura(async () => {
-              await acaoCapturaRapida();
-            })
-          }
-        >
-          Captura rápida
         </BotaoDaBarra>
       </div>
 
@@ -386,17 +356,6 @@ export function ColunaSecoes({
         >
           Web Clipper
         </Atalho>
-        <AtalhoBotao
-          icone={<CalendarDays size={14} />}
-          disabled={indoParaHoje}
-          onClick={() =>
-            iniciarIdaParaHoje(async () => {
-              await acaoAbrirNotaDoDia();
-            })
-          }
-        >
-          Hoje
-        </AtalhoBotao>
         <AtalhoBotao icone={<Download size={14} />} disabled={exportando} onClick={() => iniciarExportacao(baixarTudo)}>
           Exportar tudo
         </AtalhoBotao>

@@ -1,12 +1,9 @@
 import { Clock, NotebookPen, Star } from "lucide-react";
-import Link from "next/link";
 
 import { CartaoNota } from "@/components/cartao-nota";
 import { Vazio } from "@/components/ui";
 import { notasFavoritas, notasRecentes } from "@/lib/arquivos";
-import { PASTA_ENTRADA } from "@/lib/caminhos";
 import { listarEtiquetas } from "@/lib/etiquetas";
-import { urlDaSecao } from "@/lib/rotas";
 
 // O conteúdo vem do disco, que muda o tempo todo: nada de página estática.
 export const dynamic = "force-dynamic";
@@ -68,12 +65,7 @@ export default async function Inicio() {
 
         {!vazio ? (
           <p className="mt-10 text-[12px] text-tinta-3">
-            Dica: <kbd className="font-mono">Ctrl K</kbd> busca em todas as notas.{" "}
-            <kbd className="font-mono">Ctrl Shift N</kbd> abre uma folha em branco no caderno{" "}
-            <Link href={urlDaSecao(PASTA_ENTRADA)} className="underline underline-offset-2">
-              {PASTA_ENTRADA}
-            </Link>
-            . <kbd className="font-mono">Ctrl Shift D</kbd> abre a nota de hoje.
+            Dica: <kbd className="font-mono">Ctrl K</kbd> busca em todas as notas.
           </p>
         ) : null}
       </div>

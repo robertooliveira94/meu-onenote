@@ -20,7 +20,7 @@ import {
   reordenarPastasPara,
   salvarAnexo,
 } from "@/lib/arquivos";
-import { PASTA_ENTRADA, PASTA_GERAL, juntar, limparNome, nomeDe, pastaDe } from "@/lib/caminhos";
+import { nomeDe, pastaDe } from "@/lib/caminhos";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
 import { exportarSecao, exportarTudo } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
@@ -120,49 +120,6 @@ export async function acaoCriarPaginaFlutuante(pasta: string): Promise<Resposta>
   }
 }
 
-/** Captura rápida: uma folha em branco no caderno de entrada, com data no nome. */
-export async function acaoCapturaRapida(): Promise<void> {
-  const agora = new Date();
-  const carimbo = agora
-    .toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-    .replace(/[/:]/g, "-")
-    .replace(", ", " ");
-  // Página sempre dentro de uma seção — "Geral" é a seção padrão do caderno
-  // de entrada, criada sozinha desde o primeiro uso do app.
-  const caminho = await criarNota(juntar(PASTA_ENTRADA, PASTA_GERAL), `Ideia ${carimbo}`, "md");
-  atualizarTudo();
-  redirect(`${urlDaNota(caminho)}?editando=1`);
-}
-
-/**
- * Nota do dia: sempre a mesma página por data, no caderno de entrada. Existe
- * ainda hoje → abre ela (modo leitura, como qualquer nota); não existe →
- * cria em branco e já abre para escrever.
- */
-export async function acaoAbrirNotaDoDia(): Promise<void> {
-  const titulo = new Date().toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-  const nomeDoArquivo = `${limparNome(titulo)}.md`;
-  const pastaDoDia = juntar(PASTA_ENTRADA, PASTA_GERAL);
-  const caminhoEsperado = juntar(pastaDoDia, nomeDoArquivo);
-
-  const existente = await lerNota(caminhoEsperado);
-  if (existente) {
-    redirect(urlDaNota(caminhoEsperado));
-  }
-
-  const caminhoCriado = await criarNota(pastaDoDia, titulo, "md");
-  atualizarTudo();
-  redirect(`${urlDaNota(caminhoCriado)}?editando=1`);
-}
 
 export async function acaoRenomear(caminho: string, novoNome: string): Promise<Resposta> {
   try {
