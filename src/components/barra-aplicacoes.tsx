@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { KanbanSquare, KeyRound, NotebookText, Tag } from "lucide-react";
+import { KanbanSquare, KeyRound, NotebookText, SquareArrowOutUpRight, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -57,6 +57,7 @@ export function BarraAplicacoes({
           icone={<NotebookText size={14} />}
           contagem={cadernos.length}
           onClick={irParaNotas}
+          janela="/"
         >
           Anotações
         </BotaoApp>
@@ -65,10 +66,16 @@ export function BarraAplicacoes({
           icone={<KanbanSquare size={14} />}
           contagem={quadros.length}
           onClick={irParaKanban}
+          janela="/kanban"
         >
           Kanban
         </BotaoApp>
-        <BotaoApp ativo={appAtual === "senhas"} icone={<KeyRound size={14} />} onClick={irParaSenhas}>
+        <BotaoApp
+          ativo={appAtual === "senhas"}
+          icone={<KeyRound size={14} />}
+          onClick={irParaSenhas}
+          janela="/senhas"
+        >
           Senhas
         </BotaoApp>
       </div>
@@ -111,6 +118,7 @@ function BotaoApp({
   icone,
   contagem,
   onClick,
+  janela,
   children,
 }: {
   ativo: boolean;
@@ -118,28 +126,51 @@ function BotaoApp({
   /** Omitido para uma aplicação sem lista própria contável (ex.: Senhas, cujo conteúdo fica trancado até destrancar). */
   contagem?: number;
   onClick: () => void;
+  /** Endereço a abrir numa janela separada do navegador (usar um app enquanto o outro fica na janela principal). */
+  janela: string;
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      aria-label={contagem === undefined ? String(children) : `${children} (${contagem})`}
-      className={clsx(
-        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[12.5px] font-semibold transition-all",
-        ativo
-          ? "bg-[color-mix(in_srgb,var(--realce)_70%,black)] text-white shadow-[0_1px_2px_#16202e1a]"
-          : "text-tinta-2 hover:bg-realce-medio hover:text-tinta",
-      )}
-    >
-      {icone}
-      <span className="flex-1 text-left">{children}</span>
-      {contagem !== undefined ? (
-        <span className={clsx("text-[10.5px] tabular-nums", ativo ? "text-white/70" : "text-tinta-3")}>
-          {contagem}
-        </span>
-      ) : null}
-    </button>
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={ativo}
+        aria-label={contagem === undefined ? String(children) : `${children} (${contagem})`}
+        className={clsx(
+          "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[12.5px] font-semibold transition-all",
+          ativo
+            ? "bg-[color-mix(in_srgb,var(--realce)_70%,black)] text-white shadow-[0_1px_2px_#16202e1a]"
+            : "text-tinta-2 hover:bg-realce-medio hover:text-tinta",
+        )}
+      >
+        {icone}
+        <span className="flex-1 text-left">{children}</span>
+        {contagem !== undefined ? (
+          <span
+            className={clsx(
+              "text-[10.5px] tabular-nums group-hover:opacity-0",
+              ativo ? "text-white/70" : "text-tinta-3",
+            )}
+          >
+            {contagem}
+          </span>
+        ) : null}
+      </button>
+      {/* Aparece no hover, por cima da contagem: abre o app numa janela
+          separada, para usar o Kanban enquanto anota (ou o contrário). */}
+      <button
+        type="button"
+        title={`Abrir ${children} em nova janela`}
+        aria-label={`Abrir ${children} em nova janela`}
+        onClick={() => window.open(janela, "_blank")}
+        className={clsx(
+          "absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100",
+          ativo ? "text-white/80 hover:text-white" : "text-tinta-3 hover:text-tinta",
+        )}
+      >
+        <SquareArrowOutUpRight size={12} />
+      </button>
+    </div>
   );
 }
