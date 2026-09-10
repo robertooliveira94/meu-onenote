@@ -1,9 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { Moon, Sun, X } from "lucide-react";
+import { Check, Palette, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import { TEMAS, useTema } from "@/lib/tema";
 
 /** Peças de interface reaproveitadas em todas as telas. */
 
@@ -350,32 +352,36 @@ export function RotuloMenu({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Alterna entre tema claro e escuro — comum às duas aplicações (Anotações e
- * Kanban), por isso mora aqui em vez de dentro de uma coluna que só existe
- * numa delas.
+ * Menu de temas — comum às duas aplicações (Anotações e Kanban), por isso
+ * mora aqui em vez de dentro de uma coluna que só existe numa delas.
  */
 export function BotaoTema() {
-  const [tema, definirTema] = useState<"claro" | "escuro">("claro");
-
-  useEffect(() => {
-    definirTema(document.documentElement.dataset.tema === "escuro" ? "escuro" : "claro");
-  }, []);
-
-  function alternar() {
-    const proximo = tema === "claro" ? "escuro" : "claro";
-    document.documentElement.dataset.tema = proximo;
-    definirTema(proximo);
-    try {
-      localStorage.setItem("tema", proximo);
-    } catch {
-      // Sem armazenamento: o tema vale só para esta sessão.
-    }
-  }
+  const { tema, mudar } = useTema();
 
   return (
-    <BotaoIcone rotulo={tema === "claro" ? "Usar tema escuro" : "Usar tema claro"} onClick={alternar}>
-      {tema === "claro" ? <Moon size={14} /> : <Sun size={14} />}
-    </BotaoIcone>
+    <Menu
+      alinhamento="esquerda"
+      gatilho={(abrir) => (
+        <BotaoIcone rotulo="Trocar o tema" onClick={abrir}>
+          <Palette size={14} />
+        </BotaoIcone>
+      )}
+    >
+      {(fechar) =>
+        TEMAS.map((item) => (
+          <ItemMenu
+            key={item.id}
+            icone={<Check size={14} className={tema === item.id ? undefined : "invisible"} />}
+            onClick={() => {
+              mudar(item.id);
+              fechar();
+            }}
+          >
+            {item.nome}
+          </ItemMenu>
+        ))
+      }
+    </Menu>
   );
 }
 

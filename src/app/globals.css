@@ -72,6 +72,78 @@
   --sombra-cartao-alta: 0 2px 4px #0000004d, 0 8px 20px #00000059;
 }
 
+/* Escuro suave: a mesma família do escuro, mas em cinza-azulado, sem chegar
+   perto do preto. */
+[data-tema="escuro-suave"] {
+  --papel: #2a2f3a;
+  --superficie: #313742;
+  --superficie-alta: #3a414e;
+  --tinta: #eef1f6;
+  --tinta-2: #b7bfcd;
+  --tinta-3: #97a1b2;
+  --linha: #454d5c;
+  --linha-forte: #566072;
+  --borda-cartao: var(--linha);
+  --realce-fraco: color-mix(in srgb, var(--realce) 22%, transparent);
+  --realce-medio: color-mix(in srgb, var(--realce) 36%, transparent);
+  --perigo: #ff7b80;
+  --sombra: 0 2px 4px #00000040, 0 16px 40px #00000059;
+  --sombra-cartao: 0 1px 2px #00000033;
+  --sombra-cartao-alta: 0 2px 4px #0000003d, 0 8px 20px #00000047;
+}
+
+/* Sépia: fundo creme, tinta marrom — para textos longos. */
+[data-tema="sepia"] {
+  --papel: #efe4cf;
+  --superficie: #f7f0e0;
+  --superficie-alta: #fbf6ec;
+  --tinta: #392f21;
+  --tinta-2: #6a5c47;
+  --tinta-3: #786a53;
+  --linha: #ddd0b6;
+  --linha-forte: #c8b895;
+  --borda-cartao: #d0c1a1;
+  --perigo: #b13a2c;
+  --sombra: 0 2px 4px #3a2f2214, 0 16px 40px #3a2f2222;
+  --sombra-cartao: 0 1px 2px #3a2f221a, 0 1px 1px #3a2f2210;
+  --sombra-cartao-alta: 0 2px 4px #3a2f2218, 0 8px 20px #3a2f2220;
+}
+
+/* Cinza neutro: como o claro, mas sem o azul frio do papel. */
+[data-tema="cinza"] {
+  --papel: #ececec;
+  --superficie: #f7f7f7;
+  --superficie-alta: #ffffff;
+  --tinta: #1f1f1f;
+  --tinta-2: #565656;
+  --tinta-3: #6b6b6b;
+  --linha: #dcdcdc;
+  --linha-forte: #c2c2c2;
+  --borda-cartao: #cfcfcf;
+  --perigo: #cf342c;
+  --sombra: 0 2px 4px #0000000d, 0 16px 40px #00000017;
+  --sombra-cartao: 0 1px 2px #00000014, 0 1px 1px #0000000a;
+  --sombra-cartao-alta: 0 2px 4px #00000012, 0 8px 20px #00000018;
+}
+
+/* Alto contraste: branco e preto puros, bordas fortes, sombra virando
+   contorno sólido — para telas com brilho ruim ou baixa visão. */
+[data-tema="contraste"] {
+  --papel: #ffffff;
+  --superficie: #ffffff;
+  --superficie-alta: #ffffff;
+  --tinta: #000000;
+  --tinta-2: #1a1a1a;
+  --tinta-3: #333333;
+  --linha: #000000;
+  --linha-forte: #000000;
+  --borda-cartao: #000000;
+  --perigo: #b3000f;
+  --sombra: 0 0 0 1px #000000, 0 3px 0 #00000033;
+  --sombra-cartao: 0 0 0 1px #000000;
+  --sombra-cartao-alta: 0 0 0 2px #000000;
+}
+
 @theme inline {
   --color-papel: var(--papel);
   --color-superficie: var(--superficie);
@@ -393,22 +465,22 @@ textarea:focus {
 .hljs-function {
   color: #2f5480;
 }
-[data-tema="escuro"] .hljs-keyword,
-[data-tema="escuro"] .hljs-selector-tag,
-[data-tema="escuro"] .hljs-literal {
+[data-escuro] .hljs-keyword,
+[data-escuro] .hljs-selector-tag,
+[data-escuro] .hljs-literal {
   color: #c99ad8;
 }
-[data-tema="escuro"] .hljs-string,
-[data-tema="escuro"] .hljs-attr {
+[data-escuro] .hljs-string,
+[data-escuro] .hljs-attr {
   color: #8fc9a6;
 }
-[data-tema="escuro"] .hljs-number,
-[data-tema="escuro"] .hljs-built_in {
+[data-escuro] .hljs-number,
+[data-escuro] .hljs-built_in {
   color: #e0a86a;
 }
-[data-tema="escuro"] .hljs-title,
-[data-tema="escuro"] .hljs-name,
-[data-tema="escuro"] .hljs-function {
+[data-escuro] .hljs-title,
+[data-escuro] .hljs-name,
+[data-escuro] .hljs-function {
   color: #8fb4e0;
 }
 

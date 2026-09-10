@@ -25,12 +25,19 @@ export const metadata: Metadata = {
   description: "Anotações pessoais em seções e subseções, salvas em arquivos locais.",
 };
 
-/** Aplica o tema salvo antes da primeira pintura, para não piscar branco. */
+/**
+ * Aplica o tema salvo antes da primeira pintura, para não piscar. Aceita
+ * qualquer um dos temas (ver src/lib/tema.ts) e marca `data-escuro` para os
+ * de família escura, que compartilham alguns ajustes.
+ */
 const scriptDoTema = `
 try {
+  var validos = ["claro","escuro","escuro-suave","sepia","cinza","contraste"];
   var t = localStorage.getItem("tema");
-  if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
-  document.documentElement.dataset.tema = t;
+  if (validos.indexOf(t) < 0) t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+  var r = document.documentElement;
+  r.dataset.tema = t;
+  if (t === "escuro" || t === "escuro-suave") r.dataset.escuro = "1";
 } catch (e) {}
 `;
 
