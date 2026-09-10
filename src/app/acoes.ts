@@ -21,6 +21,7 @@ import {
   salvarAnexo,
 } from "@/lib/arquivos";
 import { nomeDe, pastaDe } from "@/lib/caminhos";
+import { gravarConfig } from "@/lib/config";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
 import { exportarSecao, exportarTudo } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
@@ -494,6 +495,15 @@ export async function acaoExportarTudo(): Promise<{ nome: string; conteudo: stri
 
 export async function acaoBuscar(termo: string): Promise<ResultadoBusca[]> {
   return buscar(z.string().max(120).parse(termo));
+}
+
+// --------------------------------------------------------------- web clipper
+
+/** Onde o Web Clipper cria as notas recortadas — uma seção, guardada no config. */
+export async function acaoDefinirDestinoRecorte(caminho: string): Promise<Resposta> {
+  return tentar(async () => {
+    await gravarConfig({ destinoRecorte: caminhoValido.parse(caminho) });
+  });
 }
 
 /** Usada pela lista de páginas depois de excluir: para onde ir agora? */

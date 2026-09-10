@@ -38,19 +38,10 @@ const PADRAO_LOCAL = "C:\\Users\\rober\\OneDrive\\Documentos\\notas";
 export const RAIZ = process.env.DADOS_PATH ? path.resolve(process.env.DADOS_PATH) : PADRAO_LOCAL;
 export const PASTA_SISTEMA = "_sistema";
 /**
- * Onde a captura rápida e a nota do dia caem — um caderno de verdade, visível
- * na árvore como qualquer outro (renomeável, com cor e ícone próprios), não
- * uma pasta escondida. "Toda nota mora dentro de um caderno" — inclusive as
- * soltas.
- */
-export const PASTA_ENTRADA = "Entrada";
-/**
- * Seção padrão criada em cada caderno para receber páginas que, por
- * qualquer motivo, apareçam soltas direto na raiz dele (migração de uma
- * versão anterior do app, ou um arquivo copiado ali por fora) — a
- * captura rápida e a nota do dia também caem aqui dentro do caderno
- * Entrada. Uma página nunca fica solta num caderno: a hierarquia é
- * sempre caderno → seção → página.
+ * Seção-abrigo criada em cada caderno para receber páginas que, por qualquer
+ * motivo, apareçam soltas direto na raiz dele (migração de uma versão
+ * anterior do app, ou um arquivo copiado ali por fora). Uma página nunca
+ * fica solta num caderno: a hierarquia é sempre caderno → seção → página.
  */
 export const PASTA_GERAL = "Geral";
 /**
