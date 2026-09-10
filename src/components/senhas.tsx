@@ -11,6 +11,7 @@ import {
   Folder,
   FolderPlus,
   KeyRound,
+  KeySquare,
   Loader2,
   Lock,
   MoreHorizontal,
@@ -37,6 +38,7 @@ import {
   acaoRenomearGrupo,
   acaoStatusCofre,
   acaoTrancar,
+  acaoTrocarSenhaMestra,
 } from "@/app/acoes-senhas";
 import {
   iniciarArrastoDeEntradaSenha,
@@ -215,6 +217,7 @@ function CofreAberto({
   const [acaoGrupo, definirAcaoGrupo] = useState<{ tipo: "novo-subgrupo" | "excluir"; grupo: GrupoSenhas } | null>(
     null,
   );
+  const [trocandoSenha, definirTrocandoSenha] = useState(false);
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
   // de tempos em tempos se ele já trancou sozinho, para voltar pra tela de
@@ -294,6 +297,16 @@ function CofreAberto({
                 >
                   Exportar CSV (texto puro)
                 </ItemMenu>
+                <SeparadorMenu />
+                <ItemMenu
+                  icone={<KeySquare size={14} />}
+                  onClick={() => {
+                    fechar();
+                    definirTrocandoSenha(true);
+                  }}
+                >
+                  Trocar senha mestra
+                </ItemMenu>
               </>
             )}
           </Menu>
@@ -365,6 +378,8 @@ function CofreAberto({
           }}
         />
       ) : null}
+
+      {trocandoSenha ? <DialogoTrocarSenha aoFechar={() => definirTrocandoSenha(false)} /> : null}
     </div>
   );
 }
@@ -760,6 +775,96 @@ function DialogoEntrada({
               Salvar
             </Botao>
           </div>
+        </div>
+      </form>
+    </Dialogo>
+  );
+}
+
+function DialogoTrocarSenha({ aoFechar }: { aoFechar: () => void }) {
+  const [senhaAtual, definirSenhaAtual] = useState("");
+  const [senhaNova, definirSenhaNova] = useState("");
+  const [confirmacao, definirConfirmacao] = useState("");
+  const [erro, definirErro] = useState<string | null>(null);
+  const [enviando, definirEnviando] = useState(false);
+  const [sucesso, definirSucesso] = useState(false);
+
+  async function enviar(evento: React.FormEvent) {
+    evento.preventDefault();
+    if (senhaNova !== confirmacao) {
+      definirErro("As duas senhas novas digitadas não são iguais.");
+      return;
+    }
+    definirEnviando(true);
+    definirErro(null);
+    const resposta = await acaoTrocarSenhaMestra(senhaAtual, senhaNova);
+    definirEnviando(false);
+    if (!resposta.ok) {
+      definirErro(resposta.erro);
+      return;
+    }
+    definirSucesso(true);
+  }
+
+  if (sucesso) {
+    return (
+      <Dialogo titulo="Senha mestra trocada" aberto aoFechar={aoFechar}>
+        <p className="text-[13px] leading-relaxed text-tinta-2">
+          A partir de agora, é a nova senha que destranca o cofre — a antiga não vale mais.
+        </p>
+        <div className="mt-4 flex justify-end">
+          <Botao variante="primario" onClick={aoFechar}>
+            Entendi
+          </Botao>
+        </div>
+      </Dialogo>
+    );
+  }
+
+  return (
+    <Dialogo
+      titulo="Trocar senha mestra"
+      descricao="O conteúdo do cofre é mantido — só a senha que abre ele muda."
+      aberto
+      aoFechar={aoFechar}
+    >
+      <form onSubmit={enviar} className="space-y-3">
+        <div>
+          <Rotulo>Senha mestra atual</Rotulo>
+          <Campo
+            type="password"
+            autoFocus
+            value={senhaAtual}
+            onChange={(evento) => definirSenhaAtual(evento.target.value)}
+          />
+        </div>
+        <div>
+          <Rotulo>Nova senha mestra</Rotulo>
+          <Campo type="password" value={senhaNova} onChange={(evento) => definirSenhaNova(evento.target.value)} />
+        </div>
+        <div>
+          <Rotulo>Confirme a nova senha mestra</Rotulo>
+          <Campo
+            type="password"
+            value={confirmacao}
+            onChange={(evento) => definirConfirmacao(evento.target.value)}
+          />
+        </div>
+
+        {erro ? <p className="text-[12.5px] text-perigo">{erro}</p> : null}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Botao type="button" onClick={aoFechar}>
+            Cancelar
+          </Botao>
+          <Botao
+            type="submit"
+            variante="primario"
+            disabled={enviando || !senhaAtual || !senhaNova}
+          >
+            {enviando ? <Loader2 size={13} className="animate-spin" /> : <KeySquare size={13} />}
+            Trocar
+          </Botao>
         </div>
       </form>
     </Dialogo>

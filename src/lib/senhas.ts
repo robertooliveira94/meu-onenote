@@ -138,6 +138,31 @@ export async function destrancar(senhaMestra: string): Promise<boolean> {
   }
 }
 
+export type ResultadoTroca = "ok" | "senha-atual-incorreta";
+
+/**
+ * Troca a senha mestra preservando todo o conteúdo — recifra o cofre com a
+ * nova senha, sem passar pela criação de um cofre novo. Confere a senha
+ * atual de novo antes de trocar (recarregando o arquivo do zero com ela),
+ * mesmo já estando destrancado: sem essa conferência, quem achasse a sessão
+ * aberta e sem vigilância poderia trocar a senha mestra sozinho.
+ */
+export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): Promise<ResultadoTroca> {
+  const db = usarSessao();
+  const bytes = await fs.readFile(CAMINHO_COFRE);
+  const credenciaisAtuais = new kdbxweb.Credentials(kdbxweb.ProtectedValue.fromString(senhaAtual));
+  try {
+    const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciaisAtuais);
+  } catch {
+    return "senha-atual-incorreta";
+  }
+  await db.credentials.setPassword(kdbxweb.ProtectedValue.fromString(senhaNova));
+  await salvarNoDisco(db);
+  renovarSessao(db);
+  return "ok";
+}
+
 class CofreTrancado extends Error {
   constructor() {
     super("O cofre está trancado.");

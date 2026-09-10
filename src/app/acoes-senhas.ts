@@ -34,6 +34,17 @@ export async function acaoTrancar(): Promise<void> {
   senhas.trancar();
 }
 
+export async function acaoTrocarSenhaMestra(senhaAtual: string, senhaNova: string): Promise<Resposta> {
+  if (senhaNova.length < 8) return { ok: false, erro: "Use pelo menos 8 caracteres na nova senha." };
+  try {
+    const resultado = await senhas.trocarSenhaMestra(senhaAtual, senhaNova);
+    if (resultado === "senha-atual-incorreta") return { ok: false, erro: "Senha atual incorreta." };
+    return { ok: true };
+  } catch {
+    return { ok: false, erro: "O cofre está trancado." };
+  }
+}
+
 export async function acaoObterArvore(): Promise<RespostaSenhas> {
   try {
     return { ok: true, arvore: senhas.obterArvore() };
