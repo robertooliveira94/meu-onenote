@@ -62,14 +62,22 @@ function CascaInterna({
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen flex-col overflow-hidden"
       style={corAtiva ? ({ "--realce": corAtiva } as React.CSSProperties) : undefined}
     >
-      <BarraAplicacoes appAtual={appAtual} cadernos={cadernos} quadros={quadros} />
-      {appAtual === "notas" ? (
-        <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+      {/* Faixa fina na cor do caderno/quadro aberto, atravessando o app
+          inteiro — é o jeito mais direto de a cor estar sempre à vista, sem
+          precisar caçar o detalhezinho colorido de cada tela. */}
+      {corAtiva ? (
+        <div className="h-[3px] shrink-0" style={{ background: corAtiva }} aria-hidden />
       ) : null}
-      <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <BarraAplicacoes appAtual={appAtual} cadernos={cadernos} quadros={quadros} />
+        {appAtual === "notas" ? (
+          <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+        ) : null}
+        <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
+      </div>
     </div>
   );
 }

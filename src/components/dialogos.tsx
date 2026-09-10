@@ -126,6 +126,75 @@ export function DialogoConfirmar({
 }
 
 /**
+ * Confirmação forte: só libera o botão depois de digitar uma palavra exata
+ * (o nome do que vai ser excluído). Para o que é irreversível o bastante
+ * para um clique só não bastar — hoje, excluir um caderno inteiro.
+ */
+export function DialogoConfirmarComTexto({
+  aberto,
+  titulo,
+  descricao,
+  palavra,
+  rotulo,
+  textoBotao,
+  aoConfirmar,
+  aoFechar,
+}: {
+  aberto: boolean;
+  titulo: string;
+  descricao: string;
+  /** O texto que precisa ser digitado para liberar o botão. */
+  palavra: string;
+  rotulo: React.ReactNode;
+  textoBotao: string;
+  aoConfirmar: () => Promise<string | null>;
+  aoFechar: () => void;
+}) {
+  const [valor, definirValor] = useState("");
+  const [erro, definirErro] = useState<string | null>(null);
+  const [ocupado, definirOcupado] = useState(false);
+  const liberado = valor.trim() === palavra.trim();
+
+  useEffect(() => {
+    if (!aberto) {
+      definirValor("");
+      definirErro(null);
+    }
+  }, [aberto]);
+
+  return (
+    <Dialogo titulo={titulo} descricao={descricao} aberto={aberto} aoFechar={aoFechar}>
+      <Rotulo>{rotulo}</Rotulo>
+      <Campo
+        autoFocus
+        value={valor}
+        onChange={(evento) => definirValor(evento.target.value)}
+        placeholder={palavra}
+      />
+      <Aviso>{erro}</Aviso>
+      <div className="mt-4 flex justify-end gap-2">
+        <Botao variante="sutil" onClick={aoFechar}>
+          Cancelar
+        </Botao>
+        <Botao
+          variante="perigo-solido"
+          disabled={ocupado || !liberado}
+          onClick={async () => {
+            definirOcupado(true);
+            const falha = await aoConfirmar();
+            definirOcupado(false);
+            if (falha) definirErro(falha);
+            else aoFechar();
+          }}
+        >
+          {textoBotao}
+        </Botao>
+      </div>
+    </Dialogo>
+  );
+}
+
+/**
  * Para onde um item pode ir: uma página só troca de seção (nunca cai direto
  * num caderno), uma seção só troca de caderno (nunca vira caderno ela
  * mesma) — a hierarquia é sempre caderno → seção → página, nada de nível

@@ -35,8 +35,11 @@
      de fundo, então aqui é só --linha mesmo (ver override abaixo). */
   --borda-cartao: #cdd6e3;
   --realce: #0ea47c;
-  --realce-fraco: #0ea47c14;
-  --realce-medio: #0ea47c26;
+  /* Derivadas de --realce (que muda com o caderno/quadro aberto) em vez de
+     presas ao verde — assim o realce da tela toda acompanha a cor do
+     caderno, não só os detalhezinhos. */
+  --realce-fraco: color-mix(in srgb, var(--realce) 12%, transparent);
+  --realce-medio: color-mix(in srgb, var(--realce) 24%, transparent);
   --perigo: #e5484d;
   --sombra: 0 2px 4px #16202e0d, 0 16px 40px #16202e1a;
   --sombra-cartao: 0 1px 2px #16202e14, 0 1px 1px #16202e0a;
@@ -61,8 +64,8 @@
   /* No escuro, o cartão (--superficie-alta) já contrasta bem contra o papel
      (--papel) — a borda normal basta, sem precisar de uma mais forte. */
   --borda-cartao: var(--linha);
-  --realce-fraco: #0ea47c26;
-  --realce-medio: #0ea47c3d;
+  --realce-fraco: color-mix(in srgb, var(--realce) 20%, transparent);
+  --realce-medio: color-mix(in srgb, var(--realce) 34%, transparent);
   --perigo: #ff6369;
   --sombra: 0 2px 4px #00000059, 0 16px 40px #00000073;
   --sombra-cartao: 0 1px 2px #00000040;

@@ -29,7 +29,7 @@ import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import { cadernoDaUrl, urlDaSecao } from "@/lib/rotas";
 import type { Caderno } from "@/lib/tipos";
 
-import { DialogoConfirmar, DialogoCor, DialogoIcone, DialogoNome } from "./dialogos";
+import { DialogoConfirmarComTexto, DialogoCor, DialogoIcone, DialogoNome } from "./dialogos";
 import { BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
 type Acao = { tipo: "renomear" | "cor" | "icone" | "excluir"; caderno: Caderno } | null;
@@ -175,10 +175,16 @@ export function SeletorDeCadernos({ cadernos }: { cadernos: Caderno[] }) {
         }}
       />
 
-      <DialogoConfirmar
+      <DialogoConfirmarComTexto
         aberto={acao?.tipo === "excluir"}
-        titulo={`Excluir ${alvo?.nome ?? ""}?`}
-        descricao="O caderno e tudo que está dentro (seções e páginas) vão para a lixeira. Dá para restaurar depois. Um quadro de mesmo nome no Kanban não é afetado."
+        titulo={`Excluir o caderno ${alvo?.nome ?? ""}?`}
+        descricao="O caderno e tudo que está dentro (seções e páginas) vão para a lixeira, dá para restaurar depois. Um quadro de mesmo nome no Kanban não é afetado."
+        palavra={alvo?.nome ?? ""}
+        rotulo={
+          <>
+            Digite <span className="font-mono text-tinta">{alvo?.nome}</span> para confirmar
+          </>
+        }
         textoBotao="Mandar para a lixeira"
         aoFechar={fechar}
         aoConfirmar={async () => {
