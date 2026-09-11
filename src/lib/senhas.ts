@@ -62,7 +62,24 @@ ligarArgon2();
  * variável de módulo comum) só para sobreviver ao hot-reload do modo de
  * desenvolvimento, que troca o módulo mas não o processo Node.
  */
-type Sessao = { db: kdbxweb.Kdbx; expiraEm: number };
+/**
+ * Gravar o `.kdbx` refaz o KDF (Argon2id) inteiro a cada `save()` — o
+ * kdbxweb troca o sal a cada gravação. Fazer isso a cada clique (criar
+ * grupo, renomear, arrastar, editar senha) deixava tudo lento. Então as
+ * mudanças são aplicadas na hora à cópia em memória (que é a fonte da
+ * verdade enquanto o cofre está aberto) e a gravação em disco é adiada
+ * ~1s depois da última mudança. Trancar (na mão ou por inatividade)
+ * força a gravação antes de descartar a chave.
+ */
+const ESPERA_SALVAR_MS = 900;
+
+type Sessao = {
+  db: kdbxweb.Kdbx;
+  expiraEm: number;
+  sujo: boolean;
+  timerSalvar: ReturnType<typeof setTimeout> | null;
+  salvando: Promise<void> | null;
+};
 const guardaGlobal = globalThis as unknown as { __cofreSessao?: Sessao };
 
 function sessaoAtiva(): Sessao | null {
@@ -70,18 +87,64 @@ function sessaoAtiva(): Sessao | null {
   if (!sessao) return null;
   if (Date.now() > sessao.expiraEm) {
     guardaGlobal.__cofreSessao = undefined;
+    // Grava o que estava pendente antes de largar a chave (o processo
+    // segue vivo, então a gravação completa mesmo sem ninguém esperando).
+    void descarregar(sessao);
     return null;
   }
   return sessao;
 }
 
-function renovarSessao(db: kdbxweb.Kdbx): void {
-  guardaGlobal.__cofreSessao = { db, expiraEm: Date.now() + ESPERA_TRAVAMENTO_MS };
+/** Começa uma sessão nova (criar / importar / destrancar). */
+function abrirSessao(db: kdbxweb.Kdbx): void {
+  guardaGlobal.__cofreSessao = {
+    db,
+    expiraEm: Date.now() + ESPERA_TRAVAMENTO_MS,
+    sujo: false,
+    timerSalvar: null,
+    salvando: null,
+  };
+}
+
+/** Adia o relógio da trava por inatividade — chamado a cada uso. */
+function tocarSessao(sessao: Sessao): void {
+  sessao.expiraEm = Date.now() + ESPERA_TRAVAMENTO_MS;
+}
+
+/** Marca a sessão como tendo mudança não gravada e (re)agenda a gravação. */
+function marcarSujo(sessao: Sessao): void {
+  sessao.sujo = true;
+  if (sessao.timerSalvar) clearTimeout(sessao.timerSalvar);
+  sessao.timerSalvar = setTimeout(() => void descarregar(sessao), ESPERA_SALVAR_MS);
+}
+
+/** Grava a sessão em disco agora, se houver algo pendente. */
+async function descarregar(sessao: Sessao): Promise<void> {
+  if (sessao.timerSalvar) {
+    clearTimeout(sessao.timerSalvar);
+    sessao.timerSalvar = null;
+  }
+  if (sessao.salvando) await sessao.salvando;
+  if (!sessao.sujo) return;
+  sessao.sujo = false;
+  sessao.salvando = salvarNoDisco(sessao.db).finally(() => {
+    sessao.salvando = null;
+  });
+  await sessao.salvando;
 }
 
 /** Descarta a chave em memória — só reabre digitando a senha mestra de novo. */
-export function trancar(): void {
+export async function trancar(): Promise<void> {
+  const sessao = guardaGlobal.__cofreSessao;
   guardaGlobal.__cofreSessao = undefined;
+  if (sessao) {
+    try {
+      await descarregar(sessao);
+    } catch {
+      // Falha ao gravar na hora de trancar: nada a fazer aqui além de não
+      // travar a interface. O conteúdo em disco fica na versão anterior.
+    }
+  }
 }
 
 export function estaDestrancado(): boolean {
@@ -108,7 +171,9 @@ export async function cofreExiste(): Promise<boolean> {
  * confirmação antes de chamar isto, em vez de só um clique.
  */
 export async function excluirCofre(): Promise<void> {
-  trancar();
+  const sessao = guardaGlobal.__cofreSessao;
+  if (sessao?.timerSalvar) clearTimeout(sessao.timerSalvar);
+  guardaGlobal.__cofreSessao = undefined;
   await fs.rm(CAMINHO_COFRE, { force: true });
 }
 
@@ -131,7 +196,7 @@ export async function criarCofre(senhaMestra: string): Promise<void> {
   }
   db.createGroup(db.getDefaultGroup(), "Geral");
   await salvarNoDisco(db);
-  renovarSessao(db);
+  abrirSessao(db);
 }
 
 /**
@@ -150,7 +215,7 @@ export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise
   }
   await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
   await fs.writeFile(CAMINHO_COFRE, bytes);
-  renovarSessao(db);
+  abrirSessao(db);
   return true;
 }
 
@@ -161,7 +226,7 @@ export async function destrancar(senhaMestra: string): Promise<boolean> {
   try {
     const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     const db = await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciais);
-    renovarSessao(db);
+    abrirSessao(db);
     return true;
   } catch {
     return false;
@@ -178,7 +243,7 @@ export type ResultadoTroca = "ok" | "senha-atual-incorreta";
  * aberta e sem vigilância poderia trocar a senha mestra sozinho.
  */
 export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): Promise<ResultadoTroca> {
-  const db = usarSessao();
+  const sessao = sessaoEmUso();
   const bytes = await fs.readFile(CAMINHO_COFRE);
   const credenciaisAtuais = new kdbxweb.Credentials(kdbxweb.ProtectedValue.fromString(senhaAtual));
   try {
@@ -187,9 +252,14 @@ export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): 
   } catch {
     return "senha-atual-incorreta";
   }
-  await db.credentials.setPassword(kdbxweb.ProtectedValue.fromString(senhaNova));
-  await salvarNoDisco(db);
-  renovarSessao(db);
+  await sessao.db.credentials.setPassword(kdbxweb.ProtectedValue.fromString(senhaNova));
+  // Grava agora (não adia): a senha nova precisa estar no disco já, e este
+  // save leva junto qualquer mudança de conteúdo que estivesse pendente.
+  if (sessao.timerSalvar) clearTimeout(sessao.timerSalvar);
+  sessao.timerSalvar = null;
+  sessao.sujo = false;
+  await salvarNoDisco(sessao.db);
+  tocarSessao(sessao);
   return "ok";
 }
 
@@ -199,12 +269,16 @@ class CofreTrancado extends Error {
   }
 }
 
-/** Toda operação sobre o conteúdo passa por aqui — garante a trava e renova o tempo de sessão a cada uso. */
+/** Toda leitura do conteúdo passa por aqui — garante a trava e renova o tempo de sessão a cada uso. */
 function usarSessao(): kdbxweb.Kdbx {
+  return sessaoEmUso().db;
+}
+
+function sessaoEmUso(): Sessao {
   const sessao = sessaoAtiva();
   if (!sessao) throw new CofreTrancado();
-  renovarSessao(sessao.db);
-  return sessao.db;
+  tocarSessao(sessao);
+  return sessao;
 }
 
 function textoDoCampo(valor: string | kdbxweb.ProtectedValue | undefined): string {
@@ -255,31 +329,31 @@ function encontrarEntrada(db: kdbxweb.Kdbx, id: string): kdbxweb.KdbxEntry {
 }
 
 export async function criarGrupo(idPai: string, nome: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  db.createGroup(encontrarGrupo(db, idPai), nome);
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  sessao.db.createGroup(encontrarGrupo(sessao.db, idPai), nome);
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 export async function renomearGrupo(id: string, nome: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  encontrarGrupo(db, id).name = nome;
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  encontrarGrupo(sessao.db, id).name = nome;
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 export async function moverGrupo(id: string, idNovoPai: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  db.move(encontrarGrupo(db, id), encontrarGrupo(db, idNovoPai));
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  sessao.db.move(encontrarGrupo(sessao.db, id), encontrarGrupo(sessao.db, idNovoPai));
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 /** Move para a lixeira interna do `.kdbx` — some da lista, mas não é apagado de vez. */
 export async function excluirGrupo(id: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  db.remove(encontrarGrupo(db, id));
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  sessao.db.remove(encontrarGrupo(sessao.db, id));
+  marcarSujo(sessao);
   return obterArvore();
 }
 
@@ -294,36 +368,36 @@ function aplicarCampos(entrada: kdbxweb.KdbxEntry, campos: CamposEntrada): void 
 }
 
 export async function criarEntrada(idGrupo: string, campos: CamposEntrada): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  const entrada = db.createEntry(encontrarGrupo(db, idGrupo));
+  const sessao = sessaoEmUso();
+  const entrada = sessao.db.createEntry(encontrarGrupo(sessao.db, idGrupo));
   aplicarCampos(entrada, campos);
-  await salvarNoDisco(db);
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 /** Guarda a versão anterior no histórico do próprio `.kdbx` antes de sobrescrever. */
 export async function atualizarEntrada(id: string, campos: CamposEntrada): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  const entrada = encontrarEntrada(db, id);
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
   entrada.pushHistory();
   aplicarCampos(entrada, campos);
   entrada.times.lastModTime = new Date();
-  db.cleanup({ historyRules: true });
-  await salvarNoDisco(db);
+  sessao.db.cleanup({ historyRules: true });
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 export async function moverEntrada(id: string, idNovoGrupo: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  db.move(encontrarEntrada(db, id), encontrarGrupo(db, idNovoGrupo));
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  sessao.db.move(encontrarEntrada(sessao.db, id), encontrarGrupo(sessao.db, idNovoGrupo));
+  marcarSujo(sessao);
   return obterArvore();
 }
 
 export async function excluirEntrada(id: string): Promise<GrupoSenhas> {
-  const db = usarSessao();
-  db.remove(encontrarEntrada(db, id));
-  await salvarNoDisco(db);
+  const sessao = sessaoEmUso();
+  sessao.db.remove(encontrarEntrada(sessao.db, id));
+  marcarSujo(sessao);
   return obterArvore();
 }
 
@@ -358,6 +432,9 @@ export function exportarCsv(): string {
 
 /** Os bytes crus do `.kdbx` — a forma segura de exportar: o arquivo continua cifrado. */
 export async function obterBytesDoCofre(): Promise<Buffer> {
-  usarSessao();
+  const sessao = sessaoEmUso();
+  // Grava o que estiver pendente antes de ler — a cópia baixada tem que
+  // bater com o que está na tela, não com uma versão de 1s atrás.
+  await descarregar(sessao);
   return fs.readFile(CAMINHO_COFRE);
 }

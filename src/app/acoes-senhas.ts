@@ -48,7 +48,7 @@ export async function acaoDestrancar(senhaMestra: string): Promise<RespostaSenha
 }
 
 export async function acaoTrancar(): Promise<void> {
-  senhas.trancar();
+  await senhas.trancar();
 }
 
 export async function acaoExcluirCofre(): Promise<Resposta> {

@@ -21,7 +21,7 @@ import {
   Trash2,
   Unlock,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   acaoAtualizarEntrada,
@@ -341,16 +341,44 @@ function CofreAberto({
 
   const grupoAtivo = encontrarGrupo(arvore, grupoAtivoId) ?? arvore;
 
-  function aplicarResposta<T extends { ok: true; arvore: GrupoSenhas } | { ok: false; erro: string }>(
-    resposta: T,
-  ): boolean {
-    if (resposta.ok) {
-      definirArvore(resposta.arvore);
-      return true;
-    }
-    alert(resposta.erro);
-    return false;
-  }
+  const aplicarResposta = useCallback(
+    <T extends { ok: true; arvore: GrupoSenhas } | { ok: false; erro: string }>(resposta: T): boolean => {
+      if (resposta.ok) {
+        definirArvore(resposta.arvore);
+        return true;
+      }
+      alert(resposta.erro);
+      return false;
+    },
+    [],
+  );
+
+  // Estáveis entre renders para o `memo` de NoGrupo / LinhaEntrada fazer efeito
+  // — sem isso, navegar entre grupos re-renderizava a árvore inteira.
+  const abrirNovoSubgrupo = useCallback(
+    (grupo: GrupoSenhas) => definirAcaoGrupo({ tipo: "novo-subgrupo", grupo }),
+    [],
+  );
+  const abrirExcluirGrupo = useCallback(
+    (grupo: GrupoSenhas) => definirAcaoGrupo({ tipo: "excluir", grupo }),
+    [],
+  );
+  const moverGrupo = useCallback(
+    async (id: string, idNovoPai: string) => void aplicarResposta(await acaoMoverGrupo(id, idNovoPai)),
+    [aplicarResposta],
+  );
+  const moverEntrada = useCallback(
+    async (id: string, idNovoGrupo: string) => void aplicarResposta(await acaoMoverEntrada(id, idNovoGrupo)),
+    [aplicarResposta],
+  );
+  const renomearGrupo = useCallback(async (id: string, nome: string) => {
+    const resposta = await acaoRenomearGrupo(id, nome);
+    if (!resposta.ok) return resposta.erro;
+    definirArvore(resposta.arvore);
+    return null;
+  }, []);
+  const abrirEntrada = useCallback((entrada: EntradaSenha) => definirEntradaEmEdicao(entrada), []);
+  const novaEntrada = useCallback(() => definirEntradaEmEdicao("nova"), []);
 
   async function trancarAgora() {
     await acaoTrancar();
@@ -442,23 +470,14 @@ function CofreAberto({
           raiz={arvore}
           grupoAtivoId={grupoAtivoId}
           onSelecionar={definirGrupoAtivoId}
-          onCriarSubgrupo={(grupo) => definirAcaoGrupo({ tipo: "novo-subgrupo", grupo })}
-          onExcluir={(grupo) => definirAcaoGrupo({ tipo: "excluir", grupo })}
-          onMoverGrupo={async (id, idNovoPai) => aplicarResposta(await acaoMoverGrupo(id, idNovoPai))}
-          onMoverEntrada={async (id, idNovoGrupo) => aplicarResposta(await acaoMoverEntrada(id, idNovoGrupo))}
-          onRenomear={async (id, nome) => {
-            const resposta = await acaoRenomearGrupo(id, nome);
-            if (!resposta.ok) return resposta.erro;
-            definirArvore(resposta.arvore);
-            return null;
-          }}
+          onCriarSubgrupo={abrirNovoSubgrupo}
+          onExcluir={abrirExcluirGrupo}
+          onMoverGrupo={moverGrupo}
+          onMoverEntrada={moverEntrada}
+          onRenomear={renomearGrupo}
         />
 
-        <ColunaEntradas
-          grupo={grupoAtivo}
-          onAbrir={(entrada) => definirEntradaEmEdicao(entrada)}
-          onNova={() => definirEntradaEmEdicao("nova")}
-        />
+        <ColunaEntradas grupo={grupoAtivo} onAbrir={abrirEntrada} onNova={novaEntrada} />
       </div>
 
       {entradaEmEdicao ? (
@@ -574,17 +593,12 @@ function ColunaGrupos({
   );
 }
 
-function NoGrupo({
-  grupo,
-  profundidade,
-  grupoAtivoId,
-  onSelecionar,
-  onCriarSubgrupo,
-  onExcluir,
-  onMoverGrupo,
-  onMoverEntrada,
-  onRenomear,
-}: {
+/** `true` se `id` é este grupo ou algum descendente. */
+function contémId(grupo: GrupoSenhas, id: string): boolean {
+  return grupo.id === id || grupo.grupos.some((sub) => contémId(sub, id));
+}
+
+type PropsNoGrupo = {
   grupo: GrupoSenhas;
   profundidade: number;
   grupoAtivoId: string;
@@ -594,7 +608,34 @@ function NoGrupo({
   onMoverGrupo: (id: string, idNovoPai: string) => void;
   onMoverEntrada: (id: string, idNovoGrupo: string) => void;
   onRenomear: (id: string, nome: string) => Promise<string | null>;
-}) {
+};
+
+/**
+ * `memo` com comparador próprio: navegar entre grupos muda `grupoAtivoId`
+ * para todos os nós, mas só os dois que trocam de estado (o que sai e o que
+ * entra) precisam re-renderizar. Os callbacks vêm do `CofreAberto` via
+ * `useCallback`, então são estáveis; a árvore só muda em cima de uma
+ * operação, aí `grupo` muda de referência e o nó re-renderiza normalmente.
+ */
+const NoGrupo = memo(NoGrupoImpl, (anterior, proximo) => {
+  if (anterior.grupo !== proximo.grupo || anterior.profundidade !== proximo.profundidade) return false;
+  if (anterior.grupoAtivoId === proximo.grupoAtivoId) return true;
+  return (
+    !contémId(anterior.grupo, anterior.grupoAtivoId) && !contémId(anterior.grupo, proximo.grupoAtivoId)
+  );
+});
+
+function NoGrupoImpl({
+  grupo,
+  profundidade,
+  grupoAtivoId,
+  onSelecionar,
+  onCriarSubgrupo,
+  onExcluir,
+  onMoverGrupo,
+  onMoverEntrada,
+  onRenomear,
+}: PropsNoGrupo) {
   const [sobre, definirSobre] = useState(false);
   const [renomeando, definirRenomeando] = useState(false);
   const ativo = grupo.id === grupoAtivoId;
@@ -745,7 +786,7 @@ function ColunaEntradas({
           </div>
         ) : (
           grupo.entradas.map((entrada) => (
-            <LinhaEntrada key={entrada.id} entrada={entrada} onAbrir={() => onAbrir(entrada)} />
+            <LinhaEntrada key={entrada.id} entrada={entrada} onAbrir={onAbrir} />
           ))
         )}
       </div>
@@ -753,7 +794,13 @@ function ColunaEntradas({
   );
 }
 
-function LinhaEntrada({ entrada, onAbrir }: { entrada: EntradaSenha; onAbrir: () => void }) {
+const LinhaEntrada = memo(function LinhaEntrada({
+  entrada,
+  onAbrir,
+}: {
+  entrada: EntradaSenha;
+  onAbrir: (entrada: EntradaSenha) => void;
+}) {
   const [copiado, definirCopiado] = useState(false);
 
   async function copiar(evento: React.MouseEvent) {
@@ -769,7 +816,7 @@ function LinhaEntrada({ entrada, onAbrir }: { entrada: EntradaSenha; onAbrir: ()
     <div
       draggable
       onDragStart={(evento) => iniciarArrastoDeEntradaSenha(evento, entrada.id)}
-      onClick={onAbrir}
+      onClick={() => onAbrir(entrada)}
       className="cartao group flex cursor-pointer items-center gap-3 px-3.5 py-2.5"
     >
       <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
@@ -791,7 +838,7 @@ function LinhaEntrada({ entrada, onAbrir }: { entrada: EntradaSenha; onAbrir: ()
       </BotaoIcone>
     </div>
   );
-}
+});
 
 type CamposEntrada = { titulo: string; usuario: string; senha: string; url: string; notas: string };
 
