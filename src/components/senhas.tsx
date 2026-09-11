@@ -327,6 +327,7 @@ function CofreAberto({
   );
   const [trocandoSenha, definirTrocandoSenha] = useState(false);
   const [excluindoCofre, definirExcluindoCofre] = useState(false);
+  const [excluindoEntrada, definirExcluindoEntrada] = useState(false);
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
   // de tempos em tempos se ele já trancou sozinho, para voltar pra tela de
@@ -488,14 +489,20 @@ function CofreAberto({
             const resposta = id ? await acaoAtualizarEntrada(id, campos) : await acaoCriarEntrada(grupoAtivo.id, campos);
             if (aplicarResposta(resposta)) definirEntradaEmEdicao(null);
           }}
-          aoExcluir={
-            entradaEmEdicao !== "nova"
-              ? async () => {
-                  if (!confirm(`Excluir "${entradaEmEdicao.titulo}"?`)) return;
-                  if (aplicarResposta(await acaoExcluirEntrada(entradaEmEdicao.id))) definirEntradaEmEdicao(null);
-                }
-              : undefined
-          }
+          aoExcluir={entradaEmEdicao !== "nova" ? () => definirExcluindoEntrada(true) : undefined}
+        />
+      ) : null}
+
+      {excluindoEntrada && entradaEmEdicao && entradaEmEdicao !== "nova" ? (
+        <DialogoExcluirEntrada
+          entrada={entradaEmEdicao}
+          aoFechar={() => definirExcluindoEntrada(false)}
+          aoConfirmar={async () => {
+            if (aplicarResposta(await acaoExcluirEntrada(entradaEmEdicao.id))) {
+              definirExcluindoEntrada(false);
+              definirEntradaEmEdicao(null);
+            }
+          }}
         />
       ) : null}
 
@@ -1143,6 +1150,28 @@ function DialogoExcluirGrupo({
       aberto
       aoFechar={aoFechar}
     >
+      <div className="flex justify-end gap-2">
+        <Botao onClick={aoFechar}>Cancelar</Botao>
+        <Botao variante="perigo-solido" onClick={aoConfirmar}>
+          <Trash2 size={13} />
+          Excluir
+        </Botao>
+      </div>
+    </Dialogo>
+  );
+}
+
+function DialogoExcluirEntrada({
+  entrada,
+  aoFechar,
+  aoConfirmar,
+}: {
+  entrada: EntradaSenha;
+  aoFechar: () => void;
+  aoConfirmar: () => Promise<void>;
+}) {
+  return (
+    <Dialogo titulo={`Excluir "${entrada.titulo}"?`} aberto aoFechar={aoFechar}>
       <div className="flex justify-end gap-2">
         <Botao onClick={aoFechar}>Cancelar</Botao>
         <Botao variante="perigo-solido" onClick={aoConfirmar}>

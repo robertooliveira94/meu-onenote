@@ -103,6 +103,7 @@ export function Dialogo({
   children,
   largura = "max-w-md",
   tituloPersonalizado,
+  realcado = false,
 }: {
   titulo: string;
   descricao?: string;
@@ -112,6 +113,8 @@ export function Dialogo({
   largura?: string;
   /** Substitui o `<h2>` padrão por outro conteúdo (ex.: um título editável) — `titulo` continua servindo de aria-label. */
   tituloPersonalizado?: React.ReactNode;
+  /** Veste a mesma cor forte do `.cartao-aberto` — para o popup de um cartão (nota, tarefa) continuar na cor dele em vez de virar branco neutro. */
+  realcado?: boolean;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
 
@@ -145,9 +148,20 @@ export function Dialogo({
         aria-modal="true"
         aria-label={titulo}
         className={clsx(
-          "surgir w-full rounded-2xl border border-linha bg-superficie-alta p-5 shadow-[var(--sombra)]",
+          "surgir w-full rounded-2xl p-5",
+          realcado
+            ? "border shadow-[inset_0_3px_0_var(--realce),var(--sombra)]"
+            : "border border-linha bg-superficie-alta shadow-[var(--sombra)]",
           largura,
         )}
+        style={
+          realcado
+            ? {
+                background: "color-mix(in srgb, var(--realce) 9%, var(--superficie-alta))",
+                borderColor: "color-mix(in srgb, var(--realce) 45%, transparent)",
+              }
+            : undefined
+        }
       >
         <div className="mb-3 flex items-start gap-3">
           <div className="min-w-0 flex-1">

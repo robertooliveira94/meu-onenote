@@ -153,7 +153,12 @@ export function DialogoConfirmarComTexto({
   const [valor, definirValor] = useState("");
   const [erro, definirErro] = useState<string | null>(null);
   const [ocupado, definirOcupado] = useState(false);
-  const liberado = valor.trim() === palavra.trim();
+  // Comparação sem diferenciar maiúsculas/minúsculas: o rótulo "DIGITE X PARA
+  // CONFIRMAR" é exibido todo em caixa alta (CSS uppercase no Rotulo), então
+  // quem digita exatamente o que vê na tela digita X em maiúsculas — travar
+  // o botão porque o nome de verdade tem outra capitalização é surpresa, não
+  // segurança de verdade (o texto já precisa bater palavra por palavra).
+  const liberado = valor.trim().toLowerCase() === palavra.trim().toLowerCase();
 
   useEffect(() => {
     if (!aberto) {

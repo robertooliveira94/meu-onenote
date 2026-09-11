@@ -1298,6 +1298,7 @@ function DialogoTarefa({
       titulo={tarefa.titulo || "Tarefa"}
       aberto
       largura="max-w-4xl"
+      realcado
       aoFechar={aoFechar}
       tituloPersonalizado={
         <TituloEditavel
