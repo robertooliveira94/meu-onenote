@@ -32,12 +32,12 @@ export const metadata: Metadata = {
  */
 const scriptDoTema = `
 try {
-  var validos = ["claro","escuro","escuro-suave","sepia","cinza","contraste"];
+  var validos = ["claro","escuro","escuro-suave","sepia","cinza","vibrante"];
   var t = localStorage.getItem("tema");
   if (validos.indexOf(t) < 0) t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
   var r = document.documentElement;
   r.dataset.tema = t;
-  if (t === "escuro" || t === "escuro-suave") r.dataset.escuro = "1";
+  if (t === "escuro" || t === "escuro-suave" || t === "vibrante") r.dataset.escuro = "1";
 } catch (e) {}
 `;
 

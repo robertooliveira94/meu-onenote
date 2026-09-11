@@ -19,7 +19,12 @@ let fila: Promise<unknown> = Promise.resolve();
 /** Leitura crua do arquivo, sem migração — é o que `alterar` precisa. */
 async function lerBruto(): Promise<Etiqueta[]> {
   try {
-    return JSON.parse(await fs.readFile(ARQUIVO_ETIQUETAS, "utf8")) as Etiqueta[];
+    const cru = JSON.parse(await fs.readFile(ARQUIVO_ETIQUETAS, "utf8")) as unknown;
+    if (!Array.isArray(cru)) return [];
+    return cru.filter(
+      (item): item is Etiqueta =>
+        !!item && typeof item.id === "string" && typeof item.nome === "string",
+    );
   } catch {
     return [];
   }

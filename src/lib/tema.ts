@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
  * que o zoom do texto — o script em `layout.tsx` aplica antes da primeira
  * pintura para não piscar.
  */
-export type Tema = "claro" | "escuro" | "escuro-suave" | "sepia" | "cinza" | "contraste";
+export type Tema = "claro" | "escuro" | "escuro-suave" | "sepia" | "cinza" | "vibrante";
 
 export const TEMAS: { id: Tema; nome: string }[] = [
   { id: "claro", nome: "Claro" },
@@ -20,10 +20,10 @@ export const TEMAS: { id: Tema; nome: string }[] = [
   { id: "escuro-suave", nome: "Escuro suave" },
   { id: "sepia", nome: "Sépia" },
   { id: "cinza", nome: "Cinza neutro" },
-  { id: "contraste", nome: "Alto contraste" },
+  { id: "vibrante", nome: "Vibrante" },
 ];
 
-const ESCUROS: Tema[] = ["escuro", "escuro-suave"];
+const ESCUROS: Tema[] = ["escuro", "escuro-suave", "vibrante"];
 
 export function ehTemaEscuro(tema: string): boolean {
   return (ESCUROS as string[]).includes(tema);

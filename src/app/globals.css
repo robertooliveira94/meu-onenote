@@ -126,22 +126,24 @@
   --sombra-cartao-alta: 0 2px 4px #00000012, 0 8px 20px #00000018;
 }
 
-/* Alto contraste: branco e preto puros, bordas fortes, sombra virando
-   contorno sólido — para telas com brilho ruim ou baixa visão. */
-[data-tema="contraste"] {
-  --papel: #ffffff;
-  --superficie: #ffffff;
-  --superficie-alta: #ffffff;
-  --tinta: #000000;
-  --tinta-2: #1a1a1a;
-  --tinta-3: #333333;
-  --linha: #000000;
-  --linha-forte: #000000;
-  --borda-cartao: #000000;
-  --perigo: #b3000f;
-  --sombra: 0 0 0 1px #000000, 0 3px 0 #00000033;
-  --sombra-cartao: 0 0 0 1px #000000;
-  --sombra-cartao-alta: 0 0 0 2px #000000;
+/* Vibrante: base violeta profunda, tinta clara e a cor do caderno acesa —
+   sombras dos cartões brilham na cor do caderno/quadro aberto. */
+[data-tema="vibrante"] {
+  --papel: #191033;
+  --superficie: #241644;
+  --superficie-alta: #2f1d58;
+  --tinta: #f4ecff;
+  --tinta-2: #cbb8ec;
+  --tinta-3: #ab93d8;
+  --linha: #46317f;
+  --linha-forte: #6045a6;
+  --borda-cartao: #6045a6;
+  --realce-fraco: color-mix(in srgb, var(--realce) 26%, transparent);
+  --realce-medio: color-mix(in srgb, var(--realce) 44%, transparent);
+  --perigo: #ff5c8a;
+  --sombra: 0 2px 4px #00000066, 0 16px 40px #0000008c;
+  --sombra-cartao: 0 1px 2px #0000004d, 0 0 18px color-mix(in srgb, var(--realce) 32%, transparent);
+  --sombra-cartao-alta: 0 2px 6px #00000059, 0 10px 28px color-mix(in srgb, var(--realce) 42%, transparent);
 }
 
 @theme inline {
@@ -528,21 +530,38 @@ textarea:focus {
   tab-size: 4;
 }
 
-/* Cartão padrão: branco, borda visível e cantos generosos. */
+/*
+  Cartão: a cor do caderno/quadro aberto (--realce) lava o fundo e a borda,
+  para o cartão se destacar do fundo do tema em vez de sumir nele. Cantos
+  generosos, borda sempre visível.
+*/
 .cartao {
-  background: var(--superficie-alta);
-  border: 1px solid var(--borda-cartao);
+  background: color-mix(in srgb, var(--realce) 6%, var(--superficie-alta));
+  border: 1px solid color-mix(in srgb, var(--realce) 24%, var(--borda-cartao));
   border-radius: 12px;
   box-shadow: var(--sombra-cartao);
   transition:
+    background 0.16s ease,
     box-shadow 0.16s ease,
     border-color 0.16s ease,
     transform 0.16s ease;
 }
 .cartao:hover {
-  border-color: color-mix(in srgb, var(--realce) 45%, var(--linha));
+  background: color-mix(in srgb, var(--realce) 10%, var(--superficie-alta));
+  border-color: color-mix(in srgb, var(--realce) 50%, var(--linha));
   box-shadow: var(--sombra-cartao-alta);
   transform: translateY(-1px);
+}
+/*
+  Cartão aberto: a cor sobe forte — sobreposição clara sobre o fundo do
+  tema, mais a faixa colorida no topo (a lombada do caderno chegando ao
+  cartão).
+*/
+.cartao-aberto,
+.cartao-aberto:hover {
+  background: color-mix(in srgb, var(--realce) 18%, var(--superficie-alta));
+  border-color: color-mix(in srgb, var(--realce) 60%, transparent);
+  box-shadow: inset 0 3px 0 var(--realce), var(--sombra-cartao-alta);
 }
 
 /* Painel com borda, para blocos que não são clicáveis. */

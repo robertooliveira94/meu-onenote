@@ -19,7 +19,14 @@ let fila: Promise<unknown> = Promise.resolve();
 
 async function lerBruto(): Promise<EtiquetaKanban[]> {
   try {
-    return JSON.parse(await fs.readFile(ARQUIVO_ETIQUETAS, "utf8")) as EtiquetaKanban[];
+    const cru = JSON.parse(await fs.readFile(ARQUIVO_ETIQUETAS, "utf8")) as unknown;
+    if (!Array.isArray(cru)) return [];
+    // Descarta entradas quebradas (sem id ou nome) em vez de deixar um
+    // `.sort` estourar lá na frente com "Cannot read properties of undefined".
+    return cru.filter(
+      (item): item is EtiquetaKanban =>
+        !!item && typeof item.id === "string" && typeof item.nome === "string",
+    );
   } catch {
     return [];
   }

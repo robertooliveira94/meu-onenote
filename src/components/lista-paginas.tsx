@@ -211,17 +211,8 @@ export function ListaPaginas({
               }}
               className={clsx(
                 "cartao group relative cursor-grab active:cursor-grabbing",
-                ativa && "shadow-[var(--sombra-cartao-alta)]",
+                ativa && "cartao-aberto",
               )}
-              style={
-                ativa
-                  ? {
-                      borderColor: "color-mix(in srgb, var(--realce) 55%, transparent)",
-                      // Faixa na cor do caderno no topo do cartão aberto.
-                      boxShadow: "inset 0 3px 0 var(--realce), var(--sombra-cartao-alta)",
-                    }
-                  : undefined
-              }
             >
               {linhaDeEncaixe ? (
                 <span
