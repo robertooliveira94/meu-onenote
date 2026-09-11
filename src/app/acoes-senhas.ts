@@ -24,6 +24,23 @@ export async function acaoCriarCofre(senhaMestra: string): Promise<RespostaSenha
   return { ok: true, arvore: senhas.obterArvore() };
 }
 
+/** Recebe um `.kdbx` em base64 e a senha mestra dele; só quando ainda não há cofre. */
+export async function acaoImportarCofre(bytesBase64: string, senhaMestra: string): Promise<RespostaSenhas> {
+  if (await senhas.cofreExiste()) return { ok: false, erro: "Já existe um cofre — destranque em vez de importar." };
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(bytesBase64, "base64");
+  } catch {
+    return { ok: false, erro: "Não deu para ler o arquivo." };
+  }
+  if (bytes.length === 0 || bytes.length > 25 * 1024 * 1024) {
+    return { ok: false, erro: "Arquivo vazio ou grande demais para ser um cofre." };
+  }
+  const certo = await senhas.importarCofre(bytes, senhaMestra);
+  if (!certo) return { ok: false, erro: "A senha não abre esse arquivo (ou não é um .kdbx válido)." };
+  return { ok: true, arvore: senhas.obterArvore() };
+}
+
 export async function acaoDestrancar(senhaMestra: string): Promise<RespostaSenhas> {
   const certo = await senhas.destrancar(senhaMestra);
   if (!certo) return { ok: false, erro: "Senha mestra incorreta." };

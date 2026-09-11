@@ -134,6 +134,26 @@ export async function criarCofre(senhaMestra: string): Promise<void> {
   renovarSessao(db);
 }
 
+/**
+ * Adota um `.kdbx` que a pessoa já tem (de um KeePass, de uma cópia baixada
+ * daqui...). Confirma que a senha mestra abre o arquivo antes de gravar —
+ * assim não fica um cofre em disco que ninguém consegue destrancar.
+ */
+export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise<boolean> {
+  const credenciais = new kdbxweb.Credentials(kdbxweb.ProtectedValue.fromString(senhaMestra));
+  let db: kdbxweb.Kdbx;
+  try {
+    const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    db = await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciais);
+  } catch {
+    return false;
+  }
+  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
+  await fs.writeFile(CAMINHO_COFRE, bytes);
+  renovarSessao(db);
+  return true;
+}
+
 /** `true` se a senha estava certa (e o cofre já fica destrancado); `false` senão. */
 export async function destrancar(senhaMestra: string): Promise<boolean> {
   const bytes = await fs.readFile(CAMINHO_COFRE);
