@@ -97,7 +97,7 @@ export function GerenciadorEtiquetas({
                   {cor === opcao ? <Check size={13} className="text-white" /> : null}
                 </button>
               ))}
-              <Botao type="submit" variante="primario" className="ml-auto">
+              <Botao type="submit" variante="primario" className="ml-auto" disabled={!nome.trim()}>
                 <Plus size={13} />
                 Criar etiqueta
               </Botao>
@@ -224,7 +224,7 @@ function FormularioEdicao({
           <Botao variante="sutil" onClick={aoFechar}>
             Cancelar
           </Botao>
-          <Botao variante="primario" onClick={salvar}>
+          <Botao variante="primario" onClick={salvar} disabled={!nome.trim()}>
             Salvar
           </Botao>
         </div>

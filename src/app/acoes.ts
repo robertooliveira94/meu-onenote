@@ -48,8 +48,20 @@ async function tentar(acao: () => Promise<void>): Promise<Resposta> {
     await acao();
     return { ok: true };
   } catch (erro) {
-    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para concluir" };
+    return { ok: false, erro: mensagemDeErro(erro) };
   }
+}
+
+/**
+ * Erro de validação (`z.parse` falhou) não pode vazar pra tela como o JSON
+ * cru dos "issues" do Zod — é o que a interface mostrava antes disto existir
+ * (ex.: criar etiqueta com o nome em branco). O campo em si já devia ter
+ * impedido o clique, mas a mensagem amigável aqui é a segunda linha de
+ * defesa.
+ */
+function mensagemDeErro(erro: unknown): string {
+  if (erro instanceof z.ZodError) return "Preencha os campos corretamente.";
+  return erro instanceof Error ? erro.message : "Não deu para concluir";
 }
 
 function atualizarTudo(): void {

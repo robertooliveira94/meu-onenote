@@ -61,8 +61,14 @@ async function tentar(acao: () => Promise<void>): Promise<Resposta> {
     await acao();
     return { ok: true };
   } catch (erro) {
-    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para concluir" };
+    return { ok: false, erro: mensagemDeErro(erro) };
   }
+}
+
+/** Ver o comentário gêmeo em `acoes.ts` — erro de `z.parse` não pode vazar cru pra tela. */
+function mensagemDeErro(erro: unknown): string {
+  if (erro instanceof z.ZodError) return "Preencha os campos corretamente.";
+  return erro instanceof Error ? erro.message : "Não deu para concluir";
 }
 
 function atualizarTudo(): void {
