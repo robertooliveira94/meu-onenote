@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { KanbanSquare, KeyRound, NotebookText, SquareArrowOutUpRight, Tag } from "lucide-react";
+import { Bookmark, KanbanSquare, KeyRound, NotebookText, SquareArrowOutUpRight, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -26,7 +26,7 @@ export function BarraAplicacoes({
   cadernos,
   quadros,
 }: {
-  appAtual: "notas" | "kanban" | "senhas";
+  appAtual: "notas" | "kanban" | "senhas" | "links";
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
 }) {
@@ -47,6 +47,11 @@ export function BarraAplicacoes({
   function irParaSenhas() {
     if (appAtual === "senhas") return;
     roteador.push("/senhas");
+  }
+
+  function irParaLinks() {
+    if (appAtual === "links") return;
+    roteador.push("/links");
   }
 
   return (
@@ -77,6 +82,14 @@ export function BarraAplicacoes({
           janela="/senhas"
         >
           Senhas
+        </BotaoApp>
+        <BotaoApp
+          ativo={appAtual === "links"}
+          icone={<Bookmark size={14} />}
+          onClick={irParaLinks}
+          janela="/links"
+        >
+          Links
         </BotaoApp>
       </div>
 

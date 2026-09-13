@@ -27,6 +27,10 @@ export const FORMATO_SUBTAREFA = "application/x-meu-onenote-subtarefa";
 export const FORMATO_GRUPO_SENHA = "application/x-meu-onenote-grupo-senha";
 /** Uma senha, arrastada para dentro de outro grupo do cofre. */
 export const FORMATO_ENTRADA_SENHA = "application/x-meu-onenote-entrada-senha";
+/** Uma pasta de links, arrastada para dentro de outra pasta. */
+export const FORMATO_PASTA_LINK = "application/x-meu-onenote-pasta-link";
+/** Um link, arrastado para dentro de outra pasta. */
+export const FORMATO_LINK = "application/x-meu-onenote-link";
 
 export function iniciarArrastoDeSecao(evento: React.DragEvent, caminho: string): void {
   evento.dataTransfer.setData(FORMATO_SECAO, caminho);
@@ -68,6 +72,16 @@ export function iniciarArrastoDeEntradaSenha(evento: React.DragEvent, id: string
   evento.dataTransfer.effectAllowed = "move";
 }
 
+export function iniciarArrastoDePastaLink(evento: React.DragEvent, id: string): void {
+  evento.dataTransfer.setData(FORMATO_PASTA_LINK, id);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
+export function iniciarArrastoDeLink(evento: React.DragEvent, id: string): void {
+  evento.dataTransfer.setData(FORMATO_LINK, id);
+  evento.dataTransfer.effectAllowed = "move";
+}
+
 export function trazSecao(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_SECAO);
 }
@@ -100,6 +114,14 @@ export function trazEntradaSenha(evento: React.DragEvent): boolean {
   return evento.dataTransfer.types.includes(FORMATO_ENTRADA_SENHA);
 }
 
+export function trazPastaLink(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_PASTA_LINK);
+}
+
+export function trazLink(evento: React.DragEvent): boolean {
+  return evento.dataTransfer.types.includes(FORMATO_LINK);
+}
+
 export function lerCaminhoDeSecao(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_SECAO);
 }
@@ -130,6 +152,14 @@ export function lerIdDeGrupoSenha(evento: React.DragEvent): string {
 
 export function lerIdDeEntradaSenha(evento: React.DragEvent): string {
   return evento.dataTransfer.getData(FORMATO_ENTRADA_SENHA);
+}
+
+export function lerIdDePastaLink(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_PASTA_LINK);
+}
+
+export function lerIdDeLink(evento: React.DragEvent): string {
+  return evento.dataTransfer.getData(FORMATO_LINK);
 }
 
 /** Tira um item de uma posição e insere em outra, sem mexer no resto da ordem. */

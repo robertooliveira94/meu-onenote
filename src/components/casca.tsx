@@ -1,13 +1,24 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 import { ColunasProvedor } from "@/lib/colunas";
-import { cadernoDaUrl, quadroDaUrl } from "@/lib/rotas";
-import type { Caderno, Etiqueta, Modelo, ResumoQuadro } from "@/lib/tipos";
+import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl } from "@/lib/rotas";
+import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
 import { BarraAplicacoes } from "./barra-aplicacoes";
 import { ColunaSecoes } from "./coluna-secoes";
+
+/** Acha uma pasta de links pelo id, em qualquer profundidade da árvore. */
+function encontrarPastaLink(raiz: PastaLink, id: string): PastaLink | null {
+  if (raiz.id === id) return raiz;
+  for (const sub of raiz.pastas) {
+    const achada = encontrarPastaLink(sub, id);
+    if (achada) return achada;
+  }
+  return null;
+}
 
 /**
  * Moldura fixa do aplicativo, da esquerda para a direita: a coluna das
@@ -23,11 +34,21 @@ export function Casca(props: {
   quadros: ResumoQuadro[];
   etiquetas: Etiqueta[];
   modelos: Modelo[];
+  linksRaiz: PastaLink;
   children: React.ReactNode;
 }) {
   return (
     <ColunasProvedor>
-      <CascaInterna {...props} />
+      {/*
+        `useSearchParams` (usado só para saber qual pasta de links está
+        aberta) exige um limite de Suspense — sem isso o Next tenta pré-
+        renderizar a página inteira como estática e falha no build. Na
+        prática o valor já está disponível de cara em toda navegação no
+        cliente, então este fallback nunca chega a aparecer de verdade.
+      */}
+      <Suspense fallback={null}>
+        <CascaInterna {...props} />
+      </Suspense>
     </ColunasProvedor>
   );
 }
@@ -37,37 +58,49 @@ function CascaInterna({
   quadros,
   etiquetas,
   modelos,
+  linksRaiz,
   children,
 }: {
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
   etiquetas: Etiqueta[];
   modelos: Modelo[];
+  linksRaiz: PastaLink;
   children: React.ReactNode;
 }) {
   const caminhoAtual = usePathname();
+  const parametros = useSearchParams();
 
-  // As três aplicações são independentes: fora de /kanban/... e /senhas,
-  // é sempre Anotações — mesmo nas telas globais (início, etiquetas,
+  // As quatro aplicações são independentes: fora de /kanban/..., /senhas e
+  // /links, é sempre Anotações — mesmo nas telas globais (início, etiquetas,
   // grafo...) que não têm um caderno "aberto".
-  const appAtual: "notas" | "kanban" | "senhas" = caminhoAtual.startsWith("/kanban")
+  const appAtual: "notas" | "kanban" | "senhas" | "links" = caminhoAtual.startsWith("/kanban")
     ? "kanban"
     : caminhoAtual.startsWith("/senhas")
       ? "senhas"
-      : "notas";
+      : caminhoAtual.startsWith("/links")
+        ? "links"
+        : "notas";
 
   const cadernoAtivo = cadernos.find((item) => item.nome === cadernoDaUrl(caminhoAtual)) ?? null;
   const quadroAtivo = quadros.find((item) => item.nome === quadroDaUrl(caminhoAtual)) ?? null;
-  const corAtiva = (appAtual === "kanban" ? quadroAtivo?.cor : cadernoAtivo?.cor) ?? null;
+  const idPastaLinkAtiva = pastaLinkDaUrl(caminhoAtual, parametros);
+  const pastaLinkAtiva = idPastaLinkAtiva ? encontrarPastaLink(linksRaiz, idPastaLinkAtiva) : null;
+  const corAtiva =
+    (appAtual === "kanban"
+      ? quadroAtivo?.cor
+      : appAtual === "links"
+        ? pastaLinkAtiva?.cor
+        : cadernoAtivo?.cor) ?? null;
 
   return (
     <div
       className="flex h-screen flex-col overflow-hidden"
       style={corAtiva ? ({ "--realce": corAtiva } as React.CSSProperties) : undefined}
     >
-      {/* Faixa fina na cor do caderno/quadro aberto, atravessando o app
-          inteiro — é o jeito mais direto de a cor estar sempre à vista, sem
-          precisar caçar o detalhezinho colorido de cada tela. */}
+      {/* Faixa fina na cor do caderno/quadro/pasta aberta, atravessando o
+          app inteiro — é o jeito mais direto de a cor estar sempre à vista,
+          sem precisar caçar o detalhezinho colorido de cada tela. */}
       {corAtiva ? (
         <div className="h-[3px] shrink-0" style={{ background: corAtiva }} aria-hidden />
       ) : null}

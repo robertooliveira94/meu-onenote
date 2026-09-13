@@ -116,11 +116,21 @@ function exigirPasta(raiz: PastaLink, id: string): PastaLink {
   return pasta;
 }
 
-export async function criarPasta(idPai: string, nome: string, cor: string, icone: string): Promise<PastaLink> {
+/** Cor e ícone de uma pasta nova ciclam pela paleta conforme a posição entre as irmãs — mesma regra de cadernos/quadros. */
+export async function criarPasta(idPai: string, nome: string): Promise<PastaLink> {
   return alterar((raiz) => {
     const limpo = nome.trim().slice(0, 60);
     if (!limpo) throw new Error("Dê um nome para a pasta.");
-    exigirPasta(raiz, idPai).pastas.push({ id: gerarId(), nome: limpo, cor, icone, pastas: [], links: [] });
+    const pai = exigirPasta(raiz, idPai);
+    const posicao = pai.pastas.length;
+    pai.pastas.push({
+      id: gerarId(),
+      nome: limpo,
+      cor: CORES_CADERNO[posicao % CORES_CADERNO.length],
+      icone: ICONES_CADERNO[posicao % ICONES_CADERNO.length],
+      pastas: [],
+      links: [],
+    });
     return raiz;
   });
 }

@@ -54,6 +54,23 @@ export function cadernoDaUrl(pathname: string): string | null {
   return semPrefixo.split("/")[0] || null;
 }
 
+/** Endereço de uma pasta de links — por id, não por nome (ver `pastaLinkDaUrl`). */
+export function urlDaPastaLink(id: string): string {
+  return `/links?pasta=${encodeURIComponent(id)}`;
+}
+
+/**
+ * Id da pasta de links aberta (`/links?pasta=<id>`), ou `null` fora da rota
+ * ou sem pasta escolhida (tela inicial). Diferente de `cadernoDaUrl`/
+ * `quadroDaUrl`: pastas de links não têm nome único nem viram segmento
+ * bonito de URL (duas subpastas em ramos diferentes podem se chamar igual),
+ * então a pasta aberta vai por parâmetro de busca, não pelo caminho.
+ */
+export function pastaLinkDaUrl(pathname: string, searchParams: URLSearchParams): string | null {
+  if (!pathname.startsWith("/links")) return null;
+  return searchParams.get("pasta");
+}
+
 /** Nome do quadro aberto (`/kanban/<Quadro>`), ou `null` fora dele. */
 export function quadroDaUrl(pathname: string): string | null {
   const semPrefixo = decodeURIComponent(pathname).replace(/^\/kanban\//, "");
