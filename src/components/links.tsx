@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, FolderPlus, MoreHorizontal, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Bookmark, FolderPlus, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import {
   acaoAtualizarLink,
@@ -46,6 +47,15 @@ function pastaTemConteudo(pasta: PastaLink): boolean {
   return pasta.pastas.length > 0 || pasta.links.length > 0;
 }
 
+type LinkComPasta = LinkSalvo & { pastaId: string };
+
+/** Achata a árvore inteira numa lista só — para a tela inicial (favoritos + recentes). */
+function achatarLinks(raiz: PastaLink): LinkComPasta[] {
+  const todos: LinkComPasta[] = raiz.links.map((link) => ({ ...link, pastaId: raiz.id }));
+  for (const sub of raiz.pastas) todos.push(...achatarLinks(sub));
+  return todos;
+}
+
 /**
  * A app de Links: pastas e subpastas à esquerda, os links da pasta aberta à
  * direita — mesmo layout de duas colunas do cofre de senhas (`ColunaGrupos`
@@ -56,8 +66,30 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
   const roteador = useRouter();
   const parametros = useSearchParams();
   const [arvore, definirArvore] = useState(arvoreInicial);
-  const pastaAtivaId = parametros.get("pasta") ?? arvoreInicial.id;
-  const pastaAtiva = encontrarPasta(arvore, pastaAtivaId) ?? arvore;
+  // Sem `?pasta=` na URL: tela inicial (favoritos + recentes). Com o
+  // parâmetro: navegando dentro daquela pasta especificamente.
+  const idPastaNaUrl = parametros.get("pasta");
+  const modo: "inicio" | "pasta" = idPastaNaUrl ? "pasta" : "inicio";
+  const pastaAtiva = idPastaNaUrl ? (encontrarPasta(arvore, idPastaNaUrl) ?? arvore) : arvore;
+  const todosOsLinks = useMemo(() => achatarLinks(arvore), [arvore]);
+  const favoritos = useMemo(
+    () => todosOsLinks.filter((link) => link.favorito).sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm)),
+    [todosOsLinks],
+  );
+  const recentes = useMemo(
+    () => [...todosOsLinks].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 9),
+    [todosOsLinks],
+  );
+
+  const [busca, definirBusca] = useState("");
+  const buscando = busca.trim().length > 0;
+  const resultadosBusca = useMemo(() => {
+    const alvo = busca.trim().toLowerCase();
+    if (!alvo) return [];
+    return todosOsLinks
+      .filter((link) => link.titulo.toLowerCase().includes(alvo) || link.url.toLowerCase().includes(alvo))
+      .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm));
+  }, [busca, todosOsLinks]);
 
   const [linkEmEdicao, definirLinkEmEdicao] = useState<LinkSalvo | "novo" | null>(null);
   const [excluindoLink, definirExcluindoLink] = useState<LinkSalvo | null>(null);
@@ -109,15 +141,32 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-2 border-b border-linha bg-superficie px-5 py-2.5">
-        <Bookmark size={15} className="text-tinta-3" />
-        <h1 className="text-[13px] font-bold tracking-[-0.02em]">Links</h1>
+      <header className="flex shrink-0 items-center gap-3 border-b border-linha bg-superficie px-5 py-2.5">
+        <Bookmark size={15} className="shrink-0 text-tinta-3" />
+        <h1 className="shrink-0 text-[13px] font-bold tracking-[-0.02em]">Links</h1>
+        <div className="relative max-w-xs flex-1">
+          <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-tinta-3" />
+          <input
+            value={busca}
+            onChange={(evento) => definirBusca(evento.target.value)}
+            placeholder="Buscar por título ou URL…"
+            className="h-8 w-full rounded-lg border border-linha bg-superficie-alta py-1 pr-2 pl-8 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
+          />
+        </div>
+        <Link
+          href="/links/lixeira"
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+        >
+          <Trash2 size={13} />
+          Lixeira
+        </Link>
       </header>
 
       <div className="flex min-h-0 flex-1">
         <ColunaPastasLinks
           raiz={arvore}
-          pastaAtivaId={pastaAtiva.id}
+          pastaAtivaId={modo === "pasta" ? pastaAtiva.id : null}
+          onInicio={() => roteador.push("/links")}
           onSelecionar={selecionarPasta}
           onCriarSubpasta={abrirNovaSubpasta}
           onExcluir={abrirExcluirPasta}
@@ -125,13 +174,19 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           onMoverLink={moverLink}
           onRenomear={renomearPasta}
         />
-        <ColunaLinks
-          pasta={pastaAtiva}
-          onAbrir={abrirLink}
-          onNovo={novoLink}
-          onExcluir={definirExcluindoLink}
-          onFavoritar={favoritarLink}
-        />
+        {buscando ? (
+          <ResultadosBusca termo={busca} resultados={resultadosBusca} onAbrir={abrirLink} onFavoritar={favoritarLink} />
+        ) : modo === "pasta" ? (
+          <ColunaLinks
+            pasta={pastaAtiva}
+            onAbrir={abrirLink}
+            onNovo={novoLink}
+            onExcluir={definirExcluindoLink}
+            onFavoritar={favoritarLink}
+          />
+        ) : (
+          <InicioLinks favoritos={favoritos} recentes={recentes} onAbrir={abrirLink} onFavoritar={favoritarLink} />
+        )}
       </div>
 
       {linkEmEdicao ? (
@@ -198,7 +253,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
               if (!resposta.ok) return resposta.erro;
               definirArvore(resposta.arvore);
               definirAcaoPasta(null);
-              if (pastaAtivaId === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
+              if (idPastaNaUrl === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
               return null;
             }}
           />
@@ -214,7 +269,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
               if (!resposta.ok) return resposta.erro;
               definirArvore(resposta.arvore);
               definirAcaoPasta(null);
-              if (pastaAtivaId === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
+              if (idPastaNaUrl === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
               return null;
             }}
           />
@@ -227,6 +282,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
 function ColunaPastasLinks({
   raiz,
   pastaAtivaId,
+  onInicio,
   onSelecionar,
   onCriarSubpasta,
   onExcluir,
@@ -235,7 +291,9 @@ function ColunaPastasLinks({
   onRenomear,
 }: {
   raiz: PastaLink;
-  pastaAtivaId: string;
+  /** `null` = nenhuma pasta selecionada (tela inicial de favoritos + recentes). */
+  pastaAtivaId: string | null;
+  onInicio: () => void;
   onSelecionar: (id: string) => void;
   onCriarSubpasta: (pasta: PastaLink) => void;
   onExcluir: (pasta: PastaLink) => void;
@@ -245,7 +303,20 @@ function ColunaPastasLinks({
 }) {
   return (
     <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-linha bg-papel">
-      <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
+      <div className="px-2 pt-2">
+        <button
+          type="button"
+          onClick={onInicio}
+          className={clsx(
+            "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[12.5px] transition-colors",
+            pastaAtivaId === null ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
+          )}
+        >
+          <Star size={13} className="shrink-0 text-tinta-3" />
+          Início
+        </button>
+      </div>
+      <div className="flex items-center justify-between px-3.5 pt-2.5 pb-2">
         <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Pastas</p>
         <BotaoIcone rotulo="Nova pasta" onClick={() => onCriarSubpasta(raiz)} className="size-6">
           <FolderPlus size={13} />
@@ -270,8 +341,8 @@ function ColunaPastasLinks({
 }
 
 /** `true` se `id` é esta pasta ou alguma descendente. */
-function contemId(pasta: PastaLink, id: string): boolean {
-  return pasta.id === id || pasta.pastas.some((sub) => contemId(sub, id));
+function contemId(pasta: PastaLink, id: string | null): boolean {
+  return id !== null && (pasta.id === id || pasta.pastas.some((sub) => contemId(sub, id)));
 }
 
 type PropsNoPasta = {
@@ -279,7 +350,7 @@ type PropsNoPasta = {
   profundidade: number;
   /** A pasta raiz não pode ser excluída/movida/renomeada — só navegada. */
   raiz?: boolean;
-  pastaAtivaId: string;
+  pastaAtivaId: string | null;
   onSelecionar: (id: string) => void;
   onCriarSubpasta: (pasta: PastaLink) => void;
   onExcluir: (pasta: PastaLink) => void;
@@ -537,6 +608,122 @@ const LinhaLink = memo(function LinhaLink({
     </div>
   );
 });
+
+/**
+ * Tela inicial da app: todos os links, mais recentes primeiro, com uma
+ * seção de favoritos acima — mesmo formato da página inicial de Anotações
+ * ("Fixadas" + "Editadas recentemente"), mas achatando a árvore de pastas
+ * inteira em vez de olhar só um caderno.
+ */
+function InicioLinks({
+  favoritos,
+  recentes,
+  onAbrir,
+  onFavoritar,
+}: {
+  favoritos: LinkComPasta[];
+  recentes: LinkComPasta[];
+  onAbrir: (link: LinkSalvo) => void;
+  onFavoritar: (link: LinkSalvo) => void;
+}) {
+  if (favoritos.length === 0 && recentes.length === 0) {
+    return (
+      <div className="min-w-0 flex-1 overflow-y-auto bg-papel px-5 py-8">
+        <Vazio
+          icone={<Bookmark size={20} />}
+          titulo="Nenhum link salvo ainda"
+          descricao='Escolha uma pasta ao lado e clique em "Novo link" para começar.'
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="min-w-0 flex-1 space-y-7 overflow-y-auto bg-papel px-5 py-5">
+      {favoritos.length > 0 ? (
+        <section>
+          <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+            <Star size={12} />
+            Favoritos
+          </h2>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {favoritos.map((link) => (
+              <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <section>
+        <h2 className="mb-2 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Recentes</h2>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {recentes.map((link) => (
+            <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CartaoLink({
+  link,
+  onAbrir,
+  onFavoritar,
+}: {
+  link: LinkComPasta;
+  onAbrir: (link: LinkSalvo) => void;
+  onFavoritar: (link: LinkSalvo) => void;
+}) {
+  return (
+    <div className="cartao group flex items-center gap-3 px-3.5 py-2.5">
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
+          <Bookmark size={14} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-medium text-tinta">{link.titulo}</p>
+          <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
+        </div>
+      </a>
+      <BotaoIcone
+        rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
+        onClick={() => onFavoritar(link)}
+        className={clsx("shrink-0", !link.favorito && "opacity-0 group-hover:opacity-100")}
+      >
+        <Star size={14} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
+      </BotaoIcone>
+      <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="shrink-0 opacity-0 group-hover:opacity-100">
+        <Pencil size={14} />
+      </BotaoIcone>
+    </div>
+  );
+}
+
+function ResultadosBusca({
+  termo,
+  resultados,
+  onAbrir,
+  onFavoritar,
+}: {
+  termo: string;
+  resultados: LinkComPasta[];
+  onAbrir: (link: LinkSalvo) => void;
+  onFavoritar: (link: LinkSalvo) => void;
+}) {
+  return (
+    <div className="min-w-0 flex-1 overflow-y-auto bg-papel px-5 py-5">
+      <p className="mb-3 text-[11.5px] text-tinta-3">
+        {resultados.length === 0
+          ? `Nada encontrado para "${termo}".`
+          : `${resultados.length} ${resultados.length === 1 ? "resultado" : "resultados"} para "${termo}"`}
+      </p>
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {resultados.map((link) => (
+          <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type CamposLink = { titulo: string; url: string; nota: string; favorito: boolean };
 

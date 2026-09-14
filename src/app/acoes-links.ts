@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import * as linksApp from "@/lib/links-app";
-import type { PastaLink } from "@/lib/tipos";
+import type { ItemLixeiraLinks, PastaLink } from "@/lib/tipos";
+
+type Resposta = { ok: true } | { ok: false; erro: string };
 
 /**
  * Ações da app de Links. Ao contrário das Anotações (onde uma mudança pode
@@ -72,4 +74,40 @@ export async function acaoFavoritarLink(id: string, favorito: boolean): Promise<
 
 export async function acaoExcluirLink(id: string): Promise<RespostaLinks> {
   return comTratamento(() => linksApp.excluirLink(id));
+}
+
+export async function acaoLinksFavoritos() {
+  return linksApp.linksFavoritos();
+}
+
+export async function acaoLinksRecentes(limite: number) {
+  return linksApp.linksRecentes(limite);
+}
+
+export async function acaoBuscarLinks(termo: string) {
+  return linksApp.buscarLinks(termo);
+}
+
+export async function acaoListarLixeiraLinks(): Promise<ItemLixeiraLinks[]> {
+  return linksApp.listarLixeiraLinks();
+}
+
+export async function acaoRestaurarDaLixeiraLinks(id: string): Promise<Resposta> {
+  try {
+    await linksApp.restaurarDaLixeira(id);
+    revalidatePath("/links", "layout");
+    return { ok: true };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu certo." };
+  }
+}
+
+export async function acaoApagarDeVezDaLixeiraLinks(id: string): Promise<Resposta> {
+  await linksApp.apagarDeVezLixeiraLinks(id);
+  return { ok: true };
+}
+
+export async function acaoEsvaziarLixeiraLinks(): Promise<Resposta> {
+  await linksApp.esvaziarLixeiraLinks();
+  return { ok: true };
 }
