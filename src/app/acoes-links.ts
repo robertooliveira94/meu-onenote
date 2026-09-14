@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { gravarConfig } from "@/lib/config";
+import { analisarBookmarksHtml } from "@/lib/importar-favoritos";
 import * as linksApp from "@/lib/links-app";
 import type { ItemLixeiraLinks, PastaLink } from "@/lib/tipos";
 
@@ -53,15 +55,29 @@ export async function acaoExcluirPastaLink(id: string): Promise<RespostaLinks> {
 }
 
 type CamposLink = { titulo: string; url: string; nota: string; favorito: boolean };
+type FaviconBuscado = { base64: string; tipo: string } | null;
 
-export async function acaoCriarLink(idPasta: string, campos: CamposLink): Promise<RespostaLinks> {
+export async function acaoCriarLink(
+  idPasta: string,
+  campos: CamposLink,
+  favicon?: FaviconBuscado,
+): Promise<RespostaLinks> {
   if (!campos.url.trim()) return { ok: false, erro: "Informe uma URL." };
-  return comTratamento(() => linksApp.criarLink(idPasta, campos));
+  return comTratamento(() => linksApp.criarLink(idPasta, campos, favicon));
 }
 
-export async function acaoAtualizarLink(id: string, campos: CamposLink): Promise<RespostaLinks> {
+export async function acaoAtualizarLink(
+  id: string,
+  campos: CamposLink,
+  favicon?: FaviconBuscado,
+): Promise<RespostaLinks> {
   if (!campos.url.trim()) return { ok: false, erro: "Informe uma URL." };
-  return comTratamento(() => linksApp.atualizarLink(id, campos));
+  return comTratamento(() => linksApp.atualizarLink(id, campos, favicon));
+}
+
+/** Busca título e favicon do próprio site — usado ao colar uma URL no diálogo de link. */
+export async function acaoBuscarMetadadosUrl(url: string) {
+  return linksApp.buscarMetadadosUrl(url);
 }
 
 export async function acaoMoverLink(id: string, idNovaPasta: string): Promise<RespostaLinks> {
@@ -110,4 +126,33 @@ export async function acaoApagarDeVezDaLixeiraLinks(id: string): Promise<Respost
 export async function acaoEsvaziarLixeiraLinks(): Promise<Resposta> {
   await linksApp.esvaziarLixeiraLinks();
   return { ok: true };
+}
+
+/** Importa um arquivo de favoritos exportado do navegador (Netscape Bookmark) pra dentro de uma pasta. */
+export async function acaoImportarFavoritosHtml(htmlTexto: string, idPastaDestino: string): Promise<RespostaLinks> {
+  const nos = analisarBookmarksHtml(htmlTexto);
+  if (nos.length === 0) return { ok: false, erro: "Não achei nenhuma pasta ou link nesse arquivo." };
+  return comTratamento(() => linksApp.importarArvore(nos, idPastaDestino));
+}
+
+/** Lembra a última pasta usada no atalho "salvar link" — só a pré-seleção, o clique seguinte pode trocar. */
+export async function acaoDefinirDestinoLink(idPasta: string): Promise<void> {
+  await gravarConfig({ destinoLink: idPasta });
+}
+
+/**
+ * Onde o atalho "salvar link" (a janelinha pop-up de `/salvar-link`) entrega
+ * o link escolhido. Busca o favicon do site (o título já vem do navegador,
+ * via `document.title` no bookmarklet — não precisa buscar de novo).
+ */
+export async function acaoSalvarLinkDoClipper(idPasta: string, titulo: string, url: string): Promise<Resposta> {
+  if (!url.trim()) return { ok: false, erro: "URL em branco." };
+  try {
+    const { favicon } = await linksApp.buscarMetadadosUrl(url);
+    await linksApp.criarLink(idPasta, { titulo, url, nota: "", favorito: false }, favicon);
+    revalidatePath("/links", "layout");
+    return { ok: true };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu certo." };
+  }
 }

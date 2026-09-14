@@ -1,18 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, FolderPlus, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Bookmark, FolderPlus, Import, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   acaoAtualizarLink,
+  acaoBuscarMetadadosUrl,
   acaoCriarLink,
   acaoCriarPastaLink,
   acaoExcluirLink,
   acaoExcluirPastaLink,
   acaoFavoritarLink,
+  acaoImportarFavoritosHtml,
   acaoMoverLink,
   acaoMoverPastaLink,
   acaoRenomearPastaLink,
@@ -31,7 +33,7 @@ import type { Link as LinkSalvo, PastaLink } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoNome } from "./dialogos";
 import { TituloEditavel } from "./titulo-editavel";
-import { Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMenu, Vazio } from "./ui";
+import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMenu, Vazio } from "./ui";
 
 function encontrarPasta(raiz: PastaLink, id: string): PastaLink | null {
   if (raiz.id === id) return raiz;
@@ -96,6 +98,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
   const [acaoPasta, definirAcaoPasta] = useState<{ tipo: "nova-subpasta" | "excluir"; pasta: PastaLink } | null>(
     null,
   );
+  const [importando, definirImportando] = useState(false);
 
   const aplicarResposta = useCallback((resposta: RespostaLinks): boolean => {
     if (resposta.ok) {
@@ -153,9 +156,17 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
             className="h-8 w-full rounded-lg border border-linha bg-superficie-alta py-1 pr-2 pl-8 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => definirImportando(true)}
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+        >
+          <Import size={13} />
+          Importar favoritos
+        </button>
         <Link
           href="/links/lixeira"
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
         >
           <Trash2 size={13} />
           Lixeira
@@ -193,8 +204,10 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         <DialogoLink
           link={linkEmEdicao === "novo" ? null : linkEmEdicao}
           aoFechar={() => definirLinkEmEdicao(null)}
-          aoSalvar={async (id, campos) => {
-            const resposta = id ? await acaoAtualizarLink(id, campos) : await acaoCriarLink(pastaAtiva.id, campos);
+          aoSalvar={async (id, campos, favicon) => {
+            const resposta = id
+              ? await acaoAtualizarLink(id, campos, favicon)
+              : await acaoCriarLink(pastaAtiva.id, campos, favicon);
             if (aplicarResposta(resposta)) definirLinkEmEdicao(null);
           }}
         />
@@ -274,6 +287,20 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
             }}
           />
         )
+      ) : null}
+
+      {importando ? (
+        <DialogoImportarFavoritos
+          raiz={arvore}
+          aoFechar={() => definirImportando(false)}
+          aoImportar={async (html, idPastaDestino) => {
+            const resposta = await acaoImportarFavoritosHtml(html, idPastaDestino);
+            if (!resposta.ok) return resposta.erro;
+            definirArvore(resposta.arvore);
+            definirImportando(false);
+            return null;
+          }}
+        />
       ) : null}
     </div>
   );
@@ -499,6 +526,25 @@ function NoPastaLinkImpl({
   );
 }
 
+/** Favicon salvo (servido por /links/favicon/<arquivo>), ou o ícone genérico de link. */
+function IconeDoLink({ link }: { link: LinkSalvo }) {
+  if (link.favicon) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena configurar o otimizador de imagens do Next pra isso.
+      <img
+        src={`/links/favicon/${link.favicon}`}
+        alt=""
+        className="size-8 shrink-0 rounded-lg border border-linha bg-superficie-alta object-contain p-1"
+      />
+    );
+  }
+  return (
+    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
+      <Bookmark size={14} />
+    </div>
+  );
+}
+
 function dominioDaUrl(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -582,9 +628,7 @@ const LinhaLink = memo(function LinhaLink({
         rel="noopener noreferrer"
         className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
-          <Bookmark size={14} />
-        </div>
+        <IconeDoLink link={link} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-medium text-tinta">{link.titulo}</p>
           <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
@@ -676,9 +720,7 @@ function CartaoLink({
   return (
     <div className="cartao group flex items-center gap-3 px-3.5 py-2.5">
       <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
-          <Bookmark size={14} />
-        </div>
+        <IconeDoLink link={link} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-medium text-tinta">{link.titulo}</p>
           <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
@@ -725,7 +767,85 @@ function ResultadosBusca({
   );
 }
 
+/** Opções indentadas de um `<select>`, uma por pasta em qualquer profundidade — usado no importador. */
+function opcoesDePasta(pasta: PastaLink, profundidade: number): React.ReactNode[] {
+  const prefixo = "  ".repeat(profundidade);
+  return [
+    <option key={pasta.id} value={pasta.id}>
+      {prefixo}
+      {pasta.icone} {pasta.nome}
+    </option>,
+    ...pasta.pastas.flatMap((sub) => opcoesDePasta(sub, profundidade + 1)),
+  ];
+}
+
+function DialogoImportarFavoritos({
+  raiz,
+  aoFechar,
+  aoImportar,
+}: {
+  raiz: PastaLink;
+  aoFechar: () => void;
+  aoImportar: (html: string, idPastaDestino: string) => Promise<string | null>;
+}) {
+  const [arquivo, definirArquivo] = useState<File | null>(null);
+  const [pastaDestino, definirPastaDestino] = useState(raiz.id);
+  const [importando, definirImportandoAgora] = useState(false);
+  const [erro, definirErro] = useState<string | null>(null);
+
+  async function importar() {
+    if (!arquivo) {
+      definirErro("Escolha o arquivo .html exportado do navegador.");
+      return;
+    }
+    definirImportandoAgora(true);
+    const html = await arquivo.text();
+    const falha = await aoImportar(html, pastaDestino);
+    definirImportandoAgora(false);
+    if (falha) definirErro(falha);
+  }
+
+  return (
+    <Dialogo
+      titulo="Importar favoritos"
+      descricao="Um arquivo .html exportado do Chrome, Firefox ou outro navegador — pastas e links entram dentro da pasta escolhida abaixo."
+      aberto
+      aoFechar={aoFechar}
+    >
+      <div className="space-y-3">
+        <div>
+          <Rotulo>Arquivo</Rotulo>
+          <input
+            type="file"
+            accept=".html,text/html"
+            onChange={(evento) => definirArquivo(evento.target.files?.[0] ?? null)}
+            className="block w-full text-[12.5px] text-tinta-2 file:mr-3 file:rounded-md file:border file:border-linha file:bg-superficie-alta file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-tinta hover:file:bg-realce-fraco"
+          />
+        </div>
+        <div>
+          <Rotulo>Pasta de destino</Rotulo>
+          <select
+            value={pastaDestino}
+            onChange={(evento) => definirPastaDestino(evento.target.value)}
+            className="h-9.5 w-full rounded-lg border border-linha bg-superficie-alta px-3 text-[13px] text-tinta focus:border-[var(--realce)] focus:outline-none"
+          >
+            {opcoesDePasta(raiz, 0)}
+          </select>
+        </div>
+        <Aviso>{erro}</Aviso>
+        <div className="flex justify-end gap-2 pt-1">
+          <Botao onClick={aoFechar}>Cancelar</Botao>
+          <Botao variante="primario" onClick={importar} disabled={importando}>
+            {importando ? "Importando…" : "Importar"}
+          </Botao>
+        </div>
+      </div>
+    </Dialogo>
+  );
+}
+
 type CamposLink = { titulo: string; url: string; nota: string; favorito: boolean };
+type FaviconBuscado = { base64: string; tipo: string } | null;
 
 function DialogoLink({
   link,
@@ -734,7 +854,7 @@ function DialogoLink({
 }: {
   link: LinkSalvo | null;
   aoFechar: () => void;
-  aoSalvar: (id: string | null, campos: CamposLink) => Promise<void>;
+  aoSalvar: (id: string | null, campos: CamposLink, favicon?: FaviconBuscado) => Promise<void>;
 }) {
   const [campos, definirCampos] = useState<CamposLink>({
     titulo: link?.titulo ?? "",
@@ -743,11 +863,26 @@ function DialogoLink({
     favorito: link?.favorito ?? false,
   });
   const [salvando, definirSalvando] = useState(false);
+  const [buscando, definirBuscando] = useState(false);
+  // `undefined` = não mexeu no favicon (mantém o que já tinha, se houver);
+  // `null`/objeto = resultado de uma busca (mesmo sem sucesso, já tentou).
+  const [favicon, definirFavicon] = useState<FaviconBuscado | undefined>(undefined);
+  const urlOriginal = useRef(link?.url ?? "");
+
+  async function buscarMetadados() {
+    const url = campos.url.trim();
+    if (!url || url === urlOriginal.current) return;
+    definirBuscando(true);
+    const resultado = await acaoBuscarMetadadosUrl(url);
+    definirBuscando(false);
+    definirFavicon(resultado.favicon);
+    if (resultado.titulo) definirCampos((atual) => (atual.titulo.trim() ? atual : { ...atual, titulo: resultado.titulo! }));
+  }
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     definirSalvando(true);
-    await aoSalvar(link?.id ?? null, campos);
+    await aoSalvar(link?.id ?? null, campos, favicon);
     definirSalvando(false);
   }
 
@@ -760,8 +895,10 @@ function DialogoLink({
             autoFocus
             value={campos.url}
             onChange={(evento) => definirCampos({ ...campos, url: evento.target.value })}
+            onBlur={buscarMetadados}
             placeholder="https://…"
           />
+          {buscando ? <p className="mt-1 text-[11.5px] text-tinta-3">Buscando título e ícone…</p> : null}
         </div>
         <div>
           <Rotulo>Título</Rotulo>

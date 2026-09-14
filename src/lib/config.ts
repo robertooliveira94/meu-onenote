@@ -14,6 +14,8 @@ const ARQUIVO = path.join(RAIZ, PASTA_SISTEMA, "config.json");
 export type Config = {
   /** Seção (caminho de profundidade 2) onde o Web Clipper cria as notas recortadas. */
   destinoRecorte?: string;
+  /** Última pasta de Links usada no atalho "salvar link" — só a pré-seleção, sempre trocável a cada clique. */
+  destinoLink?: string;
 };
 
 export async function lerConfig(): Promise<Config> {

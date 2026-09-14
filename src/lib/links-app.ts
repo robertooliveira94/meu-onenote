@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { RAIZ } from "./caminhos";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
+import type { NoImportado } from "./importar-favoritos";
 import {
   apagarDeVezLixeiraLinks,
   enviarLinkParaLixeira,
@@ -195,17 +196,45 @@ export async function excluirPasta(id: string): Promise<PastaLink> {
 
 type CamposLink = { titulo: string; url: string; nota: string; favorito: boolean };
 
-export async function criarLink(idPasta: string, campos: CamposLink): Promise<PastaLink> {
+/** Um favicon buscado na hora (ver `buscarMetadadosUrl`) — só bytes + tipo, ainda sem virar arquivo. */
+type FaviconBuscado = { base64: string; tipo: string } | null | undefined;
+
+const PASTA_FAVICONS = path.join(RAIZ, PASTA_LINKS, "favicons");
+
+const EXTENSAO_POR_TIPO: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/x-icon": "ico",
+  "image/vnd.microsoft.icon": "ico",
+  "image/svg+xml": "svg",
+};
+
+/** Grava o favicon em disco e devolve o nome do arquivo (guardado em `Link.favicon`). */
+async function salvarFavicon(idLink: string, favicon: FaviconBuscado): Promise<string | null> {
+  if (!favicon) return null;
+  const extensao = EXTENSAO_POR_TIPO[favicon.tipo];
+  if (!extensao) return null;
+  await fs.mkdir(PASTA_FAVICONS, { recursive: true });
+  const arquivo = `${idLink}.${extensao}`;
+  await fs.writeFile(path.join(PASTA_FAVICONS, arquivo), Buffer.from(favicon.base64, "base64"));
+  return arquivo;
+}
+
+export async function criarLink(idPasta: string, campos: CamposLink, favicon?: FaviconBuscado): Promise<PastaLink> {
+  const titulo = campos.titulo.trim().slice(0, 200) || campos.url.trim();
+  const url = campos.url.trim();
+  if (!url) throw new Error("Informe uma URL.");
+  const id = gerarId();
+  const nomeFavicon = await salvarFavicon(id, favicon);
   return alterar((raiz) => {
-    const titulo = campos.titulo.trim().slice(0, 200) || campos.url.trim();
-    const url = campos.url.trim();
-    if (!url) throw new Error("Informe uma URL.");
     const agora = new Date().toISOString();
     exigirPasta(raiz, idPasta).links.push({
-      id: gerarId(),
+      id,
       titulo,
       url,
-      favicon: null,
+      favicon: nomeFavicon,
       nota: campos.nota.trim().slice(0, 2000),
       favorito: campos.favorito,
       criadoEm: agora,
@@ -215,7 +244,8 @@ export async function criarLink(idPasta: string, campos: CamposLink): Promise<Pa
   });
 }
 
-export async function atualizarLink(id: string, campos: CamposLink): Promise<PastaLink> {
+export async function atualizarLink(id: string, campos: CamposLink, favicon?: FaviconBuscado): Promise<PastaLink> {
+  const nomeFavicon = favicon !== undefined ? await salvarFavicon(id, favicon) : undefined;
   return alterar((raiz) => {
     const achado = encontrarLinkComPai(raiz, id);
     if (!achado) throw new Error("Link não encontrado.");
@@ -225,6 +255,7 @@ export async function atualizarLink(id: string, campos: CamposLink): Promise<Pas
     achado.link.url = url;
     achado.link.nota = campos.nota.trim().slice(0, 2000);
     achado.link.favorito = campos.favorito;
+    if (nomeFavicon !== undefined) achado.link.favicon = nomeFavicon;
     achado.link.atualizadoEm = new Date().toISOString();
     return raiz;
   });
@@ -275,6 +306,75 @@ export async function restaurarDaLixeira(id: string): Promise<PastaLink> {
 export { apagarDeVezLixeiraLinks, esvaziarLixeiraLinks, listarLixeiraLinks };
 export type { ItemLixeiraLinks };
 
+const ENTIDADES_HTML: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  "#39": "'",
+  nbsp: " ",
+};
+
+/** Só as entidades mais comuns em `<title>` — sem puxar uma lib de HTML inteira pra isso. */
+function decodificarEntidadesHtml(texto: string): string {
+  return texto.replace(/&(#?\w+);/g, (bruto, nome: string) => ENTIDADES_HTML[nome.toLowerCase()] ?? bruto);
+}
+
+/**
+ * Busca o `<title>` e um favicon da própria página — nada de serviço de
+ * terceiros (o app é local/sem-nuvem por princípio, ver PRODUCT.md), então o
+ * favicon é buscado direto do site de origem e salvo aqui dentro.
+ * Falha em qualquer etapa (site fora do ar, sem favicon, resposta grande
+ * demais) devolve campos nulos — quem chama cai pro título manual/ícone
+ * genérico, nunca trava a tela de criar link.
+ */
+export async function buscarMetadadosUrl(
+  url: string,
+): Promise<{ titulo: string | null; favicon: FaviconBuscado }> {
+  let base: URL;
+  try {
+    base = new URL(url);
+  } catch {
+    return { titulo: null, favicon: null };
+  }
+
+  let titulo: string | null = null;
+  let hrefFavicon: string | null = null;
+  try {
+    const resposta = await fetch(base, { signal: AbortSignal.timeout(5000), redirect: "follow" });
+    if (resposta.ok) {
+      const html = await resposta.text();
+      const tituloAchado = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
+      if (tituloAchado) titulo = decodificarEntidadesHtml(tituloAchado.trim()).slice(0, 200) || null;
+      const linkAchado = html.match(/<link[^>]+rel=["'](?:shortcut icon|icon|apple-touch-icon)["'][^>]*>/i)?.[0];
+      const hrefAchado = linkAchado?.match(/href=["']([^"']+)["']/i)?.[1];
+      if (hrefAchado) hrefFavicon = hrefAchado;
+    }
+  } catch {
+    // Site fora do ar, timeout, CORS do lado deles não importa aqui (é o
+    // servidor buscando, não o navegador) — sem título, cai pro manual.
+  }
+
+  let favicon: FaviconBuscado = null;
+  try {
+    const urlFavicon = new URL(hrefFavicon ?? "/favicon.ico", base);
+    const resposta = await fetch(urlFavicon, { signal: AbortSignal.timeout(4000) });
+    if (resposta.ok) {
+      const bytes = Buffer.from(await resposta.arrayBuffer());
+      const TAMANHO_MAXIMO = 256 * 1024;
+      if (bytes.length > 0 && bytes.length <= TAMANHO_MAXIMO) {
+        const tipo = resposta.headers.get("content-type")?.split(";")[0].trim() || "image/x-icon";
+        if (EXTENSAO_POR_TIPO[tipo]) favicon = { base64: bytes.toString("base64"), tipo };
+      }
+    }
+  } catch {
+    // Sem favicon: ícone genérico na interface, sem drama.
+  }
+
+  return { titulo, favicon };
+}
+
 type LinkComPasta = Link & { pastaId: string };
 
 function achatar(raiz: PastaLink): LinkComPasta[] {
@@ -304,4 +404,50 @@ export async function buscarLinks(termo: string): Promise<LinkComPasta[]> {
   return achatar(raiz)
     .filter((link) => link.titulo.toLowerCase().includes(alvo) || link.url.toLowerCase().includes(alvo))
     .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm));
+}
+
+/**
+ * Mescla os nós importados dentro de `pastaDestino`: uma pasta com o mesmo
+ * nome de uma já existente (só entre irmãs diretas) recebe o conteúdo
+ * dentro dela em vez de duplicar; links sempre entram — sem checar
+ * duplicidade, favoritos de navegador raramente repetem por acaso.
+ */
+function mesclarImportados(pastaDestino: PastaLink, nos: NoImportado[]): void {
+  const agora = new Date().toISOString();
+  for (const no of nos) {
+    if (no.tipo === "link") {
+      pastaDestino.links.push({
+        id: gerarId(),
+        titulo: no.titulo,
+        url: no.url,
+        favicon: null,
+        nota: "",
+        favorito: false,
+        criadoEm: agora,
+        atualizadoEm: agora,
+      });
+      continue;
+    }
+    let alvo = pastaDestino.pastas.find((pasta) => pasta.nome === no.nome);
+    if (!alvo) {
+      const posicao = pastaDestino.pastas.length;
+      alvo = {
+        id: gerarId(),
+        nome: no.nome,
+        cor: CORES_CADERNO[posicao % CORES_CADERNO.length],
+        icone: ICONES_CADERNO[posicao % ICONES_CADERNO.length],
+        pastas: [],
+        links: [],
+      };
+      pastaDestino.pastas.push(alvo);
+    }
+    mesclarImportados(alvo, no.filhos);
+  }
+}
+
+export async function importarArvore(nos: NoImportado[], idPastaDestino: string): Promise<PastaLink> {
+  return alterar((raiz) => {
+    mesclarImportados(exigirPasta(raiz, idPastaDestino), nos);
+    return raiz;
+  });
 }

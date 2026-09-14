@@ -1,4 +1,5 @@
 import { Clipper } from "@/components/clipper";
+import { SalvarComoLinkBookmarklet } from "@/components/salvar-como-link-bookmarklet";
 import { lerArvore } from "@/lib/arquivos";
 import { lerConfig } from "@/lib/config";
 
@@ -13,5 +14,10 @@ export default async function TelaDoClipper() {
     cadernos[0]?.secoes[0]?.caminho ||
     "";
 
-  return <Clipper cadernos={cadernos} destinoInicial={destinoInicial} />;
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <Clipper cadernos={cadernos} destinoInicial={destinoInicial} />
+      <SalvarComoLinkBookmarklet />
+    </div>
+  );
 }
