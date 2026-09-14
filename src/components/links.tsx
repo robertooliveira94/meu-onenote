@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, FolderPlus, Import, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Bookmark, FolderPlus, Import, Link2, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
@@ -156,10 +156,17 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
             className="h-8 w-full rounded-lg border border-linha bg-superficie-alta py-1 pr-2 pl-8 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
           />
         </div>
+        <Link
+          href="/links/atalho"
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+        >
+          <Link2 size={13} />
+          Atalho do navegador
+        </Link>
         <button
           type="button"
           onClick={() => definirImportando(true)}
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
         >
           <Import size={13} />
           Importar favoritos
