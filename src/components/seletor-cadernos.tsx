@@ -290,7 +290,7 @@ function LinhaCaderno({
         />
       ) : null}
 
-      <Link href={endereco} className="flex min-w-0 flex-1 items-center gap-2 py-[6px] pl-2.5">
+      <Link href={endereco} className="linha-nav flex min-w-0 flex-1 items-center gap-2 pl-2.5">
         <span className="text-[14px] leading-none" aria-hidden>
           {caderno.icone}
         </span>

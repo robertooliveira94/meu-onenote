@@ -5,6 +5,7 @@ import { Check, Palette, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { DENSIDADES, useDensidade } from "@/lib/densidade";
 import { TEMAS, useTema } from "@/lib/tema";
 
 /** Peças de interface reaproveitadas em todas as telas. */
@@ -281,6 +282,7 @@ export function Menu({
         ? createPortal(
             <div
               ref={painelRef}
+              role="menu"
               style={{ position: "fixed", ...posicao }}
               className="surgir z-50 min-w-[190px] overflow-y-auto overscroll-contain rounded-xl border border-linha bg-superficie-alta p-1.5 shadow-[var(--sombra)]"
             >
@@ -371,30 +373,48 @@ export function RotuloMenu({ children }: { children: React.ReactNode }) {
  */
 export function BotaoTema() {
   const { tema, mudar } = useTema();
+  const densidade = useDensidade();
 
   return (
     <Menu
       alinhamento="esquerda"
       gatilho={(abrir) => (
-        <BotaoIcone rotulo="Trocar o tema" onClick={abrir}>
+        <BotaoIcone rotulo="Aparência: tema e densidade" onClick={abrir}>
           <Palette size={14} />
         </BotaoIcone>
       )}
     >
-      {(fechar) =>
-        TEMAS.map((item) => (
-          <ItemMenu
-            key={item.id}
-            icone={<Check size={14} className={tema === item.id ? undefined : "invisible"} />}
-            onClick={() => {
-              mudar(item.id);
-              fechar();
-            }}
-          >
-            {item.nome}
-          </ItemMenu>
-        ))
-      }
+      {(fechar) => (
+        <>
+          <RotuloMenu>Tema</RotuloMenu>
+          {TEMAS.map((item) => (
+            <ItemMenu
+              key={item.id}
+              icone={<Check size={14} className={tema === item.id ? undefined : "invisible"} />}
+              onClick={() => {
+                mudar(item.id);
+                fechar();
+              }}
+            >
+              {item.nome}
+            </ItemMenu>
+          ))}
+          <SeparadorMenu />
+          <RotuloMenu>Densidade</RotuloMenu>
+          {DENSIDADES.map((item) => (
+            <ItemMenu
+              key={item.id}
+              icone={<Check size={14} className={densidade.densidade === item.id ? undefined : "invisible"} />}
+              onClick={() => {
+                densidade.mudar(item.id);
+                fechar();
+              }}
+            >
+              {item.nome}
+            </ItemMenu>
+          ))}
+        </>
+      )}
     </Menu>
   );
 }

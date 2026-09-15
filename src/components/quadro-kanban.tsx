@@ -573,7 +573,7 @@ export function QuadroKanban({
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2">
+              <div className="lista-cartoes min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 {tarefasVisiveis.length === 0 && colunaAdicionando !== coluna ? (
                   <p className="px-1.5 py-3 text-[11.5px] leading-relaxed text-tinta-3">
                     {tarefas.length === 0
@@ -942,7 +942,7 @@ function CartaoTarefa({
           }
         }}
         className={clsx(
-          "cartao block w-full cursor-grab overflow-hidden px-3 py-2.5 pr-7 text-left active:cursor-grabbing",
+          "cartao block w-full cursor-grab overflow-hidden pr-7 text-left active:cursor-grabbing",
           impedida && "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]",
         )}
         style={{ borderLeft: `3px solid ${impedida ? "var(--perigo)" : corDaColuna}` }}
@@ -1179,7 +1179,7 @@ function CampoNovaTarefa({
   }, []);
 
   return (
-    <div className="cartao px-2.5 py-2">
+    <div className="cartao">
       <textarea
         ref={campo}
         value={valor}

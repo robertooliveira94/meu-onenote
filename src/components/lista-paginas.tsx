@@ -175,7 +175,7 @@ export function ListaPaginas({
         </div>
       </div>
 
-      <div className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
+      <div className="lista-cartoes flex-1 overflow-y-auto px-3 pb-3">
         {notas.length === 0 ? (
           <p className="px-2 py-4 text-[12px] leading-relaxed text-tinta-3">
             Seção vazia. O “+” cria a primeira página já aberta para escrever — o título sai da
@@ -228,7 +228,7 @@ export function ListaPaginas({
                   aria-hidden
                 />
               ) : null}
-              <Link href={urlDaNota(nota.caminho)} className={clsx("block px-3.5", ativa ? "pt-3.5 pb-3" : "py-3")}>
+              <Link href={urlDaNota(nota.caminho)} className={clsx("block", ativa && "pt-1")}>
                 <div className="flex items-center gap-1.5">
                   {nota.favorita ? (
                     <Star size={11} className="shrink-0 fill-current text-[#c69214]" />

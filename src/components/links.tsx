@@ -449,7 +449,7 @@ function NoPastaLinkImpl({
         onClick={() => onSelecionar(pasta.id)}
         style={{ paddingLeft: 8 + profundidade * 14, color: ativa ? undefined : undefined }}
         className={clsx(
-          "group flex cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-1 text-[12.5px] transition-colors",
+          "linha-nav group flex cursor-pointer items-center gap-1.5 rounded-md pr-1 text-[12.5px] transition-colors",
           ativa ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
           sobre && "ring-2 ring-[var(--realce)]",
         )}
@@ -595,7 +595,7 @@ function ColunaLinks({
         </Botao>
       </div>
 
-      <div className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
+      <div className="lista-cartoes flex-1 overflow-y-auto px-4 pb-4">
         {pasta.links.length === 0 ? (
           <div className="pt-8">
             <Vazio
@@ -629,7 +629,7 @@ const LinhaLink = memo(function LinhaLink({
     <div
       draggable
       onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
-      className="cartao group flex items-center gap-3 px-3.5 py-2.5"
+      className="cartao group flex items-center gap-3"
     >
       <a
         href={link.url}

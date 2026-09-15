@@ -10,7 +10,7 @@ export function CartaoNota({ nota, etiquetas }: { nota: ResumoNota; etiquetas: E
     .filter((etiqueta): etiqueta is Etiqueta => Boolean(etiqueta));
 
   return (
-    <Link href={urlDaNota(nota.caminho)} className="cartao flex flex-col p-3.5">
+    <Link href={urlDaNota(nota.caminho)} className="cartao flex flex-col">
       <p className="truncate text-[13.5px] font-medium">{nota.titulo}</p>
       <p className="mt-1 line-clamp-2 min-h-[2.4em] text-[12px] leading-snug text-tinta-2">
         {nota.trecho || "página em branco"}

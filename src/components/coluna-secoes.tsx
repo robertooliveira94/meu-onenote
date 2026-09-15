@@ -608,7 +608,7 @@ function LinhaSecao({
         />
       ) : null}
 
-      <Link href={endereco} className="flex min-w-0 flex-1 items-center gap-2 py-[5px] pl-2.5">
+      <Link href={endereco} className="linha-nav flex min-w-0 flex-1 items-center gap-2 pl-2.5">
         <span
           className="size-1.5 shrink-0 rounded-full opacity-60"
           style={{ background: caderno.cor }}

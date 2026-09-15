@@ -48,6 +48,21 @@
   /* Zoom do texto de uma página (leitura, prévia, editor) — preferência da
      pessoa, não da nota; ver src/lib/zoom.ts. */
   --escala-texto: 1;
+
+  /* Densidade (ver src/lib/densidade.ts): o que a "compacta" aperta são só
+     estas variáveis — espaçamento interno dos cartões, vão entre eles e a
+     altura das linhas de árvore. Fonte não muda. */
+  --esp-cartao-y: 10px;
+  --esp-cartao-x: 14px;
+  --esp-lista: 6px;
+  --esp-nav-y: 6px;
+}
+
+[data-densidade="compacta"] {
+  --esp-cartao-y: 6px;
+  --esp-cartao-x: 10px;
+  --esp-lista: 3px;
+  --esp-nav-y: 3px;
 }
 
 [data-tema="escuro"] {
@@ -562,6 +577,43 @@ textarea:focus {
   background: color-mix(in srgb, var(--realce) 18%, var(--superficie-alta));
   border-color: color-mix(in srgb, var(--realce) 60%, transparent);
   box-shadow: inset 0 3px 0 var(--realce), var(--sombra-cartao-alta);
+}
+
+/*
+  Padding do cartão pela variável de densidade. Na camada `components` de
+  propósito: uma utilidade no elemento (o `pr-7` do cartão de tarefa, que
+  reserva lugar pro botão "…") continua vencendo, porque `utilities` vem
+  depois — só o que o cartão não diz por conta própria segue a densidade.
+*/
+@layer components {
+  .cartao {
+    padding: var(--esp-cartao-y) var(--esp-cartao-x);
+  }
+}
+
+/*
+  Contêiner de lista de cartões (páginas, tarefas de uma coluna, senhas,
+  links, tarefas do painel): o vão vem da densidade, e cada item só ganha
+  layout quando entra na tela — `content-visibility: auto` faz o navegador
+  pular o que está fora, sem virtualização nem biblioteca. O
+  `contain-intrinsic-size` é a altura reservada pra rolagem não pular.
+*/
+.lista-cartoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-lista);
+}
+.lista-cartoes > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+/* Linha de árvore (seção, grupo do cofre, pasta de links, caderno, quadro):
+   o respiro vertical segue a densidade. */
+@layer components {
+  .linha-nav {
+    padding-block: var(--esp-nav-y);
+  }
 }
 
 /* Painel com borda, para blocos que não são clicáveis. */

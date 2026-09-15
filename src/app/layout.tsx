@@ -38,6 +38,7 @@ try {
   var r = document.documentElement;
   r.dataset.tema = t;
   if (t === "escuro" || t === "escuro-suave" || t === "vibrante") r.dataset.escuro = "1";
+  if (localStorage.getItem("densidade") === "compacta") r.dataset.densidade = "compacta";
 } catch (e) {}
 `;
 
