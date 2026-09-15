@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Children, memo, useMemo, useRef } from "react";
+import { Children, isValidElement, memo, useMemo, useRef } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 import { juntar } from "@/lib/caminho-texto";
 import { converterWikilinks } from "@/lib/remark-wikilinks";
+import { identificadorDeTitulo } from "@/lib/sumario";
 import { urlDaMidia, urlDaNota } from "@/lib/rotas";
 
 // Fora do componente de propósito: um array literal novo a cada render faria
@@ -15,12 +16,26 @@ import { urlDaMidia, urlDaNota } from "@/lib/rotas";
 const PLUGINS_REMARK = [remarkGfm];
 const PLUGINS_REHYPE = [rehypeHighlight];
 
+/** O texto puro de um título, atravessando negrito, código e links dentro dele. */
+function textoDoNo(no: React.ReactNode): string {
+  return Children.toArray(no)
+    .map((filho) => {
+      if (typeof filho === "string" || typeof filho === "number") return String(filho);
+      if (isValidElement<{ children?: React.ReactNode }>(filho)) return textoDoNo(filho.props.children);
+      return "";
+    })
+    .join("");
+}
+
 /**
  * Um título sem texto ("### " recém-digitado, antes do título em si) vira um
  * `<h3></h3>` vazio, que não desenha nada — enquanto se escreve, isso parece
  * que os "#" foram engolidos pela prévia. Aqui esse caso desenha os próprios
  * "#" apagadinhos, então a linha nunca some do olho de quem está digitando;
  * assim que o título ganha texto, vira um título de verdade.
+ *
+ * Títulos com texto ganham um `id` (ver `identificadorDeTitulo`): é a âncora
+ * que o sumário usa para rolar até eles.
  */
 function tituloOuMarcaVazia(nivel: 1 | 2 | 3 | 4 | 5 | 6) {
   const Marcacao = `h${nivel}` as const;
@@ -28,7 +43,7 @@ function tituloOuMarcaVazia(nivel: 1 | 2 | 3 | 4 | 5 | 6) {
     const semTexto = Children.toArray(children).every(
       (filho) => typeof filho === "string" && filho.trim() === "",
     );
-    if (!semTexto) return <Marcacao>{children}</Marcacao>;
+    if (!semTexto) return <Marcacao id={identificadorDeTitulo(textoDoNo(children))}>{children}</Marcacao>;
     return (
       <Marcacao className="titulo-vazio" title={`Título de nível ${nivel}, ainda sem texto`}>
         {"#".repeat(nivel)}

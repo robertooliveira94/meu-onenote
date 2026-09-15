@@ -10,6 +10,7 @@ import {
   Link2,
   Loader2,
   PaintBucket,
+  ListTree,
   Maximize2,
   Minimize2,
   PanelRightClose,
@@ -37,6 +38,7 @@ import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { useModoFoco } from "@/lib/foco";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
+import { extrairTitulos } from "@/lib/sumario";
 import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
 import type { Etiqueta, Nota } from "@/lib/tipos";
 import { useAtalho } from "@/lib/atalhos";
@@ -45,6 +47,7 @@ import { useZoomTexto } from "@/lib/zoom";
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
+import { SumarioNota } from "./sumario-nota";
 import { TituloEditavel } from "./titulo-editavel";
 import { AlcaRedimensionar, Botao, BotaoIcone, ItemMenu, Menu } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
@@ -138,14 +141,46 @@ export function PaginaNota({
       return proximo;
     });
   }
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem("sumario-visivel");
+      if (salvo !== null) definirSumarioVisivel(salvo === "1");
+    } catch {
+      // Sem armazenamento: fica visível pela sessão inteira.
+    }
+  }, []);
+  const alternarSumario = useCallback(() => {
+    definirSumarioVisivel((atual) => {
+      const proximo = !atual;
+      try {
+        localStorage.setItem("sumario-visivel", proximo ? "1" : "0");
+      } catch {
+        // Sem armazenamento: o ajuste vale só para esta sessão.
+      }
+      return proximo;
+    });
+  }, []);
+
   const [estado, definirEstado] = useState<Estado>("salvo");
   const [historicoAberto, definirHistoricoAberto] = useState(false);
+  const [sumarioVisivel, definirSumarioVisivel] = useState(true);
   const [favorita, definirFavorita] = useState(nota.favorita);
   const [avisoImagem, definirAvisoImagem] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const painelLeitura = useRef<HTMLDivElement | null>(null);
   const zoom = useZoomTexto();
   const fundoEditor = useFundoEditor();
   const modoFoco = useModoFoco();
+  // Duas refs no mesmo elemento: a do zoom (Ctrl+roda) e a do sumário, que
+  // precisa do painel rolável para saber qual título está na tela. Devolver o
+  // retorno de `refRolagem` preserva a limpeza do ouvinte de `wheel`.
+  const refPainelLeitura = useCallback(
+    (elemento: HTMLDivElement | null) => {
+      painelLeitura.current = elemento;
+      return zoom.refRolagem(elemento);
+    },
+    [zoom.refRolagem],
+  );
   const pastaDaNota = pastaDe(nota.caminho);
   // Largura do texto cru na edição lado a lado — a prévia ocupa o resto.
   // Mesmo padrão das outras colunas ajustáveis do app (barra lateral,
@@ -191,12 +226,67 @@ export function PaginaNota({
     salvar(conteudo).then(() => roteador.refresh());
   }, [conteudo, ehMarkdown, nota.conteudo, roteador, salvar]);
 
+  // Do texto adiado, não do imediato: em notas grandes, reextrair os títulos
+  // a cada tecla competiria com o próprio campo de texto.
+  const titulos = useMemo(() => extrairTitulos(conteudoPreVisualizado), [conteudoPreVisualizado]);
+  // Menos de três títulos não é sumário, é repetição do que já está à vista.
+  const temSumario = ehMarkdown && titulos.length >= 3;
+  const sumarioAberto = temSumario && sumarioVisivel;
+
+  /** Clicar num título do sumário durante a edição leva o cursor até a linha dele. */
+  const irParaLinha = useCallback((linha: number) => {
+    const campo = area.current;
+    if (!campo) return;
+    const posicao = campo.value.split("\n").slice(0, linha).reduce((soma, texto) => soma + texto.length + 1, 0);
+    campo.focus();
+    campo.setSelectionRange(posicao, posicao);
+
+    // Quem rola é o próprio campo (um textarea rola por dentro), e
+    // `setSelectionRange` sozinho não garante trazer a linha para a tela.
+    // Multiplicar a linha pela altura da linha erraria em texto que quebra
+    // sozinho — uma linha lógica pode ocupar três visuais —, então a altura
+    // sai de um espelho invisível com a mesma fonte e a mesma largura.
+    const estilo = getComputedStyle(campo);
+    const espelho = document.createElement("div");
+    espelho.style.cssText = [
+      "position:absolute",
+      "visibility:hidden",
+      "white-space:pre-wrap",
+      "box-sizing:border-box",
+      "top:0",
+      "left:-9999px",
+      `width:${campo.clientWidth}px`,
+      `padding:0 ${estilo.paddingRight} 0 ${estilo.paddingLeft}`,
+      `font-family:${estilo.fontFamily}`,
+      `font-size:${estilo.fontSize}`,
+      `font-weight:${estilo.fontWeight}`,
+      `line-height:${estilo.lineHeight}`,
+      `letter-spacing:${estilo.letterSpacing}`,
+      `overflow-wrap:${estilo.overflowWrap}`,
+      `word-break:${estilo.wordBreak}`,
+      `tab-size:${estilo.tabSize}`,
+    ].join(";");
+    espelho.textContent = `${campo.value.split("\n").slice(0, linha).join("\n")}\n`;
+    document.body.appendChild(espelho);
+    const alturaAteALinha = espelho.getBoundingClientRect().height;
+    espelho.remove();
+
+    const respiro = 3 * (parseFloat(estilo.lineHeight) || 20);
+    campo.scrollTop = Math.max(0, parseFloat(estilo.paddingTop) + alturaAteALinha - respiro);
+  }, []);
+
   // Atalhos da nota, no registro central (é o que a folha `?` lista).
   useAtalho("ctrl+s", { grupo: "Anotações", descricao: "Salvar agora", mesmoEmCampo: true, acao: () => salvar(conteudo) });
   useAtalho("e", {
     grupo: "Anotações",
     descricao: editando ? "Concluir a edição" : "Editar a página",
     acao: () => (editando ? concluirEdicao() : ehMarkdown && definirEditando(true)),
+  });
+  useAtalho("]", {
+    grupo: "Anotações",
+    descricao: sumarioVisivel ? "Esconder o sumário" : "Mostrar o sumário",
+    ativo: temSumario,
+    acao: alternarSumario,
   });
   useAtalho("ctrl+shift+f", {
     grupo: "Anotações",
@@ -397,6 +487,15 @@ export function PaginaNota({
               <History size={15} />
             </BotaoIcone>
 
+            {temSumario ? (
+              <BotaoIcone
+                rotulo={sumarioVisivel ? "Esconder o sumário (])" : "Mostrar o sumário (])"}
+                onClick={alternarSumario}
+              >
+                <ListTree size={15} className={sumarioVisivel ? "text-tinta" : undefined} />
+              </BotaoIcone>
+            ) : null}
+
             <BotaoIcone
               rotulo={modoFoco.foco ? "Sair do modo foco (Esc)" : "Modo foco (Ctrl+Shift+F)"}
               onClick={modoFoco.alternar}
@@ -584,7 +683,7 @@ export function PaginaNota({
               ) : null}
             </div>
           ) : (
-            <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8" ref={zoom.refRolagem}>
+            <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8" ref={refPainelLeitura}>
               {/*
                 A margem colorida é a lombada do caderno chegando até a
                 página — por isso ela desenha a si mesma ao abrir a nota
@@ -635,6 +734,16 @@ export function PaginaNota({
             </div>
           )}
         </div>
+
+        {sumarioAberto ? (
+          <SumarioNota
+            titulos={titulos}
+            editando={editando}
+            containerLeitura={painelLeitura}
+            aoIrParaLinha={irParaLinha}
+            aoFechar={alternarSumario}
+          />
+        ) : null}
 
         {historicoAberto ? (
           <PainelHistorico
