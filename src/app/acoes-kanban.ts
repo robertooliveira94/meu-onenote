@@ -43,6 +43,7 @@ import {
   reordenarColunas,
   reordenarTarefasPara,
   salvarTarefa,
+  tarefasComPrazoVencendo,
 } from "@/lib/kanban";
 import type { ColunaKanban, Comentario, Quadro, Subtarefa } from "@/lib/tipos";
 
@@ -425,4 +426,9 @@ export async function acaoExcluirEtiquetaKanban(id: string): Promise<Resposta> {
 /** Busca de tarefas em todos os quadros pra paleta de comandos — só pelo índice, pelo título. */
 export async function acaoBuscarTarefas(termo: string) {
   return buscarTarefas(z.string().max(120).parse(termo));
+}
+
+/** Tarefas atrasadas e vencendo hoje, para o aviso do hub. `hoje` é a data do navegador (AAAA-MM-DD). */
+export async function acaoTarefasComPrazoVencendo(hoje: string) {
+  return tarefasComPrazoVencendo(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(hoje));
 }

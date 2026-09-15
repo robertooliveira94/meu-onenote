@@ -517,3 +517,42 @@ export async function buscarTarefas(termo: string, limite = 8): Promise<TarefaAc
   }
   return achadas;
 }
+
+/** Uma tarefa com prazo estourado ou vencendo hoje — o que o aviso do hub precisa mostrar. */
+export type TarefaComPrazo = TarefaAchada & { prazo: string };
+
+/**
+ * Tarefas de qualquer quadro com prazo até `hoje` (AAAA-MM-DD), separadas em
+ * atrasadas (prazo antes de hoje) e as que vencem hoje. Só pelo índice — o
+ * prazo já mora lá — e pulando o que está na coluna de conclusão do quadro,
+ * porque tarefa feita não atrasa. A data vem do navegador para não depender
+ * do fuso do processo.
+ */
+export async function tarefasComPrazoVencendo(
+  hoje: string,
+): Promise<{ atrasadas: TarefaComPrazo[]; vencemHoje: TarefaComPrazo[] }> {
+  const indice = await lerIndice();
+  const configs = new Map<string, Promise<ConfigQuadro>>();
+  const atrasadas: TarefaComPrazo[] = [];
+  const vencemHoje: TarefaComPrazo[] = [];
+
+  for (const [caminho, meta] of Object.entries(indice.notas)) {
+    const prazo = meta.prazoKanban;
+    if (!prazo || prazo > hoje) continue;
+    if (!caminho.startsWith(`${PASTA_KANBAN}/`)) continue;
+    const partes = caminho.split("/");
+    if (partes.length !== 4) continue;
+    const [, quadro, coluna] = partes;
+    if (!configs.has(quadro)) configs.set(quadro, garantirQuadro(quadro));
+    const config = await configs.get(quadro)!;
+    if (coluna === config.colunaConcluida) continue;
+    const tarefa: TarefaComPrazo = { caminho, titulo: tituloDe(caminho), quadro, coluna, prazo };
+    (prazo < hoje ? atrasadas : vencemHoje).push(tarefa);
+  }
+
+  const porPrazo = (a: TarefaComPrazo, b: TarefaComPrazo) =>
+    a.prazo.localeCompare(b.prazo) || a.titulo.localeCompare(b.titulo, "pt-BR");
+  atrasadas.sort(porPrazo);
+  vencemHoje.sort(porPrazo);
+  return { atrasadas, vencemHoje };
+}

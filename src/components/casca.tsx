@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { AtalhosProvedor, useAtalho } from "@/lib/atalhos";
+import { useAvisosDePrazo } from "@/lib/avisos-prazo";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
 import { PaletaProvedor, usePaleta } from "@/lib/paleta";
 import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
@@ -136,6 +137,7 @@ function CascaInterna({
   const caminhoAtual = usePathname();
   const parametros = useSearchParams();
   const [folhaAberta, definirFolhaAberta] = useState(false);
+  const avisosDePrazo = useAvisosDePrazo();
 
   // As quatro aplicações são independentes: fora de /kanban/..., /senhas e
   // /links, é sempre Anotações — mesmo nas telas globais (início, etiquetas,
@@ -175,6 +177,7 @@ function CascaInterna({
           appAtual={appAtual}
           cadernos={cadernos}
           quadros={quadros}
+          atrasadas={avisosDePrazo.atrasadas.length}
           aoAbrirAtalhos={() => definirFolhaAberta(true)}
         />
         {appAtual === "notas" ? (

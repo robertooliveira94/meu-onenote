@@ -26,11 +26,14 @@ export function BarraAplicacoes({
   appAtual,
   cadernos,
   quadros,
+  atrasadas,
   aoAbrirAtalhos,
 }: {
   appAtual: App;
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
+  /** Tarefas com prazo estourado em qualquer quadro — vira o ponto no ícone do Kanban. */
+  atrasadas: number;
   aoAbrirAtalhos: () => void;
 }) {
   const roteador = useRouter();
@@ -61,8 +64,13 @@ export function BarraAplicacoes({
         />
         <BotaoApp
           nome="Kanban"
-          detalhe={plural(quadros.length, "quadro", "quadros")}
+          detalhe={
+            atrasadas
+              ? `${plural(quadros.length, "quadro", "quadros")} · ${plural(atrasadas, "tarefa atrasada", "tarefas atrasadas")}`
+              : plural(quadros.length, "quadro", "quadros")
+          }
           ativo={appAtual === "kanban"}
+          alerta={atrasadas > 0}
           icone={<KanbanSquare size={18} />}
           onClick={irParaKanban}
           janela="/kanban"
@@ -100,6 +108,7 @@ function BotaoApp({
   icone,
   onClick,
   janela,
+  alerta = false,
 }: {
   nome: string;
   /** Contagem da lista da aplicação, no tooltip ("3 cadernos"). Omitido quando não há lista contável. */
@@ -107,6 +116,8 @@ function BotaoApp({
   ativo: boolean;
   icone: React.ReactNode;
   onClick: () => void;
+  /** Ponto vermelho no canto do ícone — algo pede atenção lá dentro (tarefa atrasada). */
+  alerta?: boolean;
   /** Endereço a abrir numa janela separada do navegador — no menu do botão direito. */
   janela: string;
 }) {
@@ -128,13 +139,19 @@ function BotaoApp({
           aria-label={titulo}
           title={titulo}
           className={clsx(
-            "flex size-10 items-center justify-center rounded-lg transition-all",
+            "relative flex size-10 items-center justify-center rounded-lg transition-all",
             ativo
               ? "bg-[color-mix(in_srgb,var(--realce)_70%,black)] text-white shadow-[0_1px_2px_#16202e1a]"
               : "text-tinta-2 hover:bg-realce-medio hover:text-tinta",
           )}
         >
           {icone}
+          {alerta ? (
+            <span
+              aria-hidden
+              className="absolute top-1.5 right-1.5 size-2 rounded-full bg-perigo ring-2 ring-superficie"
+            />
+          ) : null}
         </button>
       )}
     >

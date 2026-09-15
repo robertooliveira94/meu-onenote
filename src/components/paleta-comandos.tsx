@@ -8,6 +8,7 @@ import {
   Folder,
   KanbanSquare,
   Palette,
+  Rows3,
   Search,
   SquareArrowOutUpRight,
   Zap,
@@ -20,6 +21,7 @@ import { acaoBuscarTarefas } from "@/app/acoes-kanban";
 import { acaoBuscarLinks } from "@/app/acoes-links";
 import { partesDoCombo, useExecutarAtalho, useListaDeAtalhos } from "@/lib/atalhos";
 import type { TarefaAchada } from "@/lib/kanban";
+import { DENSIDADES, useDensidade } from "@/lib/densidade";
 import { usePaleta } from "@/lib/paleta";
 import { urlDaNota, urlDaPastaLink, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import { TEMAS, useTema } from "@/lib/tema";
@@ -107,6 +109,7 @@ export function PaletaComandos({
   const { aberta, termoInicial, fechar } = usePaleta();
   const roteador = useRouter();
   const { tema, mudar: mudarTema } = useTema();
+  const { densidade, mudar: mudarDensidade } = useDensidade();
   const atalhos = useListaDeAtalhos();
   const executarAtalho = useExecutarAtalho();
 
@@ -197,6 +200,17 @@ export function PaletaComandos({
           icone: <Palette size={14} />,
           titulo: destacar(rotulo, termoLimpo),
           executar: () => mudarTema(opcao.id),
+        });
+      }
+      for (const opcao of DENSIDADES) {
+        const rotulo = `Densidade: ${opcao.nome}`;
+        if (opcao.id === densidade || !casa(rotulo, "densidade")) continue;
+        todos.push({
+          id: `densidade:${opcao.id}`,
+          secao: "Ações",
+          icone: <Rows3 size={14} />,
+          titulo: destacar(rotulo, termoLimpo),
+          executar: () => mudarDensidade(opcao.id),
         });
       }
       for (const [nome, href] of [
@@ -321,7 +335,7 @@ export function PaletaComandos({
       });
     }
     return todos;
-  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, cadernos, quadros, linksRaiz, notas, tarefas, links, etiquetas, roteador]);
+  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, densidade, mudarDensidade, cadernos, quadros, linksRaiz, notas, tarefas, links, etiquetas, roteador]);
 
   useEffect(() => {
     definirSelecionado(0);

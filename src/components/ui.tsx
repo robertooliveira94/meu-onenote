@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, Palette, X } from "lucide-react";
+import { Bell, BellOff, Check, Palette, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useAvisarPrazos } from "@/lib/avisos-prazo";
 import { DENSIDADES, useDensidade } from "@/lib/densidade";
 import { TEMAS, useTema } from "@/lib/tema";
 
@@ -368,18 +369,20 @@ export function RotuloMenu({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Menu de temas — comum às duas aplicações (Anotações e Kanban), por isso
- * mora aqui em vez de dentro de uma coluna que só existe numa delas.
+ * Menu de preferências do hub — tema, densidade e avisos — no rodapé do
+ * trilho. Comum às quatro aplicações, por isso mora aqui em vez de dentro de
+ * uma coluna que só existe numa delas.
  */
 export function BotaoTema() {
   const { tema, mudar } = useTema();
   const densidade = useDensidade();
+  const avisos = useAvisarPrazos();
 
   return (
     <Menu
       alinhamento="esquerda"
       gatilho={(abrir) => (
-        <BotaoIcone rotulo="Aparência: tema e densidade" onClick={abrir}>
+        <BotaoIcone rotulo="Preferências: tema, densidade e avisos" onClick={abrir}>
           <Palette size={14} />
         </BotaoIcone>
       )}
@@ -413,6 +416,23 @@ export function BotaoTema() {
               {item.nome}
             </ItemMenu>
           ))}
+          {avisos.suportado ? (
+            <>
+              <SeparadorMenu />
+              <RotuloMenu>Avisos</RotuloMenu>
+              {/* Liga a notificação do navegador pra tarefa atrasada. O pedido
+                  de permissão só vale vindo de um clique — por isso é aqui. */}
+              <ItemMenu
+                icone={avisos.ligado ? <Bell size={14} /> : <BellOff size={14} />}
+                onClick={() => {
+                  void avisos.alternar();
+                  fechar();
+                }}
+              >
+                {avisos.ligado ? "Avisar prazos do Kanban: ligado" : "Avisar prazos do Kanban"}
+              </ItemMenu>
+            </>
+          ) : null}
         </>
       )}
     </Menu>
