@@ -31,6 +31,8 @@ type Registro = Atalho & { id: number };
 
 const AtalhosContexto = createContext<{
   registrar: (atalho: Atalho) => () => void;
+  /** Dispara o atalho que vence pra este combo, como se a tecla tivesse sido apertada. */
+  executar: (combo: string) => void;
   lista: Registro[];
 } | null>(null);
 
@@ -99,8 +101,20 @@ export function AtalhosProvedor({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", aoTeclar);
   }, []);
 
-  const valor = useMemo(() => ({ registrar, lista }), [registrar, lista]);
+  const executar = useCallback((combo: string) => {
+    const alvo = normalizar(combo);
+    const candidatos = atual.current.filter((item) => item.combo === alvo);
+    candidatos[candidatos.length - 1]?.acao(new KeyboardEvent("keydown", { key: alvo }));
+  }, []);
+
+  const valor = useMemo(() => ({ registrar, executar, lista }), [registrar, executar, lista]);
   return <AtalhosContexto.Provider value={valor}>{children}</AtalhosContexto.Provider>;
+}
+
+/** Roda um atalho por fora do teclado — é como a paleta de comandos oferece as mesmas ações. */
+export function useExecutarAtalho(): (combo: string) => void {
+  const contexto = useContext(AtalhosContexto);
+  return contexto?.executar ?? (() => {});
 }
 
 /**

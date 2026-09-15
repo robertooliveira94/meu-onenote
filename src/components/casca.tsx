@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 
 import { AtalhosProvedor, useAtalho } from "@/lib/atalhos";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
+import { PaletaProvedor, usePaleta } from "@/lib/paleta";
 import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
@@ -12,6 +13,7 @@ import { BarraAplicacoes } from "./barra-aplicacoes";
 import { ColunaQuadros } from "./coluna-quadros";
 import { ColunaSecoes } from "./coluna-secoes";
 import { FolhaAtalhos } from "./folha-atalhos";
+import { PaletaComandos } from "./paleta-comandos";
 
 /** Acha uma pasta de links pelo id, em qualquer profundidade da árvore. */
 function encontrarPastaLink(raiz: PastaLink, id: string): PastaLink | null {
@@ -43,16 +45,18 @@ export function Casca(props: {
   return (
     <ColunasProvedor>
       <AtalhosProvedor>
-        {/*
-          `useSearchParams` (usado só para saber qual pasta de links está
-          aberta) exige um limite de Suspense — sem isso o Next tenta pré-
-          renderizar a página inteira como estática e falha no build. Na
-          prática o valor já está disponível de cara em toda navegação no
-          cliente, então este fallback nunca chega a aparecer de verdade.
-        */}
-        <Suspense fallback={null}>
-          <CascaInterna {...props} />
-        </Suspense>
+        <PaletaProvedor>
+          {/*
+            `useSearchParams` (usado só para saber qual pasta de links está
+            aberta) exige um limite de Suspense — sem isso o Next tenta pré-
+            renderizar a página inteira como estática e falha no build. Na
+            prática o valor já está disponível de cara em toda navegação no
+            cliente, então este fallback nunca chega a aparecer de verdade.
+          */}
+          <Suspense fallback={null}>
+            <CascaInterna {...props} />
+          </Suspense>
+        </PaletaProvedor>
       </AtalhosProvedor>
     </ColunasProvedor>
   );
@@ -72,7 +76,11 @@ function AtalhosDoHub({
 }) {
   const roteador = useRouter();
   const colunas = useColunas();
+  const paleta = usePaleta();
   const grupo = "Hub";
+
+  useAtalho("ctrl+k", { grupo, descricao: "Paleta de comandos", mesmoEmCampo: true, acao: () => paleta.abrir() });
+  useAtalho("/", { grupo, descricao: "Buscar (paleta)", acao: () => paleta.abrir() });
 
   // Alt+dígito, não Ctrl+dígito: o navegador reserva Ctrl+1..8 pra trocar
   // de aba e nem deixa a página interceptar.
@@ -170,7 +178,7 @@ function CascaInterna({
           aoAbrirAtalhos={() => definirFolhaAberta(true)}
         />
         {appAtual === "notas" ? (
-          <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+          <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} modelos={modelos} />
         ) : appAtual === "kanban" ? (
           <ColunaQuadros quadros={quadros} />
         ) : null}
@@ -183,6 +191,7 @@ function CascaInterna({
         aoAbrirFolha={() => definirFolhaAberta(true)}
       />
       <FolhaAtalhos aberta={folhaAberta} aoFechar={() => definirFolhaAberta(false)} />
+      <PaletaComandos cadernos={cadernos} quadros={quadros} etiquetas={etiquetas} linksRaiz={linksRaiz} />
     </div>
   );
 }

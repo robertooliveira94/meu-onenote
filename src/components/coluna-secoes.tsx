@@ -45,13 +45,13 @@ import {
   trazSecao,
 } from "@/lib/arrastar";
 import { useColunas } from "@/lib/colunas";
+import { usePaleta } from "@/lib/paleta";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { urlDaNota, urlDaSecao } from "@/lib/rotas";
-import type { Caderno, Etiqueta, Modelo, Secao } from "@/lib/tipos";
+import type { Caderno, Modelo, Secao } from "@/lib/tipos";
 
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
 import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
-import { PaletaBusca } from "./paleta-busca";
 import { SeletorDeCadernos } from "./seletor-cadernos";
 import { AlcaRedimensionar, BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
@@ -100,21 +100,19 @@ async function baixarTudo(): Promise<void> {
 export function ColunaSecoes({
   caderno,
   cadernos,
-  etiquetas,
   modelos,
 }: {
   /** O caderno aberto — cujas seções aparecem no meio da coluna. `null` fora de /secao, /nota e /kanban. */
   caderno: Caderno | null;
   /** Todos os cadernos — só para o diálogo "Mover para" oferecer os outros como destino. */
   cadernos: Caderno[];
-  etiquetas: Etiqueta[];
   modelos: Modelo[];
 }) {
   const caminhoAtual = usePathname();
   const roteador = useRouter();
   const [acao, definirAcao] = useState<Acao>(null);
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
-  const [buscaAberta, definirBuscaAberta] = useState(false);
+  const paleta = usePaleta();
   const [exportando, iniciarExportacao] = useTransition();
   const [, iniciarCriacaoDePagina] = useTransition();
   // 248 de partida (era 220): a coluna agora carrega os cadernos também,
@@ -202,18 +200,6 @@ export function ColunaSecoes({
     }
   }
 
-  useEffect(() => {
-    function aoTeclar(evento: KeyboardEvent) {
-      const combinando = evento.ctrlKey || evento.metaKey;
-      if (combinando && evento.key.toLowerCase() === "k") {
-        evento.preventDefault();
-        definirBuscaAberta(true);
-      }
-    }
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, []);
-
   if (recolhida) {
     return (
       <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-superficie pt-3">
@@ -263,7 +249,7 @@ export function ColunaSecoes({
         <BotaoDaBarra
           icone={<Search size={14} />}
           atalho="Ctrl K"
-          onClick={() => definirBuscaAberta(true)}
+          onClick={() => paleta.abrir()}
         >
           Buscar
         </BotaoDaBarra>
@@ -458,7 +444,6 @@ export function ColunaSecoes({
         aoFechar={fechar}
       />
 
-      <PaletaBusca aberta={buscaAberta} aoFechar={() => definirBuscaAberta(false)} etiquetas={etiquetas} />
     </div>
   );
 }

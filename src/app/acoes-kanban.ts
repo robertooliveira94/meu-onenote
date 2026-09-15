@@ -20,6 +20,7 @@ import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban
 import { PRIORIDADES } from "@/lib/tipos";
 import {
   adicionarComentario,
+  buscarTarefas,
   criarColuna,
   criarTarefa,
   definirColunaConcluida,
@@ -419,4 +420,9 @@ export async function acaoExcluirEtiquetaKanban(id: string): Promise<Resposta> {
   });
   atualizarTudo();
   return resposta;
+}
+
+/** Busca de tarefas em todos os quadros pra paleta de comandos — só pelo índice, pelo título. */
+export async function acaoBuscarTarefas(termo: string) {
+  return buscarTarefas(z.string().max(120).parse(termo));
 }

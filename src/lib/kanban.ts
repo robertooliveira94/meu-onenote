@@ -483,3 +483,37 @@ export async function definirColunaConcluida(quadro: string, nome: string): Prom
   config.colunaConcluida = nome;
   await salvarConfigQuadro(quadro, config);
 }
+
+/** Uma tarefa achada pela paleta de comandos — só o que precisa pra listar e abrir o quadro. */
+export type TarefaAchada = { caminho: string; titulo: string; quadro: string; coluna: string };
+
+/** Sem acento e sem caixa — mesma normalização da busca de notas. */
+function normalizarTexto(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+/**
+ * Busca tarefas em todos os quadros pelo título — só pelo índice, sem abrir
+ * arquivo: o título é o nome do arquivo, e o caminho já diz quadro e
+ * coluna (`_kanban/<Quadro>/<Coluna>/<Tarefa>.md`). Usada pela paleta de
+ * comandos; a busca de notas continua não vendo tarefa nenhuma.
+ */
+export async function buscarTarefas(termo: string, limite = 8): Promise<TarefaAchada[]> {
+  const alvo = normalizarTexto(termo.trim());
+  if (alvo.length < 2) return [];
+  const indice = await lerIndice();
+  const achadas: TarefaAchada[] = [];
+  for (const caminho of Object.keys(indice.notas)) {
+    if (!caminho.startsWith(`${PASTA_KANBAN}/`)) continue;
+    const partes = caminho.split("/");
+    if (partes.length !== 4) continue;
+    const titulo = tituloDe(caminho);
+    if (!normalizarTexto(titulo).includes(alvo)) continue;
+    achadas.push({ caminho, titulo, quadro: partes[1], coluna: partes[2] });
+    if (achadas.length >= limite) break;
+  }
+  return achadas;
+}

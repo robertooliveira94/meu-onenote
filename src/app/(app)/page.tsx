@@ -65,7 +65,7 @@ export default async function Inicio() {
 
         {!vazio ? (
           <p className="mt-10 text-[12px] text-tinta-3">
-            Dica: <kbd className="font-mono">Ctrl K</kbd> busca em todas as notas.
+            Dica: <kbd className="font-mono">Ctrl K</kbd> abre a paleta: busca notas, tarefas e links, e executa ações. <kbd className="font-mono">?</kbd> mostra os atalhos.
           </p>
         ) : null}
       </div>
