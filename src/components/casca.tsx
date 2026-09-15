@@ -1,15 +1,17 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
-import { ColunasProvedor } from "@/lib/colunas";
-import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl } from "@/lib/rotas";
+import { AtalhosProvedor, useAtalho } from "@/lib/atalhos";
+import { ColunasProvedor, useColunas } from "@/lib/colunas";
+import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
 import { BarraAplicacoes } from "./barra-aplicacoes";
 import { ColunaQuadros } from "./coluna-quadros";
 import { ColunaSecoes } from "./coluna-secoes";
+import { FolhaAtalhos } from "./folha-atalhos";
 
 /** Acha uma pasta de links pelo id, em qualquer profundidade da árvore. */
 function encontrarPastaLink(raiz: PastaLink, id: string): PastaLink | null {
@@ -40,18 +42,72 @@ export function Casca(props: {
 }) {
   return (
     <ColunasProvedor>
-      {/*
-        `useSearchParams` (usado só para saber qual pasta de links está
-        aberta) exige um limite de Suspense — sem isso o Next tenta pré-
-        renderizar a página inteira como estática e falha no build. Na
-        prática o valor já está disponível de cara em toda navegação no
-        cliente, então este fallback nunca chega a aparecer de verdade.
-      */}
-      <Suspense fallback={null}>
-        <CascaInterna {...props} />
-      </Suspense>
+      <AtalhosProvedor>
+        {/*
+          `useSearchParams` (usado só para saber qual pasta de links está
+          aberta) exige um limite de Suspense — sem isso o Next tenta pré-
+          renderizar a página inteira como estática e falha no build. Na
+          prática o valor já está disponível de cara em toda navegação no
+          cliente, então este fallback nunca chega a aparecer de verdade.
+        */}
+        <Suspense fallback={null}>
+          <CascaInterna {...props} />
+        </Suspense>
+      </AtalhosProvedor>
     </ColunasProvedor>
   );
+}
+
+/** Os atalhos que valem no hub inteiro — trocar de aplicação, recolher colunas, a folha. */
+function AtalhosDoHub({
+  appAtual,
+  cadernos,
+  quadros,
+  aoAbrirFolha,
+}: {
+  appAtual: "notas" | "kanban" | "senhas" | "links";
+  cadernos: Caderno[];
+  quadros: ResumoQuadro[];
+  aoAbrirFolha: () => void;
+}) {
+  const roteador = useRouter();
+  const colunas = useColunas();
+  const grupo = "Hub";
+
+  // Alt+dígito, não Ctrl+dígito: o navegador reserva Ctrl+1..8 pra trocar
+  // de aba e nem deixa a página interceptar.
+  useAtalho("alt+1", {
+    grupo,
+    descricao: "Ir para Anotações",
+    acao: () => {
+      const primeiro = cadernos[0];
+      roteador.push(primeiro ? urlDaSecao(primeiro.secoes[0]?.caminho ?? primeiro.caminho) : "/");
+    },
+  });
+  useAtalho("alt+2", {
+    grupo,
+    descricao: "Ir para o Kanban",
+    acao: () => roteador.push(quadros[0] ? urlDoQuadro(quadros[0].nome) : "/kanban"),
+  });
+  useAtalho("alt+3", { grupo, descricao: "Ir para Senhas", acao: () => roteador.push("/senhas") });
+  useAtalho("alt+4", { grupo, descricao: "Ir para Links", acao: () => roteador.push("/links") });
+
+  const colunaDaApp = appAtual === "notas" ? "secoes" : appAtual === "kanban" ? "quadros" : null;
+  useAtalho("[", {
+    grupo,
+    descricao: appAtual === "kanban" ? "Recolher/mostrar os quadros" : "Recolher/mostrar cadernos e seções",
+    ativo: colunaDaApp !== null,
+    acao: () => colunaDaApp && colunas.alternar(colunaDaApp),
+  });
+  useAtalho("]", {
+    grupo,
+    descricao: "Recolher/mostrar a lista de páginas",
+    ativo: appAtual === "notas",
+    acao: () => colunas.alternar("paginas"),
+  });
+  useAtalho("?", { grupo, descricao: "Esta folha de atalhos", acao: aoAbrirFolha });
+
+  return null;
 }
 
 function CascaInterna({
@@ -71,6 +127,7 @@ function CascaInterna({
 }) {
   const caminhoAtual = usePathname();
   const parametros = useSearchParams();
+  const [folhaAberta, definirFolhaAberta] = useState(false);
 
   // As quatro aplicações são independentes: fora de /kanban/..., /senhas e
   // /links, é sempre Anotações — mesmo nas telas globais (início, etiquetas,
@@ -106,7 +163,12 @@ function CascaInterna({
         <div className="h-[3px] shrink-0" style={{ background: corAtiva }} aria-hidden />
       ) : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <BarraAplicacoes appAtual={appAtual} cadernos={cadernos} quadros={quadros} />
+        <BarraAplicacoes
+          appAtual={appAtual}
+          cadernos={cadernos}
+          quadros={quadros}
+          aoAbrirAtalhos={() => definirFolhaAberta(true)}
+        />
         {appAtual === "notas" ? (
           <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
         ) : appAtual === "kanban" ? (
@@ -114,6 +176,13 @@ function CascaInterna({
         ) : null}
         <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
       </div>
+      <AtalhosDoHub
+        appAtual={appAtual}
+        cadernos={cadernos}
+        quadros={quadros}
+        aoAbrirFolha={() => definirFolhaAberta(true)}
+      />
+      <FolhaAtalhos aberta={folhaAberta} aoFechar={() => definirFolhaAberta(false)} />
     </div>
   );
 }

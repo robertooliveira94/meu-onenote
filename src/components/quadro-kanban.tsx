@@ -62,6 +62,7 @@ import {
   trazSubtarefa,
   trazTarefa,
 } from "@/lib/arrastar";
+import { useAtalho } from "@/lib/atalhos";
 import { juntar } from "@/lib/caminho-texto";
 import { CORES_PRIORIDADE } from "@/lib/cores";
 import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
@@ -159,6 +160,11 @@ export function QuadroKanban({
   const [tarefaAberta, definirTarefaAberta] = useState<string | null>(null);
   const [colunaAdicionando, definirColunaAdicionando] = useState<ColunaKanban | null>(null);
   const [aviso, definirAviso] = useState<string | null>(null);
+  useAtalho("n", {
+    grupo: "Kanban",
+    descricao: `Nova tarefa em ${colunas[0] ?? "…"}`,
+    acao: () => colunas[0] && definirColunaAdicionando(colunas[0]),
+  });
   const [criandoColuna, definirCriandoColuna] = useState(false);
   const [colunaParaRenomear, definirColunaParaRenomear] = useState<string | null>(null);
   const [colunaParaExcluir, definirColunaParaExcluir] = useState<string | null>(null);

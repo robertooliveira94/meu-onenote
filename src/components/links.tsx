@@ -28,6 +28,7 @@ import {
   trazLink,
   trazPastaLink,
 } from "@/lib/arrastar";
+import { useAtalho } from "@/lib/atalhos";
 import { urlDaPastaLink } from "@/lib/rotas";
 import type { Link as LinkSalvo, PastaLink } from "@/lib/tipos";
 
@@ -137,6 +138,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
   }, []);
   const abrirLink = useCallback((link: LinkSalvo) => definirLinkEmEdicao(link), []);
   const novoLink = useCallback(() => definirLinkEmEdicao("novo"), []);
+  useAtalho("n", { grupo: "Links", descricao: `Novo link em ${pastaAtiva.nome}`, acao: novoLink });
   const favoritarLink = useCallback(
     async (link: LinkSalvo) => void aplicarResposta(await acaoFavoritarLink(link.id, !link.favorito)),
     [aplicarResposta],

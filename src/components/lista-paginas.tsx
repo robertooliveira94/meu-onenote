@@ -34,6 +34,7 @@ import {
   acaoReordenarNotasPara,
 } from "@/app/acoes";
 import { calcularNovaOrdem, iniciarArrastoDePagina, lerCaminhoDePagina, trazPagina } from "@/lib/arrastar";
+import { useAtalho } from "@/lib/atalhos";
 import { useColunas } from "@/lib/colunas";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
@@ -78,6 +79,12 @@ export function ListaPaginas({
   });
   const colunas = useColunas();
   const [, iniciarCriacaoDePagina] = useTransition();
+
+  useAtalho("n", {
+    grupo: "Anotações",
+    descricao: `Nova página em ${nomeDaPasta}`,
+    acao: () => iniciarCriacaoDePagina(async () => void (await acaoCriarPagina(pasta))),
+  });
 
   async function abrirNovaPaginaFlutuante() {
     const resposta = await acaoCriarPaginaFlutuante(pasta);

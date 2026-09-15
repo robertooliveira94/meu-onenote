@@ -1,13 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, KanbanSquare, KeyRound, NotebookText, SquareArrowOutUpRight } from "lucide-react";
+import { Bookmark, KanbanSquare, KeyRound, Keyboard, NotebookText, SquareArrowOutUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import type { Caderno, ResumoQuadro } from "@/lib/tipos";
 
-import { BotaoTema, ItemMenu, Menu } from "./ui";
+import { BotaoIcone, BotaoTema, ItemMenu, Menu } from "./ui";
 
 export type App = "notas" | "kanban" | "senhas" | "links";
 
@@ -26,10 +26,12 @@ export function BarraAplicacoes({
   appAtual,
   cadernos,
   quadros,
+  aoAbrirAtalhos,
 }: {
   appAtual: App;
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
+  aoAbrirAtalhos: () => void;
 }) {
   const roteador = useRouter();
 
@@ -82,6 +84,9 @@ export function BarraAplicacoes({
       </nav>
 
       <div className="mt-auto flex flex-col items-center gap-1">
+        <BotaoIcone rotulo="Atalhos de teclado (?)" onClick={aoAbrirAtalhos}>
+          <Keyboard size={14} />
+        </BotaoIcone>
         <BotaoTema />
       </div>
     </aside>

@@ -51,6 +51,7 @@ import {
   trazEntradaSenha,
   trazGrupoSenha,
 } from "@/lib/arrastar";
+import { useAtalho } from "@/lib/atalhos";
 import type { EntradaSenha, GrupoSenhas } from "@/lib/tipos";
 
 import { BotaoComoFunciona } from "./explicador-criptografia";
@@ -380,6 +381,8 @@ function CofreAberto({
   }, []);
   const abrirEntrada = useCallback((entrada: EntradaSenha) => definirEntradaEmEdicao(entrada), []);
   const novaEntrada = useCallback(() => definirEntradaEmEdicao("nova"), []);
+  useAtalho("n", { grupo: "Senhas", descricao: `Nova senha em ${grupoAtivo.nome || "Cofre"}`, acao: novaEntrada });
+  useAtalho("ctrl+l", { grupo: "Senhas", descricao: "Trancar o cofre", mesmoEmCampo: true, acao: () => trancarAgora() });
 
   async function trancarAgora() {
     await acaoTrancar();

@@ -36,6 +36,7 @@ import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
 import type { Etiqueta, Nota } from "@/lib/tipos";
+import { useAtalho } from "@/lib/atalhos";
 import { useZoomTexto } from "@/lib/zoom";
 
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
@@ -186,20 +187,25 @@ export function PaginaNota({
     salvar(conteudo).then(() => roteador.refresh());
   }, [conteudo, ehMarkdown, nota.conteudo, roteador, salvar]);
 
+  // Atalhos da nota, no registro central (é o que a folha `?` lista).
+  useAtalho("ctrl+s", { grupo: "Anotações", descricao: "Salvar agora", mesmoEmCampo: true, acao: () => salvar(conteudo) });
+  useAtalho("e", {
+    grupo: "Anotações",
+    descricao: editando ? "Concluir a edição" : "Editar a página",
+    acao: () => (editando ? concluirEdicao() : ehMarkdown && definirEditando(true)),
+  });
+  // Esc só sai da edição quando não há um diálogo por cima — o registro já
+  // engole teclas soltas com diálogo aberto, mas o Esc do editor precisa
+  // valer dentro do próprio campo de texto.
   useEffect(() => {
     function aoTeclar(evento: KeyboardEvent) {
-      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") {
-        evento.preventDefault();
-        salvar(conteudo);
-      }
-      // Esc só sai da edição quando não há um diálogo por cima.
       if (evento.key === "Escape" && editando && !document.querySelector("[role=dialog]")) {
         concluirEdicao();
       }
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [conteudo, editando, concluirEdicao, salvar]);
+  }, [editando, concluirEdicao]);
 
   useEffect(() => {
     if (editando) area.current?.focus();
