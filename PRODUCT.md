@@ -51,8 +51,15 @@ si — uma seção nunca tem outra seção dentro), páginas são arquivos `.md`
 sempre dentro de uma seção, nunca soltas direto no caderno. Página nova é
 sempre markdown; os `.txt` de versões anteriores continuam abrindo e
 editando normalmente, e o menu deles oferece converter para markdown.
-O Kanban é outra aplicação, com pastas próprias em `dados/_kanban/` — ver
-"aplicações independentes" abaixo.
+Kanban, Senhas e Links são outras aplicações, com dados próprios: quadros
+em `dados/_kanban/`, o cofre em `dados/_senhas/cofre.kdbx` (um arquivo
+`.kdbx` opaco, cifrado — a única exceção ao "arquivo aberto em qualquer
+editor" de texto, porque é da natureza de um cofre de senhas ser ilegível
+sem a senha mestra), e a árvore de Links em `dados/_links/arvore.json`
+(uma exceção deliberada ao "disco é a verdade": um link não tem corpo de
+texto que justifique ser arquivo próprio, então a árvore inteira de
+pastas vive num JSON só; os favicons, esses sim, são arquivos reais em
+`dados/_links/favicons/`) — ver "aplicações independentes" abaixo.
 Metadados que não cabem num arquivo de texto
 (etiquetas, favoritos, ordem manual, cor/ícone do caderno) ficam num índice
 à parte (`dados/_sistema/indice.json`), para as notas em si continuarem
@@ -107,11 +114,6 @@ limpas e abríveis em qualquer editor.
 - Modelos de página cadastráveis (nome, descrição, conteúdo em markdown) —
   um botão à parte ("começar de um modelo") cria a página já com o modelo
   escolhido, só aparecendo quando existe algum modelo cadastrado.
-- Captura rápida (`Ctrl+Shift+N`) e a nota do dia (`Ctrl+Shift+D`, sempre a
-  mesma página por data) caem na seção "Geral" do caderno "Entrada" — um
-  caderno de verdade, visível e renomeável na tira de cadernos como
-  qualquer outro, não uma pasta escondida. "Toda nota mora dentro de uma
-  seção", mesmo as soltas.
 - Colar uma imagem (print, cópia de outro app) direto no editor de markdown
   salva o arquivo numa subpasta `_anexos/` ao lado da nota e insere
   `![](_anexos/arquivo.png)` — caminho relativo de verdade, que continua
@@ -138,18 +140,43 @@ limpas e abríveis em qualquer editor.
   e página — num único markdown, mesma lógica de exportar uma seção só.
 - Web clipper (`/clipper`): um bookmarklet para a barra de favoritos do
   navegador que recorta a página aberta (título, endereço e o texto
-  selecionado) direto para uma nota nova no caderno "Entrada", sem extensão
-  nenhuma para instalar.
-- **O app é um hub de aplicações independentes** — hoje Anotações e Kanban.
-  A coluna mais à esquerda diz qual está aberta e lista o que é dela:
-  cadernos numa, quadros na outra. As listas não se misturam em nada:
+  selecionado) direto para uma nota nova numa seção escolhida — o destino é
+  configurável na própria tela do clipper (um `<select>` caderno → seção,
+  lembrado entre recortes) e não fica mais preso a um caderno fixo. Sem
+  extensão nenhuma para instalar.
+- **Cor do caderno/quadro mais visível pela interface inteira**: além da
+  bolinha na lista, o caderno (ou quadro, ou pasta de Links) aberto pinta
+  uma faixa fina no topo do app inteiro, o item ativo na lista fica com
+  fundo mais saturado, e os cartões (nota, tarefa, link) ganham fundo e
+  borda tingidos dessa cor — o cartão aberto no momento fica com a cor
+  ainda mais forte (faixa colorida no topo). Um popup de card (tarefa do
+  Kanban, link) herda essa mesma cor forte em vez de ficar branco neutro.
+- **Excluir caderno exige digitar o nome** antes de liberar o botão —
+  mesma trava usada para excluir uma pasta de Links com conteúdo dentro;
+  seção e página continuam só com confirmação de um clique.
+- **Cor de fundo do editor de markdown** à escolha, independente do tema
+  da interface: acompanhar o tema (padrão), sempre claro, sempre escuro ou
+  sépia — lembrado entre sessões.
+- **Seis temas** para a interface inteira (claro, escuro, sépia, escuro
+  suave, cinza neutro, vibrante — este último saturado e com brilho,
+  pensado pra quem quer uma tela com mais cor/contraste), escolhidos num
+  menu; a tela nunca pisca no tema errado ao carregar.
+- **Abrir uma aplicação em janela separada do navegador**: cada botão de
+  aplicação (Anotações, Kanban, Senhas, Links) tem, ao passar o mouse, um
+  botão para abrir aquela aplicação numa segunda janela — para usar duas
+  ao mesmo tempo lado a lado. As duas janelas dividem o mesmo servidor e
+  dados; uma mudança numa aparece na outra ao atualizar.
+- **O app é um hub de aplicações independentes** — hoje Anotações, Kanban,
+  Senhas e Links. A coluna mais à esquerda diz qual está aberta e lista o
+  que é dela (cadernos, quadros, ou nada — Senhas e Links navegam a
+  própria árvore na área de conteúdo). As listas não se misturam em nada:
   excluir o quadro "Trabalho" não encosta no caderno "Trabalho", e
-  vice-versa. Em modo Kanban, a coluna de navegação das anotações (busca,
-  captura rápida, seções, atalhos fixos) some da tela; sobram a coluna de
-  quadros e o quadro em si. O botão de tema claro/escuro fica no rodapé
-  dessa coluna, visível nos dois modos. No topo da coluna só existem os
-  dois botões de aplicação (Anotações, Kanban) — sem nome ou logo do app
-  por cima deles. Abrir o app cai direto em Anotações.
+  vice-versa; excluir um cofre não mexe em nada de Links, e vice-versa. Em
+  qualquer aplicação que não Anotações, a coluna de navegação das
+  anotações (busca, seções, atalhos fixos) some da tela. O botão de tema
+  fica no rodapé dessa coluna, visível em todas. No topo da coluna só
+  existem os botões de aplicação — sem nome ou logo do app por cima
+  deles. Abrir o app cai direto em Anotações.
 - Kanban (`/kanban/<Quadro>`): quadros próprios, guardados em
   `dados/_kanban/<Quadro>/<Coluna>/<Tarefa>.md` — fora dos cadernos, porque
   não são anotação. Cada tarefa é um arquivo `.md` de verdade; arrastar
@@ -161,9 +188,13 @@ limpas e abríveis em qualquer editor.
   páginas. As tarefas do Kanban não aparecem em nada das Anotações (busca,
   recentes, favoritos, painel `/tarefas`, árvore de cadernos).
   - **Etiquetas do Kanban** (`/kanban/etiquetas`): cadastro à parte das
-    etiquetas de anotações — mesma interface, mas vale só para tarefas, em
-    qualquer quadro. O editor de tarefa tem seu próprio seletor, que já
-    linka pra lá quando falta cadastrar uma cor nova.
+    etiquetas de anotações — mesma interface, mas vale só para tarefas.
+    Cada etiqueta é **geral** (aparece em todos os quadros) ou presa a um
+    quadro específico (só aparece nele); a tela de cadastro mostra as duas
+    listas separadas, e excluir um quadro leva junto as etiquetas que
+    eram só dele. O editor de tarefa tem seu próprio seletor (gerais + as
+    do quadro atual), que já linka pra lá quando falta cadastrar uma cor
+    nova.
   - **Dependências ("Bloqueado por")**: uma tarefa pode depender de outras
     do mesmo quadro. O cartão mostra um cadeado com a contagem de
     dependências ainda não concluídas; arrastar a tarefa pra a coluna de
@@ -217,6 +248,41 @@ limpas e abríveis em qualquer editor.
     "Editar" volta pra caixa de texto. Abaixo dela, as subtarefas e o mural
     de comentários. Impedimento, prioridade, prazo, sprint, etiquetas e
     "Bloqueado por" ficam numa coluna à direita, separados do conteúdo.
+- **Senhas** (`/senhas`): um cofre de senhas em `.kdbx` de verdade (formato
+  do KeePass, Argon2id + AES-256) — o arquivo abre também no KeePassXC,
+  KeePassDX etc., sem "exportar para outra plataforma", só copiar o
+  arquivo. Tela de senha mestra cria um cofre novo ou importa um `.kdbx`
+  que a pessoa já tem. Destrancado, mostra uma árvore de grupos
+  (subgrupos à vontade, sem profundidade fixa) com senhas dentro de cada
+  um — criar, renomear, mover e excluir por arrastar ou pelo menu, exibir/
+  ocultar e copiar a senha com um clique (a área de transferência se
+  limpa sozinha depois de um tempo). Tranca sozinho depois de inatividade;
+  "Trocar senha mestra" recifra o cofre inteiro sem perder o conteúdo.
+  Exportação em CSV texto puro existe como plano B, com aviso de que sai
+  sem cifra nenhuma. Excluir o cofre inteiro é sem lixeira, sem desfazer —
+  por isso exige digitar uma palavra de confirmação antes de liberar o
+  botão (excluir um grupo dentro do cofre já é só um clique). Escrita em
+  disco é adiada ~1s após a última mudança
+  (o KDF do Argon2id é caro de recalcular a cada save) — as mudanças
+  aparecem na tela na hora, vindas da cópia em memória, então a navegação
+  não fica lenta esperando o disco.
+- **Links** (`/links`): um gerenciador de favoritos — pastas e subpastas
+  (aninhamento livre, mesma forma de árvore do cofre de senhas, mas sem
+  cifra: é um JSON simples), cada uma com cor e ícone próprios. Um link
+  guarda título (buscado sozinho no próprio site ao colar a URL, sempre
+  editável), URL, favicon (baixado do site de origem e salvo aqui dentro
+  — nunca um serviço de terceiros), nota opcional e uma estrela de
+  favorito. Um clique abre o link em nova aba na hora; editar/mover/
+  excluir é ação separada. Tela inicial mostra todos os links (achatando
+  a árvore inteira) com uma seção de favoritos acima de recentes; busca
+  simples por título/URL. Excluir sempre vai para uma lixeira própria
+  (recuperável); pasta com conteúdo dentro exige digitar o nome pra
+  confirmar, igual excluir um caderno. Dá para importar de uma vez um
+  arquivo de favoritos exportado do navegador (`.html`, formato padrão
+  Netscape), recriando a árvore de pastas. Um atalho de navegador à parte
+  (`/links/atalho`, independente do Web Clipper das Anotações) abre uma
+  janela pop-up pequena por cima da página atual — escolhe a pasta,
+  salva, fecha sozinha — sem trocar de aba nem virar nota.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de

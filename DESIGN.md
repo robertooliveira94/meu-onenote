@@ -129,13 +129,18 @@ escurece no clique, o campo de texto ganha um anel de foco na cor do
 caderno ativo). A firmeza vem da forma; o calor vem do feedback.
 
 **Key Characteristics:**
-- Uma cor de destaque por caderno, nunca uma paleta de marca fixa — a cor
-  muda com o contexto e atravessa a interface inteira.
-- Fundo branco de verdade (não bege, não cinza-escuro por padrão); o
-  branco só existe como "cartão" porque o `--papel` ao redor dele é
-  levemente mais frio/escuro.
+- Uma cor de destaque por caderno/quadro/pasta, nunca uma paleta de marca
+  fixa — a cor muda com o contexto e atravessa a interface inteira, hoje
+  nas quatro aplicações do hub (Anotações, Kanban, Senhas, Links).
+- Fundo branco de verdade no tema Claro (não bege, não cinza-escuro por
+  padrão); o branco só existe como "cartão" porque o `--papel` ao redor
+  dele é levemente mais frio/escuro. Os outros cinco temas trocam essa
+  base, sempre preservando a mesma relação entre papel/superfície/tinta.
 - Camada plana em repouso; sombra é sempre uma resposta a estado (hover)
-  ou uma propriedade de flutuar acima do conteúdo (menu, diálogo).
+  ou uma propriedade de flutuar acima do conteúdo (menu, diálogo) — em
+  qualquer um dos seis temas, incluindo o Vibrante, onde a sombra de hover
+  fica colorida em vez de neutra, mas continua só existindo em resposta a
+  estado.
 - Tipografia única — Plus Jakarta Sans cobre interface e leitura; a
   diferenciação vem do tamanho e peso, não de trocar de família.
 
@@ -184,16 +189,52 @@ significado por contexto, não por tema — ela é redefinida por JavaScript
 por cima do CSS, não pela media query de tema.
 
 ### Named Rules
-**A Regra da Lombada.** A cor de um caderno nunca fica presa a um só
-lugar. Ela precisa aparecer em pelo menos três destes quatro pontos para
-um caderno estar "completo" visualmente: a bolinha/ícone na árvore, a
-barra do item ativo, o carimbo do cartão aberto, a margem da leitura.
+**A Regra da Lombada.** A cor de um caderno (ou quadro, ou pasta de Links)
+nunca fica presa a um só lugar. Ela precisa aparecer em pelo menos três
+destes cinco pontos para estar "completo" visualmente: a bolinha/ícone na
+árvore, a barra do item ativo, o carimbo do cartão aberto, a margem da
+leitura, e a faixa fina de 3px atravessando o topo do app inteiro
+(`casca.tsx`) — o ponto mais recente, e o único que existe fora da área de
+conteúdo da própria aplicação.
 
 **A Regra da Cor Única.** No máximo uma cor saturada de caderno está
 "ativa" (definida em `--realce`) por vez, em toda a tela. Duas cores de
 caderno nunca competem lado a lado como decoração — quando aparecem juntas
 (ex.: lista de cadernos na barra lateral), é sempre como bolinhas pequenas
 e discretas, nunca como blocos de fundo.
+
+### Seis Temas
+Cada tema redefine o mesmo conjunto de neutros (`--papel`, `--superficie`,
+`--superficie-alta`, `--tinta`, `--tinta-2`, `--tinta-3`, `--linha`,
+`--linha-forte`, `--borda-cartao`, `--perigo`, as três sombras) atrás de
+`[data-tema]` — a relação entre eles se preserva, só o valor muda:
+- **Claro** (`#F3F5F9` papel): o padrão, descrito acima.
+- **Escuro** (`#0E1420` papel, `#E9EEF6` tinta): inversão direta do claro.
+- **Escuro Suave** (`#2A2F3A` papel): a mesma família do escuro, em
+  cinza-azulado, sem chegar perto do preto — para quem acha o escuro
+  padrão contrastado demais à noite.
+- **Sépia** (`#EFE4CF` papel, `#392F21` tinta marrom): pensado para leitura
+  longa, mesmo espírito de um papel envelhecido.
+- **Cinza Neutro** (`#ECECEC` papel): como o Claro, mas sem o azul frio do
+  papel — um branco/cinza mais neutro.
+- **Vibrante** (`#191033` papel roxo-profundo, `#F4ECFF` tinta clara):
+  o tema mais saturado da família — `--realce-fraco`/`--realce-medio`
+  misturam mais forte (26%/44%, contra 12%/24% no Claro) e a sombra de
+  cartão passa a brilhar na cor do caderno/quadro aberto
+  (`0 0 18px color-mix(in srgb, var(--realce) 32%, transparent)`) em vez
+  de neutra — é a mesma Regra do Plano em Repouso (sombra só em resposta a
+  hover), só que a cor da sombra deixa de ser neutra e vira a cor ativa.
+  `data-escuro` marca Escuro, Escuro Suave e Vibrante como família escura
+  para os poucos ajustes que valem pros três juntos (o realce de sintaxe
+  do código).
+
+O fundo da área de escrita (editor de markdown/texto puro) pode ser fixado
+à parte do tema da interface — Claro, Escuro, Sépia ou "acompanhar o
+tema" (padrão) — via `[data-fundo-editor]`, sua própria variável
+(`--fundo-editor`/`--tinta-editor`). É a única superfície do sistema com
+essa independência do tema, porque uma pessoa pode preferir escrever num
+fundo diferente do resto da interface (ex.: sépia para os olhos, mesmo
+com o app inteiro no tema escuro).
 
 ## Typography
 
@@ -232,13 +273,16 @@ hierarquia; a mono é a única exceção, reservada a conteúdo literal.
 
 ## Layout
 
-Três colunas em telas de trabalho: barra lateral (árvore de cadernos, 248px
-de partida) e lista de páginas (292px de partida) são **redimensionáveis
-arrastando a borda direita**, como uma coluna de planilha; a área de
-conteúdo sempre ocupa o resto do espaço. Sem grade responsiva além disso; o
-app assume uma janela de desktop (é um serviço local, não uma página
-pública). Densidade compacta: paddings típicos de 8–16px, altura de
-controle padrão de 34–38px.
+Até quatro colunas em telas de trabalho de Anotações: a coluna de
+aplicativos (214px, fixa, nunca redimensiona) fica sempre mais à esquerda;
+depois dela, a coluna de seções (248px de partida) e a lista de páginas
+(292px de partida) são **redimensionáveis arrastando a borda direita**,
+como uma coluna de planilha; a área de conteúdo sempre ocupa o resto do
+espaço. Kanban, Senhas e Links dispensam a coluna de seções — a área de
+conteúdo delas já tem a própria navegação (quadro, árvore de grupos/pastas)
+embutida. Sem grade responsiva além disso; o app assume uma janela de
+desktop (é um serviço local, não uma página pública). Densidade compacta:
+paddings típicos de 8–16px, altura de controle padrão de 34–38px.
 
 A largura de cada uma é lembrada por painel (`localStorage`, chaves
 `largura-barra-lateral` e `largura-lista-paginas`), clampada entre um
@@ -249,10 +293,12 @@ O modo de edição de uma nota em markdown divide a área de conteúdo em duas
 colunas iguais — texto cru à esquerda, prévia renderizada à direita — sem
 proporção assimétrica.
 
-**Recolher para escrever**: um botão no topo da barra lateral (`PanelLeftClose`)
-esconde a barra lateral e a lista de páginas de uma vez, dando à área de
-conteúdo o máximo de espaço — o mesmo botão, como `PanelLeftOpen` flutuando
-no canto superior esquerdo, traz as duas de volta. Estado único
+**Recolher para escrever**: um botão no topo da coluna de seções
+(`PanelLeftClose`) esconde a coluna de seções e a lista de páginas de uma
+vez, dando à área de conteúdo o máximo de espaço — o mesmo botão, como
+`PanelLeftOpen` flutuando no canto superior esquerdo, traz as duas de
+volta (a coluna de aplicativos nunca recolhe, sempre fica visível). Estado
+único
 (`localStorage`, chave `colunas-recolhidas`) compartilhado entre os dois
 painéis porque moram em componentes diferentes; enquanto recolhidas, ficam
 com `inert` — não só invisíveis, também fora da ordem de tab.
@@ -283,7 +329,13 @@ tem sombra "de repouso" perceptível além de um traço quase invisível
 
 No tema escuro os três valores usam preto puro em vez de `--tinta`
 (`#00000040`, `#0000004d`, `#00000073`), porque uma sombra colorida em
-tinta clara não lê como profundidade sobre um fundo já escuro.
+tinta clara não lê como profundidade sobre um fundo já escuro. No tema
+Vibrante a sombra de cartão vai um passo além: continua só aparecendo em
+hover/estado, mas a cor deixa de ser neutra e passa a ser a própria
+`--realce` (`0 0 18px color-mix(in srgb, var(--realce) 32%, transparent)`)
+— o cartão brilha na cor do caderno/quadro aberto em vez de só ganhar
+profundidade neutra. Mesma regra (sombra é resposta a estado), só que a
+paleta de sombra do tema é saturada em vez de neutra.
 
 ### Named Rules
 **A Regra do Plano em Repouso.** Nada tem sombra visível parado. Se uma
@@ -359,7 +411,7 @@ desenhar um cartão inteiro ao redor.
 - **Rótulo:** sempre acima do campo, em versalete 11px.
 
 ### Alça de Redimensionar
-- **Onde aparece:** coluna de navegação, coluna de páginas, e agora também
+- **Onde aparece:** coluna de seções, coluna de páginas, e agora também
   entre o texto cru e a prévia na edição lado a lado de uma página em
   markdown — mesmo componente, mesmo comportamento, só mudando qual painel
   ele ajusta.
@@ -376,21 +428,23 @@ desenhar um cartão inteiro ao redor.
   ajuste.
 
 ### Navigation
-- **Tira de cadernos (topo da área de conteúdo):** um caderno é sempre o
-  nível mais alto — nunca fica aninhado dentro de outra coluna, como seções
-  ficavam antes. Vira uma lista horizontal, com rolagem própria se não
-  couber tudo: ícone + nome por chip, "+ Novo caderno" fixo no fim. Chip
-  ativo (o caderno implícito na URL atual) ganha fundo `realce-medio` e
-  peso de fonte — mesmo vocabulário de "você está aqui" que o resto do app
-  já usa, sem barra lateral aqui (não faz sentido numa lista horizontal).
-- **Coluna de navegação:** uma coluna só, sempre visível — logo, busca,
-  captura rápida e tema no topo; os atalhos fixos (Início, Etiquetas,
-  Grafo, Tarefas, Modelos, Web Clipper, Hoje, Exportar tudo, Lixeira) no
-  rodapé; as seções do caderno aberto no meio, só quando há um caderno
-  aberto (fora de /secao, /nota e /kanban esse meio fica vazio, e a coluna
-  vira só os atalhos). Item de seção ativo ganha a mesma barra vertical de
-  2.5px na cor do caderno + wash de fundo que a árvore antiga usava.
-- **Recolher coluna a coluna:** a coluna de navegação e a de páginas
+- **Coluna de aplicativos (214px, sempre a mais à esquerda):** o topo tem
+  um botão por aplicativo (Anotações, Kanban, Senhas, Links) — ícone +
+  nome + contagem, sem nome/logo do produto por cima deles. O ativo ganha
+  fundo sólido escurecido na cor de destaque (`color-mix(in srgb,
+  var(--realce) 70%, black)`) e texto branco; ao passar o mouse, um
+  segundo botão pequeno some/aparece no canto pra abrir aquele app numa
+  janela separada. Embaixo do seletor de app, a lista daquele app
+  (cadernos, quadros, ou nada — Senhas e Links navegam a própria árvore na
+  área de conteúdo, sem lista aqui). O botão de tema (agora um menu com as
+  seis opções, não mais um toggle claro/escuro) fica sempre no rodapé
+  dessa coluna, visível em qualquer aplicativo.
+- **Coluna de seções (só em Anotações):** busca, as seções do caderno
+  aberto, e os atalhos fixos no rodapé (Início, Etiquetas, Grafo, Tarefas,
+  Modelos, Web Clipper, Exportar tudo, Lixeira). Item de seção ativo ganha
+  a mesma barra vertical de 2.5px na cor do caderno + wash de fundo que o
+  resto do sistema usa pra "você está aqui".
+- **Recolher coluna a coluna:** a coluna de seções e a de páginas
   recolhem cada uma por conta própria (não é mais um "modo foco" único que
   esconde as duas juntas) — cada botão de recolher vira uma barra fina de
   40px com só o ícone pra abrir de novo, nunca desaparece de vez. Ter
@@ -478,7 +532,22 @@ A combinação de `inset 0 3px 0 var(--realce)` mais a sombra de hover
 permanente é o único lugar do sistema onde uma cor sólida entra dentro de
 um cartão branco sem ser conteúdo (ícone, etiqueta). É reservada
 exclusivamente ao cartão da página que está aberta no momento — nunca usada
-como decoração ou para chamar atenção para outra coisa.
+como decoração ou para chamar atenção para outra coisa. O mesmo carimbo
+existe como uma opção do diálogo genérico (`realcado`): quando um popup
+representa o detalhe de um cartão específico (a tarefa aberta no Kanban,
+um link), ele herda esse mesmo fundo tingido + faixa no topo em vez de
+ficar branco neutro — o popup "é" o cartão, só expandido.
+
+### Cofre de Senhas e Links (aplicações com árvore própria)
+As duas seguem o mesmo vocabulário do resto do sistema em vez de inventar
+um próprio: uma árvore de grupos/pastas (aninhamento livre, sem
+profundidade fixa) numa coluna à esquerda, com as folhas (senha, link)
+listadas à direita como `.cartao`. Links tinge a árvore com a cor da
+pasta ativa (mesma `--realce`); o cofre de senhas fica neutro (sem cor
+por grupo) porque a segurança do conteúdo, não a identidade visual, é o
+que importa ali. O cartão de link usa o favicon do próprio site como
+ícone quando existe, caindo no mesmo emblema colorido (`realce-medio` +
+ícone) que os outros cartões usam quando não existe.
 
 ## Do's and Don'ts
 
