@@ -52,9 +52,13 @@ function comboDoEvento(evento: KeyboardEvent): string {
   return [
     evento.ctrlKey || evento.metaKey ? "ctrl" : "",
     evento.altKey ? "alt" : "",
-    // Shift só conta com teclas nomeadas: "?" já é Shift+/ e "N" é Shift+n,
-    // então numa tecla de um caractere o próprio caractere carrega o shift.
-    evento.shiftKey && evento.key.length > 1 ? "shift" : "",
+    // Numa tecla de um caractere sozinha, o próprio caractere carrega o
+    // shift ("?" já é Shift+/ e "N" é Shift+n), então marcá-lo de novo
+    // quebraria esses combos. Com Ctrl ou Alt junto não: Ctrl+Shift+F chega
+    // como a letra "F" e, sem esta marca, seria indistinguível de Ctrl+F.
+    evento.shiftKey && (evento.key.length > 1 || evento.ctrlKey || evento.metaKey || evento.altKey)
+      ? "shift"
+      : "",
     tecla,
   ]
     .filter(Boolean)

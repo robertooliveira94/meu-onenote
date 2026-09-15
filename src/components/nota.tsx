@@ -10,6 +10,8 @@ import {
   Link2,
   Loader2,
   PaintBucket,
+  Maximize2,
+  Minimize2,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -32,6 +34,7 @@ import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
+import { useModoFoco } from "@/lib/foco";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
@@ -142,6 +145,7 @@ export function PaginaNota({
   const area = useRef<HTMLTextAreaElement>(null);
   const zoom = useZoomTexto();
   const fundoEditor = useFundoEditor();
+  const modoFoco = useModoFoco();
   const pastaDaNota = pastaDe(nota.caminho);
   // Largura do texto cru na edição lado a lado — a prévia ocupa o resto.
   // Mesmo padrão das outras colunas ajustáveis do app (barra lateral,
@@ -194,18 +198,26 @@ export function PaginaNota({
     descricao: editando ? "Concluir a edição" : "Editar a página",
     acao: () => (editando ? concluirEdicao() : ehMarkdown && definirEditando(true)),
   });
+  useAtalho("ctrl+shift+f", {
+    grupo: "Anotações",
+    descricao: modoFoco.foco ? "Sair do modo foco" : "Modo foco (só o texto)",
+    mesmoEmCampo: true,
+    acao: modoFoco.alternar,
+  });
   // Esc só sai da edição quando não há um diálogo por cima — o registro já
   // engole teclas soltas com diálogo aberto, mas o Esc do editor precisa
   // valer dentro do próprio campo de texto.
   useEffect(() => {
     function aoTeclar(evento: KeyboardEvent) {
-      if (evento.key === "Escape" && editando && !document.querySelector("[role=dialog]")) {
-        concluirEdicao();
-      }
+      if (evento.key !== "Escape" || document.querySelector("[role=dialog]")) return;
+      // Um Esc por vez, do mais recente para o mais antigo: primeiro devolve
+      // a moldura, só depois sai da edição.
+      if (modoFoco.foco) modoFoco.sair();
+      else if (editando) concluirEdicao();
     }
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [editando, concluirEdicao]);
+  }, [editando, concluirEdicao, modoFoco]);
 
   useEffect(() => {
     if (editando) area.current?.focus();
@@ -309,19 +321,33 @@ export function PaginaNota({
     aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
   }
 
+  // Edição lado a lado: texto cru à esquerda, prévia à direita. Texto puro
+  // nunca divide (não tem o que pré-visualizar).
+  const divididoEmDois = ehMarkdown && previaVisivel;
+
   const palavras = useMemo(() => contarPalavras(conteudo), [conteudo]);
   const minutosDeLeitura = tempoDeLeituraEmMinutos(palavras);
 
   const secoes = nota.caminho.split("/").slice(0, -1);
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-papel">
-      <header className="shrink-0 border-b border-linha bg-superficie px-7 pt-3.5 pb-3">
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11.5px] text-tinta-3">
-          <span aria-hidden>{iconeDoCaderno}</span>
-          <span className="truncate">{secoes.join(" / ")}</span>
-        </div>
+    <section className="relative flex min-w-0 flex-1 flex-col bg-papel">
+      {/* No modo foco some tudo, inclusive o botão que ligou o modo — sem
+          esta saída flutuante a pessoa fica sem nada clicável na tela.
+          Discreto até o mouse chegar perto, para não competir com o texto. */}
+      {modoFoco.foco ? (
+        <button
+          type="button"
+          onClick={modoFoco.sair}
+          title="Sair do modo foco (Esc)"
+          className="absolute top-3 right-4 z-20 flex items-center gap-1.5 rounded-lg border border-linha bg-superficie px-2 py-1 text-[11.5px] text-tinta-2 opacity-35 shadow-[var(--sombra)] transition-opacity hover:opacity-100 focus-visible:opacity-100"
+        >
+          <Minimize2 size={13} />
+          Sair do foco
+        </button>
+      ) : null}
 
+      <header className="esconde-no-foco shrink-0 border-b border-linha bg-superficie px-7 pt-3 pb-2.5">
         {/* `flex-wrap`: numa janela estreita (a janela flutuante), o bloco de
             botões desce para baixo do título em vez de esmagá-lo até o texto
             quebrar caractere a caractere. O `minWidth` no h1 é o gatilho: quando
@@ -371,6 +397,13 @@ export function PaginaNota({
               <History size={15} />
             </BotaoIcone>
 
+            <BotaoIcone
+              rotulo={modoFoco.foco ? "Sair do modo foco (Esc)" : "Modo foco (Ctrl+Shift+F)"}
+              onClick={modoFoco.alternar}
+            >
+              {modoFoco.foco ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </BotaoIcone>
+
             {flutuante ? null : (
               <BotaoIcone
                 rotulo="Tornar flutuante"
@@ -396,7 +429,16 @@ export function PaginaNota({
           </div>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+        {/* Uma linha só de metadados: onde a página mora, as etiquetas dela e
+            o tamanho do texto. Eram três linhas separadas — trilha em cima do
+            título, etiquetas embaixo e contagem numa terceira —, o que fazia
+            o cabeçalho comer quase um terço da altura útil numa tela de
+            notebook. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px] text-tinta-3">
+          <span className="flex min-w-0 shrink-0 items-center gap-1.5">
+            <span aria-hidden>{iconeDoCaderno}</span>
+            <span className="truncate">{secoes.join(" / ")}</span>
+          </span>
           <SeletorEtiquetas
             caminho={nota.caminho}
             etiquetasDaNota={nota.etiquetas}
@@ -416,7 +458,17 @@ export function PaginaNota({
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           {editando ? (
-            <>
+            <div className="flex min-h-0 flex-1">
+              {/* A barra de formatação vive dentro da coluna do texto, não
+                  por cima das duas: ela age no que está escrito à esquerda,
+                  e atravessar a prévia sugeria que agia nela também. */}
+              <div
+                className={clsx(
+                  "relative flex flex-col overflow-hidden",
+                  divididoEmDois ? "shrink-0" : "min-w-0 flex-1",
+                )}
+                style={divididoEmDois ? { width: divisorEditor.largura } : undefined}
+              >
               <BarraFormatacao
                 formato={nota.formato}
                 campo={area}
@@ -485,71 +537,52 @@ export function PaginaNota({
                 </p>
               ) : null}
 
-              <div className="flex min-h-0 flex-1">
-                {ehMarkdown && previaVisivel ? (
-                  // Envoltório à parte, sem rolagem própria: é o que faz a
-                  // alça de redimensionar (posicionada em relação a ele)
-                  // ficar sempre na borda visível, em vez de rolar junto
-                  // com o texto — mesmo padrão da lista de páginas e da
-                  // coluna de seções.
-                  <div className="relative shrink-0 overflow-hidden" style={{ width: divisorEditor.largura }}>
-                    <div className="h-full overflow-y-auto" ref={zoom.refRolagem}>
-                      <textarea
-                        ref={area}
-                        // Não controlado de propósito — ver `aplicarNoCampo`.
-                        defaultValue={conteudo}
-                        onChange={(evento) => definirConteudo(evento.target.value)}
-                        onKeyDown={aoTeclarNoCampo}
-                        onPaste={aoColarNoCampo}
-                        spellCheck
-                        placeholder="Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
-                        className="editor-texto min-h-full w-full resize-none px-7 py-5 placeholder:text-tinta-3 focus:outline-none"
-                      />
-                    </div>
-                    <AlcaRedimensionar
-                      aoArrastar={divisorEditor.iniciarArraste}
-                      aoRestaurar={divisorEditor.restaurarPadrao}
-                      rotulo="Redimensionar o texto e a prévia"
-                    />
-                  </div>
-                ) : (
-                  // Prévia escondida (ou nota em texto puro, que não tem
-                  // prévia): o texto cru ocupa a largura toda.
-                  <div className="min-w-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
-                    <textarea
-                      ref={area}
-                      defaultValue={conteudo}
-                      onChange={(evento) => definirConteudo(evento.target.value)}
-                      onKeyDown={aoTeclarNoCampo}
-                      onPaste={aoColarNoCampo}
-                      spellCheck
-                      placeholder={
-                        ehMarkdown
-                          ? "Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
-                          : "Escreva à vontade."
-                      }
-                      className={clsx(
-                        ehMarkdown ? "editor-texto" : "editor-simples",
-                        "min-h-full w-full resize-none px-7 py-5 placeholder:text-tinta-3 focus:outline-none",
-                      )}
-                    />
-                  </div>
-                )}
+                {/* A rolagem é deste envoltório, não da coluna inteira: é o
+                    que mantém a barra de formatação parada no topo e a alça
+                    de redimensionar sempre na borda visível. */}
+                <div className="min-h-0 flex-1 overflow-y-auto" ref={zoom.refRolagem}>
+                  <textarea
+                    ref={area}
+                    // Não controlado de propósito — ver `aplicarNoCampo`.
+                    defaultValue={conteudo}
+                    onChange={(evento) => definirConteudo(evento.target.value)}
+                    onKeyDown={aoTeclarNoCampo}
+                    onPaste={aoColarNoCampo}
+                    spellCheck
+                    placeholder={
+                      ehMarkdown
+                        ? "Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
+                        : "Escreva à vontade."
+                    }
+                    className={clsx(
+                      ehMarkdown ? "editor-texto" : "editor-simples",
+                      "min-h-full w-full resize-none px-7 py-5 placeholder:text-tinta-3 focus:outline-none",
+                    )}
+                  />
+                </div>
 
-                {ehMarkdown && previaVisivel ? (
-                  <div
-                    className="min-w-0 flex-1 overflow-y-auto border-l border-linha bg-superficie px-8 py-5"
-                    ref={zoom.refRolagem}
-                  >
-                    <VisualizadorMarkdown
-                      conteudo={conteudoPreVisualizado}
-                      pastaBase={pastaDaNota}
-                      mapaDeLinks={mapaDeLinks}
-                    />
-                  </div>
+                {divididoEmDois ? (
+                  <AlcaRedimensionar
+                    aoArrastar={divisorEditor.iniciarArraste}
+                    aoRestaurar={divisorEditor.restaurarPadrao}
+                    rotulo="Redimensionar o texto e a prévia"
+                  />
                 ) : null}
               </div>
-            </>
+
+              {divididoEmDois ? (
+                <div
+                  className="min-w-0 flex-1 overflow-y-auto border-l border-linha bg-superficie px-8 py-5"
+                  ref={zoom.refRolagem}
+                >
+                  <VisualizadorMarkdown
+                    conteudo={conteudoPreVisualizado}
+                    pastaBase={pastaDaNota}
+                    mapaDeLinks={mapaDeLinks}
+                  />
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div className="min-w-0 flex-1 overflow-y-auto px-8 py-8" ref={zoom.refRolagem}>
               {/*
@@ -560,7 +593,11 @@ export function PaginaNota({
                 passar pelo modo de edição), em vez de só aparecer pronta
                 junto com o resto do texto.
               */}
-              <article key={nota.caminho} className="relative pl-7">
+              {/* A largura de leitura: passar de ~72 caracteres por linha
+                  cansa o olho, e numa tela larga com a coluna recolhida a
+                  linha chegava a 150. A prévia da edição continua livre — lá
+                  o espaço já é metade. */}
+              <article key={nota.caminho} className="coluna-leitura relative pl-7">
                 <span
                   aria-hidden
                   className="spinha-lombada absolute inset-y-0 left-0 w-[2px] origin-top rounded-full"

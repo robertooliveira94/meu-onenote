@@ -262,6 +262,29 @@ textarea:focus {
   word-break: break-word;
 }
 
+/*
+  A largura de leitura. Linha muito longa cansa: o olho perde o começo da
+  seguinte. Setenta e poucos caracteres é a medida clássica, e como a fonte
+  da prosa tem ~0.5em de largura média, 36em dela dão isso. Acompanha o zoom
+  do texto (`--escala-texto`), então aumentar a letra alarga a coluna junto
+  em vez de espremer as linhas. Só o modo leitura usa: na edição lado a lado
+  cada painel já é estreito por conta própria.
+*/
+.coluna-leitura {
+  max-width: calc(36 * 15.5px * var(--escala-texto));
+  margin-inline: auto;
+}
+
+/*
+  Modo foco (`src/lib/foco.ts`): a moldura toda sai da tela e fica só o
+  texto. Uma regra só, porque quem precisa sumir — trilho, coluna de
+  navegação, cabeçalho da nota — está espalhado por componentes que não são
+  parentes uns dos outros.
+*/
+[data-foco="1"] .esconde-no-foco {
+  display: none !important;
+}
+
 /* Nome escrito de cima para baixo, para caber na barra estreita de uma coluna
    recolhida sem virar sopa de letras. */
 .texto-vertical {

@@ -52,7 +52,7 @@ export function BarraAplicacoes({
   const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
   return (
-    <aside className="flex w-14 shrink-0 flex-col items-center border-r border-linha bg-superficie py-2.5">
+    <aside className="esconde-no-foco flex w-14 shrink-0 flex-col items-center border-r border-linha bg-superficie py-2.5">
       <nav className="flex flex-col items-center gap-1" aria-label="Aplicativos">
         <BotaoApp
           nome="Anotações"

@@ -75,7 +75,7 @@ export function ColunaSecoes({
 
   if (colunas.recolhida("secoes")) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-superficie pt-3">
+      <div className="esconde-no-foco flex w-10 shrink-0 flex-col items-center gap-2 border-r border-linha bg-superficie pt-3">
         <BotaoIcone rotulo="Mostrar cadernos, seções e páginas" onClick={() => colunas.alternar("secoes")}>
           <PanelLeftOpen size={15} />
         </BotaoIcone>
@@ -102,7 +102,7 @@ export function ColunaSecoes({
 
   return (
     <div
-      className="relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-superficie"
+      className="esconde-no-foco relative flex shrink-0 flex-col overflow-hidden border-r border-linha bg-superficie"
       style={{ width: largura.largura }}
     >
       <div className="flex items-center gap-2 px-3.5 py-2.5">
