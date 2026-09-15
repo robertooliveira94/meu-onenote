@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { ListaPaginas } from "@/components/lista-paginas";
 import { PaginaNota } from "@/components/nota";
-import { lerArvore, lerNota, listarNotas } from "@/lib/arquivos";
-import { nomeDe, pastaDe } from "@/lib/caminhos";
+import { lerArvore, lerNota } from "@/lib/arquivos";
 import { listarEtiquetas } from "@/lib/etiquetas";
 import { linksDaNota, listarBacklinks } from "@/lib/links";
-import { listarModelos } from "@/lib/modelos";
 import { caminhoDaUrl } from "@/lib/rotas";
 
 export default async function TelaDaNota({
@@ -21,40 +18,24 @@ export default async function TelaDaNota({
   const nota = await lerNota(caminho);
   if (!nota) notFound();
 
-  const pasta = pastaDe(caminho);
-  const [notas, etiquetas, cadernos, modelos, mapaDeLinks, backlinks, busca] = await Promise.all([
-    listarNotas(pasta),
+  const [etiquetas, cadernos, mapaDeLinks, backlinks, busca] = await Promise.all([
     listarEtiquetas(),
     lerArvore(),
-    listarModelos(),
     linksDaNota(nota.conteudo),
     listarBacklinks(caminho),
     searchParams,
   ]);
 
   return (
-    <>
-      <ListaPaginas
-        pasta={pasta}
-        nomeDaPasta={nomeDe(pasta) || "Notas"}
-        notas={notas}
-        etiquetas={etiquetas}
-        cadernos={cadernos}
-        modelos={modelos}
-        caminhoAtivo={caminho}
-      />
-      {/* A chave remonta o editor ao trocar de página, zerando o estado local. */}
-      <PaginaNota
-        key={caminho}
-        nota={nota}
-        etiquetas={etiquetas}
-        editandoInicial={busca.editando === "1"}
-        iconeDoCaderno={
-          cadernos.find((caderno) => caderno.nome === caminho.split("/")[0])?.icone ?? "📓"
-        }
-        mapaDeLinks={mapaDeLinks}
-        backlinks={backlinks}
-      />
-    </>
+    // A chave remonta o editor ao trocar de página, zerando o estado local.
+    <PaginaNota
+      key={caminho}
+      nota={nota}
+      etiquetas={etiquetas}
+      editandoInicial={busca.editando === "1"}
+      iconeDoCaderno={cadernos.find((caderno) => caderno.nome === caminho.split("/")[0])?.icone ?? "📓"}
+      mapaDeLinks={mapaDeLinks}
+      backlinks={backlinks}
+    />
   );
 }

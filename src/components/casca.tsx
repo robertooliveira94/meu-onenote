@@ -104,15 +104,9 @@ function AtalhosDoHub({
   const colunaDaApp = appAtual === "notas" ? "secoes" : appAtual === "kanban" ? "quadros" : null;
   useAtalho("[", {
     grupo,
-    descricao: appAtual === "kanban" ? "Recolher/mostrar os quadros" : "Recolher/mostrar cadernos e seções",
+    descricao: appAtual === "kanban" ? "Recolher/mostrar os quadros" : "Recolher/mostrar a árvore",
     ativo: colunaDaApp !== null,
     acao: () => colunaDaApp && colunas.alternar(colunaDaApp),
-  });
-  useAtalho("]", {
-    grupo,
-    descricao: "Recolher/mostrar a lista de páginas",
-    ativo: appAtual === "notas",
-    acao: () => colunas.alternar("paginas"),
   });
   useAtalho("?", { grupo, descricao: "Esta folha de atalhos", acao: aoAbrirFolha });
 

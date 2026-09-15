@@ -3,13 +3,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 /**
- * Recolher a coluna de seções e a de páginas — cada uma por conta própria,
- * não mais as duas juntas. Um contexto só porque cada botão de recolher
- * mora dentro da própria coluna, mas o estado precisa sobreviver a essa
- * coluna trocando de conteúdo (de caderno pra caderno, de seção pra seção)
- * sem se perder.
+ * Recolher a coluna de navegação de cada aplicação. Um contexto só porque o
+ * botão de recolher mora dentro da própria coluna, mas o estado precisa
+ * sobreviver a essa coluna trocando de conteúdo (de caderno pra caderno, de
+ * quadro pra quadro) sem se perder.
  */
-export type Coluna = "secoes" | "paginas" | "quadros";
+export type Coluna = "secoes" | "quadros";
 
 const ColunasContexto = createContext<{
   recolhida: (coluna: Coluna) => boolean;
@@ -18,14 +17,12 @@ const ColunasContexto = createContext<{
 
 const CHAVES: Record<Coluna, string> = {
   secoes: "coluna-secoes-recolhida",
-  paginas: "coluna-paginas-recolhida",
   quadros: "coluna-quadros-recolhida",
 };
 
 export function ColunasProvedor({ children }: { children: React.ReactNode }) {
   const [estado, definirEstado] = useState<Record<Coluna, boolean>>({
     secoes: false,
-    paginas: false,
     quadros: false,
   });
 
@@ -33,11 +30,10 @@ export function ColunasProvedor({ children }: { children: React.ReactNode }) {
     try {
       definirEstado({
         secoes: localStorage.getItem(CHAVES.secoes) === "1",
-        paginas: localStorage.getItem(CHAVES.paginas) === "1",
         quadros: localStorage.getItem(CHAVES.quadros) === "1",
       });
     } catch {
-      // Sem armazenamento: as duas começam sempre abertas.
+      // Sem armazenamento: começam sempre abertas.
     }
   }, []);
 

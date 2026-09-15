@@ -30,7 +30,7 @@ import { atualizarIndice, entradaDaNota, entradaDaPasta } from "@/lib/indice";
 import { apagarDeVez, enviarParaLixeira, esvaziarLixeira, restaurar } from "@/lib/lixeira";
 import { criarModelo, editarModelo, excluirModelo, lerModelo } from "@/lib/modelos";
 import { urlDaNota, urlDaSecao } from "@/lib/rotas";
-import type { ResultadoBusca, VersaoHistorico } from "@/lib/tipos";
+import type { ResultadoBusca, ResumoNota, VersaoHistorico } from "@/lib/tipos";
 
 /**
  * Ponte entre a interface e o disco. Tudo que altera arquivo passa por aqui,
@@ -115,6 +115,18 @@ export async function acaoCriarPagina(pasta: string, modeloId?: string): Promise
   atualizarTudo();
   // Nota nova já abre em edição — não faria sentido abrir uma folha vazia em leitura.
   redirect(`${urlDaNota(caminho)}?editando=1`);
+}
+
+/**
+ * As páginas de uma seção, para a árvore de navegação (`arvore-notas.tsx`).
+ *
+ * A árvore vive na casca, e um layout do App Router não re-renderiza quando
+ * só o segmento filho da rota muda — então a lista não pode chegar por
+ * props. Ela é buscada aqui quando a seção é aberta, e só então: seção
+ * fechada não custa uma leitura de pasta.
+ */
+export async function acaoListarNotas(pasta: string): Promise<ResumoNota[]> {
+  return listarNotas(caminhoValido.parse(pasta));
 }
 
 /**
