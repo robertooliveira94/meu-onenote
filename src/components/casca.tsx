@@ -8,6 +8,7 @@ import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
 import { BarraAplicacoes } from "./barra-aplicacoes";
+import { ColunaQuadros } from "./coluna-quadros";
 import { ColunaSecoes } from "./coluna-secoes";
 
 /** Acha uma pasta de links pelo id, em qualquer profundidade da árvore. */
@@ -108,6 +109,8 @@ function CascaInterna({
         <BarraAplicacoes appAtual={appAtual} cadernos={cadernos} quadros={quadros} />
         {appAtual === "notas" ? (
           <ColunaSecoes caderno={cadernoAtivo} cadernos={cadernos} etiquetas={etiquetas} modelos={modelos} />
+        ) : appAtual === "kanban" ? (
+          <ColunaQuadros quadros={quadros} />
         ) : null}
         <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
       </div>

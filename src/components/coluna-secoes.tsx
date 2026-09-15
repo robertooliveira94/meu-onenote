@@ -52,6 +52,7 @@ import type { Caderno, Etiqueta, Modelo, Secao } from "@/lib/tipos";
 import { DialogoConfirmar, DialogoMover, DialogoNome } from "./dialogos";
 import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
 import { PaletaBusca } from "./paleta-busca";
+import { SeletorDeCadernos } from "./seletor-cadernos";
 import { AlcaRedimensionar, BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
 type Alvo = { caminho: string; nome: string };
@@ -116,10 +117,12 @@ export function ColunaSecoes({
   const [buscaAberta, definirBuscaAberta] = useState(false);
   const [exportando, iniciarExportacao] = useTransition();
   const [, iniciarCriacaoDePagina] = useTransition();
+  // 248 de partida (era 220): a coluna agora carrega os cadernos também,
+  // desde que a coluna de aplicativos virou um trilho só de ícones.
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
-    padrao: 220,
-    minima: 170,
-    maxima: 360,
+    padrao: 248,
+    minima: 190,
+    maxima: 380,
   });
   const colunas = useColunas();
   const recolhida = colunas.recolhida("secoes");
@@ -220,20 +223,21 @@ export function ColunaSecoes({
         {/* Recolhida, a coluna ainda precisa dizer onde a pessoa está — o
             nome da seção aberta, escrito de cima para baixo, é o que cabe
             nesta faixa. Clicar nele abre a coluna de volta. */}
-        {secaoAtiva ? (
+        {caderno ? (
           <button
             type="button"
             onClick={() => colunas.alternar("secoes")}
-            title={`Seção aberta: ${secaoAtiva.nome} (clique para mostrar as seções)`}
+            title={`${caderno.nome}${secaoAtiva ? ` › ${secaoAtiva.nome}` : ""} (clique para mostrar cadernos e seções)`}
             className="flex min-h-0 flex-1 flex-col items-center gap-2 pb-3"
           >
             <span
               className="size-1.5 shrink-0 rounded-full"
-              style={{ background: caderno?.cor ?? "var(--realce)" }}
+              style={{ background: caderno.cor }}
               aria-hidden
             />
             <span className="texto-vertical min-h-0 text-[11.5px] font-medium text-tinta-2">
-              {secaoAtiva.nome}
+              {caderno.nome}
+              {secaoAtiva ? ` › ${secaoAtiva.nome}` : ""}
             </span>
           </button>
         ) : null}
@@ -247,13 +251,10 @@ export function ColunaSecoes({
       style={{ width: largura.largura }}
     >
       <div className="flex items-center gap-2 px-3.5 py-2.5">
-        {/* O nome do caderno aberto: a coluna das aplicações ao lado mostra
-            qual caderno está selecionado, mas aqui ele vira o título do que
-            se está olhando — as seções logo abaixo são deste caderno. */}
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold tracking-[-0.01em]">
-          {caderno ? caderno.nome : "Anotações"}
+          Anotações
         </span>
-        <BotaoIcone rotulo="Recolher seções" onClick={() => colunas.alternar("secoes")}>
+        <BotaoIcone rotulo="Recolher cadernos e seções" onClick={() => colunas.alternar("secoes")}>
           <PanelLeftClose size={14} />
         </BotaoIcone>
       </div>
@@ -266,6 +267,15 @@ export function ColunaSecoes({
         >
           Buscar
         </BotaoDaBarra>
+      </div>
+
+      <div className="mx-3 h-px bg-linha" />
+
+      {/* Os cadernos moravam na coluna de aplicativos; com ela virando um
+          trilho de ícones, vêm pra cá — em cima das seções, que são deles.
+          Altura limitada pra lista de cadernos nunca engolir a de seções. */}
+      <div className="flex shrink-0 flex-col pt-2" style={{ maxHeight: "38%" }}>
+        <SeletorDeCadernos cadernos={cadernos} />
       </div>
 
       <div className="mx-3 h-px bg-linha" />

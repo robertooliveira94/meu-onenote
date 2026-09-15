@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useState } from "react";
  * coluna trocando de conteúdo (de caderno pra caderno, de seção pra seção)
  * sem se perder.
  */
-export type Coluna = "secoes" | "paginas";
+export type Coluna = "secoes" | "paginas" | "quadros";
 
 const ColunasContexto = createContext<{
   recolhida: (coluna: Coluna) => boolean;
@@ -19,12 +19,14 @@ const ColunasContexto = createContext<{
 const CHAVES: Record<Coluna, string> = {
   secoes: "coluna-secoes-recolhida",
   paginas: "coluna-paginas-recolhida",
+  quadros: "coluna-quadros-recolhida",
 };
 
 export function ColunasProvedor({ children }: { children: React.ReactNode }) {
   const [estado, definirEstado] = useState<Record<Coluna, boolean>>({
     secoes: false,
     paginas: false,
+    quadros: false,
   });
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function ColunasProvedor({ children }: { children: React.ReactNode }) {
       definirEstado({
         secoes: localStorage.getItem(CHAVES.secoes) === "1",
         paginas: localStorage.getItem(CHAVES.paginas) === "1",
+        quadros: localStorage.getItem(CHAVES.quadros) === "1",
       });
     } catch {
       // Sem armazenamento: as duas começam sempre abertas.
