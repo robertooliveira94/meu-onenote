@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import "./globals.css";
@@ -23,6 +23,12 @@ const fonteMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Meu bloco de anotações",
   description: "Anotações pessoais em seções e subseções, salvas em arquivos locais.",
+  manifest: "/manifest.webmanifest",
+};
+
+// Cor da moldura da janela quando instalado como app (ver src/app/manifest.ts).
+export const viewport: Viewport = {
+  themeColor: "#0ea47c",
 };
 
 /**

@@ -129,7 +129,8 @@ limpas e abríveis em qualquer editor.
   mostra o vault inteiro como uma rede (arraste do mouse destaca as conexões
   de uma nota, clique abre), com uma lista à parte das "notas órfãs" — as
   que nenhuma outra ainda referencia.
-- Busca global (`Ctrl+K`) no título e no corpo de todas as notas.
+- Busca global no título e no corpo de todas as notas — hoje uma das
+  seções da paleta de comandos (`Ctrl+K`), ao lado de tarefas e links.
 - Painel `/tarefas` junta toda `- [ ]`/`- [x]` do vault inteiro, agrupada por
   página; clicar na caixinha ali grava direto no arquivo de origem, sem abrir
   a nota. Um filtro "Mostrar concluídas" some com o que já foi feito por
@@ -161,22 +162,55 @@ limpas e abríveis em qualquer editor.
   suave, cinza neutro, vibrante — este último saturado e com brilho,
   pensado pra quem quer uma tela com mais cor/contraste), escolhidos num
   menu; a tela nunca pisca no tema errado ao carregar.
-- **Abrir uma aplicação em janela separada do navegador**: cada botão de
-  aplicação (Anotações, Kanban, Senhas, Links) tem, ao passar o mouse, um
-  botão para abrir aquela aplicação numa segunda janela — para usar duas
-  ao mesmo tempo lado a lado. As duas janelas dividem o mesmo servidor e
-  dados; uma mudança numa aparece na outra ao atualizar.
+- **Abrir uma aplicação em janela separada do navegador**: botão direito
+  no ícone de uma aplicação (Anotações, Kanban, Senhas, Links) no trilho
+  oferece "Abrir em nova janela" — para usar duas ao mesmo tempo lado a
+  lado. A mesma ação existe na paleta de comandos. As duas janelas dividem
+  o mesmo servidor e dados; uma mudança numa aparece na outra ao atualizar.
 - **O app é um hub de aplicações independentes** — hoje Anotações, Kanban,
-  Senhas e Links. A coluna mais à esquerda diz qual está aberta e lista o
-  que é dela (cadernos, quadros, ou nada — Senhas e Links navegam a
-  própria árvore na área de conteúdo). As listas não se misturam em nada:
-  excluir o quadro "Trabalho" não encosta no caderno "Trabalho", e
-  vice-versa; excluir um cofre não mexe em nada de Links, e vice-versa. Em
-  qualquer aplicação que não Anotações, a coluna de navegação das
-  anotações (busca, seções, atalhos fixos) some da tela. O botão de tema
-  fica no rodapé dessa coluna, visível em todas. No topo da coluna só
-  existem os botões de aplicação — sem nome ou logo do app por cima
-  deles. Abrir o app cai direto em Anotações.
+  Senhas e Links. Um **trilho de ícones** de 56 px na borda esquerda diz
+  qual está aberta (nome e contagem no tooltip); cada aplicação carrega a
+  própria coluna de navegação ao lado dele: Anotações tem cadernos +
+  seções numa coluna e páginas noutra, Kanban tem a coluna de quadros,
+  Senhas e Links navegam a própria árvore na área de conteúdo. Cada coluna
+  recolhe pra uma faixa fina (`[` e `]` no teclado) e lembra a largura.
+  As listas não se misturam em nada: excluir o quadro "Trabalho" não
+  encosta no caderno "Trabalho", e vice-versa; excluir um cofre não mexe
+  em nada de Links, e vice-versa. No rodapé do trilho ficam a folha de
+  atalhos e o menu de Preferências (tema, densidade, avisos), visíveis em
+  todas as aplicações. Abrir o app cai direto em Anotações.
+- **Paleta de comandos** (`Ctrl+K` ou `/`, de qualquer aplicação): uma
+  caixa só que mistura ações (nova página, novo quadro, trocar tema,
+  densidade, recolher colunas, abrir em nova janela, trancar cofre…),
+  "Ir para" (todas as telas fixas, cada caderno › seção, cada quadro, cada
+  pasta de links) e as buscas de servidor em notas, tarefas do Kanban e
+  links — tudo numa lista navegável por setas e Enter. Prefixos `>`, `#`,
+  `@` e `!` restringem a ações, notas, tarefas ou links. Senhas ficam de
+  fora da paleta: o cofre só é lido destrancado.
+- **Atalhos de teclado consistentes**, registrados num lugar só e listados
+  na folha `?` (que mostra apenas o que vale na tela atual): `Alt+1..4`
+  troca de aplicação, `n` cria o item da tela (página, tarefa, senha,
+  link), `e` edita a nota aberta, `Ctrl+S` salva, `[`/`]` recolhem as
+  colunas, `Ctrl+L` tranca o cofre. Tecla solta nunca dispara dentro de um
+  campo de texto.
+- **Densidade** da interface (Confortável ou Compacta) no menu de
+  Preferências: a compacta aperta o espaço interno dos cartões, o vão
+  entre eles e a altura das linhas das árvores — para caber mais numa
+  lista de 200 links ou 40 senhas — sem mexer no tamanho da fonte.
+  Lembrada entre sessões e aplicada antes da primeira pintura, como o
+  tema. Listas longas só fazem layout do que está na tela
+  (`content-visibility`), sem biblioteca de virtualização.
+- **Avisos de prazo do Kanban atravessam o hub**: o ícone do Kanban no
+  trilho ganha um ponto vermelho quando alguma tarefa de qualquer quadro
+  está com prazo estourado (a contagem no tooltip), visível de dentro de
+  Links, Senhas ou Anotações; tarefa na coluna de conclusão não conta. Quem
+  quiser liga "Avisar prazos do Kanban" em Preferências: o navegador pede
+  permissão no clique e, dali em diante, mostra uma notificação com as
+  atrasadas e as que vencem hoje — uma vez por dia para cada conjunto, e
+  clicar nela abre o quadro. Desligado por padrão.
+- **Instalável como aplicativo** (menu do Chrome/Edge → Instalar): abre em
+  janela própria sem barra de endereço, com ícone na barra de tarefas e
+  no menu Iniciar. Sem service worker — o app é local, offline é o normal.
 - Kanban (`/kanban/<Quadro>`): quadros próprios, guardados em
   `dados/_kanban/<Quadro>/<Coluna>/<Tarefa>.md` — fora dos cadernos, porque
   não são anotação. Cada tarefa é um arquivo `.md` de verdade; arrastar

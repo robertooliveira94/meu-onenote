@@ -20,6 +20,15 @@ Só abrir o navegador em **http://localhost:3100** — ou dar dois cliques no
 atalho "Meu Bloco de Anotacoes" na Área de Trabalho. O serviço já está
 rodando em segundo plano; não precisa abrir nada antes.
 
+### Instalar como aplicativo
+
+Com a página aberta, no menu do Chrome ou do Edge (⋮ → "Instalar Meu bloco
+de anotações", ou o ícone de instalar na barra de endereço) o hub vira um
+aplicativo próprio: abre numa janela sem barra de endereço, com ícone na
+barra de tarefas e no menu Iniciar, e pode ser fixado ali como qualquer
+programa. Continua sendo o mesmo serviço em `localhost:3100` — só muda a
+janela. Para desinstalar, botão direito no ícone → "Desinstalar".
+
 ## Onde ficam as anotações
 
 Por padrão, em `C:\Users\rober\OneDrive\Documentos\notas` — **dentro do

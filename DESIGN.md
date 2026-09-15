@@ -273,35 +273,48 @@ hierarquia; a mono é a única exceção, reservada a conteúdo literal.
 
 ## Layout
 
-Até quatro colunas em telas de trabalho de Anotações: a coluna de
-aplicativos (214px, fixa, nunca redimensiona) fica sempre mais à esquerda;
-depois dela, a coluna de seções (248px de partida) e a lista de páginas
-(292px de partida) são **redimensionáveis arrastando a borda direita**,
-como uma coluna de planilha; a área de conteúdo sempre ocupa o resto do
-espaço. Kanban, Senhas e Links dispensam a coluna de seções — a área de
-conteúdo delas já tem a própria navegação (quadro, árvore de grupos/pastas)
-embutida. Sem grade responsiva além disso; o app assume uma janela de
-desktop (é um serviço local, não uma página pública). Densidade compacta:
-paddings típicos de 8–16px, altura de controle padrão de 34–38px.
+Até quatro colunas em telas de trabalho de Anotações: o trilho de
+aplicativos (56px, fixo, só ícones) fica sempre mais à esquerda; depois
+dele, a coluna de seções (248px de partida — carrega cadernos em cima e
+seções embaixo) e a lista de páginas (292px de partida) são
+**redimensionáveis arrastando a borda direita**, como uma coluna de
+planilha; a área de conteúdo sempre ocupa o resto do espaço. Num notebook
+de 1366px a moldura toda soma 596px e sobram ~770px pra nota (a coluna
+larga de aplicativos de antes, 214px, comia 158px disso). Kanban tem a
+própria coluna de quadros (220px de partida) no lugar da de seções;
+Senhas e Links dispensam coluna — a área de conteúdo delas já tem a
+própria navegação (árvore de grupos/pastas) embutida. Sem grade
+responsiva além disso; o app assume uma janela de desktop (é um serviço
+local, não uma página pública).
 
-A largura de cada uma é lembrada por painel (`localStorage`, chaves
-`largura-barra-lateral` e `largura-lista-paginas`), clampada entre um
-mínimo e um máximo por painel para nunca colapsar nem engolir a tela
-inteira. Duplo clique na borda volta ao valor de partida.
+**Densidade** é uma preferência da pessoa, não uma classe por tela: quatro
+variáveis em `:root` (`--esp-cartao-y: 10px`, `--esp-cartao-x: 14px`,
+`--esp-lista: 6px`, `--esp-nav-y: 6px`) dão o padding interno de `.cartao`,
+o vão de `.lista-cartoes` e o padding vertical de `.linha-nav`;
+`[data-densidade="compacta"]` no `<html>` aperta pra 6/10/3/3. Nada de
+fonte muda. Aplicada antes da primeira pintura pelo mesmo script do tema
+(`localStorage` chave `densidade`). Altura de controle padrão continua
+34–38px. `.lista-cartoes > *` leva `content-visibility: auto` — listas
+longas só fazem layout do que está na tela.
+
+A largura de cada coluna é lembrada por painel (`localStorage`, chaves
+`largura-coluna-secoes`, `largura-lista-paginas` e
+`largura-coluna-quadros`), clampada entre um mínimo e um máximo por painel
+para nunca colapsar nem engolir a tela inteira. Duplo clique na borda volta
+ao valor de partida.
 
 O modo de edição de uma nota em markdown divide a área de conteúdo em duas
 colunas iguais — texto cru à esquerda, prévia renderizada à direita — sem
 proporção assimétrica.
 
-**Recolher para escrever**: um botão no topo da coluna de seções
-(`PanelLeftClose`) esconde a coluna de seções e a lista de páginas de uma
-vez, dando à área de conteúdo o máximo de espaço — o mesmo botão, como
-`PanelLeftOpen` flutuando no canto superior esquerdo, traz as duas de
-volta (a coluna de aplicativos nunca recolhe, sempre fica visível). Estado
-único
-(`localStorage`, chave `colunas-recolhidas`) compartilhado entre os dois
-painéis porque moram em componentes diferentes; enquanto recolhidas, ficam
-com `inert` — não só invisíveis, também fora da ordem de tab.
+**Recolher para escrever**: cada coluna (seções, páginas, quadros) recolhe
+por conta própria pra uma faixa de 40px com o nome na vertical — o botão
+de reabrir nunca some. `[` recolhe a coluna da aplicação (seções ou
+quadros), `]` a lista de páginas. O trilho de aplicativos nunca recolhe.
+Estado por coluna (`localStorage`, chaves `coluna-secoes-recolhida`,
+`coluna-paginas-recolhida`, `coluna-quadros-recolhida`); enquanto
+recolhida, o conteúdo fica com `inert` — não só invisível, também fora da
+ordem de tab.
 
 **Zoom do texto**: três controles no cabeçalho da nota (`-`, percentual,
 `+`) e `Ctrl`/`⌘` + roda do mouse sobre a área de texto aumentam ou diminuem
@@ -428,22 +441,39 @@ desenhar um cartão inteiro ao redor.
   ajuste.
 
 ### Navigation
-- **Coluna de aplicativos (214px, sempre a mais à esquerda):** o topo tem
-  um botão por aplicativo (Anotações, Kanban, Senhas, Links) — ícone +
-  nome + contagem, sem nome/logo do produto por cima deles. O ativo ganha
-  fundo sólido escurecido na cor de destaque (`color-mix(in srgb,
-  var(--realce) 70%, black)`) e texto branco; ao passar o mouse, um
-  segundo botão pequeno some/aparece no canto pra abrir aquele app numa
-  janela separada. Embaixo do seletor de app, a lista daquele app
-  (cadernos, quadros, ou nada — Senhas e Links navegam a própria árvore na
-  área de conteúdo, sem lista aqui). O botão de tema (agora um menu com as
-  seis opções, não mais um toggle claro/escuro) fica sempre no rodapé
-  dessa coluna, visível em qualquer aplicativo.
-- **Coluna de seções (só em Anotações):** busca, as seções do caderno
-  aberto, e os atalhos fixos no rodapé (Início, Etiquetas, Grafo, Tarefas,
-  Modelos, Web Clipper, Exportar tudo, Lixeira). Item de seção ativo ganha
-  a mesma barra vertical de 2.5px na cor do caderno + wash de fundo que o
-  resto do sistema usa pra "você está aqui".
+- **Trilho de aplicativos (56px, sempre o mais à esquerda):** um botão
+  quadrado de 40px por aplicativo (Anotações, Kanban, Senhas, Links), só
+  ícone de 18px — nome e contagem vão pro tooltip/`aria-label` ("Kanban ·
+  3 quadros"); sem nome/logo do produto por cima. O ativo ganha fundo
+  sólido escurecido na cor de destaque (`color-mix(in srgb, var(--realce)
+  70%, black)`) e ícone branco. Botão direito abre um `Menu` com "Abrir em
+  nova janela" — o botãozinho de hover da coluna larga não cabe aqui. O
+  ícone do Kanban recebe um ponto de 8px em `--perigo` (com anel de 2px na
+  cor da superfície) no canto superior direito quando há tarefa atrasada em
+  qualquer quadro; a contagem vai pro tooltip. Rodapé: botão da folha de
+  atalhos (`Keyboard`) e o menu de Preferências (`Palette`) — tema (6
+  opções), densidade (2) e o liga/desliga de "Avisar prazos do Kanban" —
+  visível em qualquer aplicativo.
+- **Coluna de seções (só em Anotações):** botão "Buscar" (abre a paleta),
+  a lista de cadernos (até 38% da altura, rolagem própria), depois as
+  seções do caderno aberto, e os atalhos fixos no rodapé (Início,
+  Etiquetas, Grafo, Tarefas, Modelos, Web Clipper, Exportar tudo, Lixeira).
+  Item de seção ativo ganha a mesma barra vertical de 2.5px na cor do
+  caderno + wash de fundo que o resto do sistema usa pra "você está aqui".
+  Recolhida, a faixa mostra "caderno › seção" na vertical.
+- **Coluna de quadros (só no Kanban):** mesmo esqueleto — cabeçalho, a
+  lista de quadros com a cor de cada um, rodapé com "Etiquetas do Kanban".
+- **Paleta de comandos (`Ctrl+K`, `/`):** um `Dialogo` com campo de busca
+  e uma lista única de resultados em seções rotuladas (`RotuloMenu`):
+  Ações, Ir para, Notas, Tarefas, Links. Ações e Ir para filtram na hora
+  por palavras (sem acento); as três buscas de servidor disparam juntas
+  com debounce de 220ms. Linha selecionada mostra "Enter" à direita;
+  rodapé lista os prefixos `>` `#` `@` `!`. É a única caixa de busca do
+  hub — não há campo de busca em coluna nenhuma.
+- **Folha de atalhos (`?`):** `Dialogo` com os atalhos ativos na tela,
+  agrupados (Hub, Anotações, Kanban…), cada combo em `<kbd>` monoespaçado
+  com borda `--linha` e `rounded-sm`. Atalhos vêm de um registro central
+  (`useAtalho`), então a folha nunca lista o que não funciona ali.
 - **Recolher coluna a coluna:** a coluna de seções e a de páginas
   recolhem cada uma por conta própria (não é mais um "modo foco" único que
   esconde as duas juntas) — cada botão de recolher vira uma barra fina de
