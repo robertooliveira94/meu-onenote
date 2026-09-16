@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { PanelLeftClose, PanelLeftOpen, Tag } from "lucide-react";
+import { CalendarCheck, PanelLeftClose, PanelLeftOpen, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -75,6 +75,18 @@ export function ColunaQuadros({ quadros }: { quadros: ResumoQuadro[] }) {
       <div className="mx-3 h-px bg-linha" />
 
       <nav className="shrink-0 p-2" aria-label="Atalhos do Kanban">
+        <Link
+          href="/kanban/hoje"
+          className={clsx(
+            "flex items-center gap-2.5 rounded-md px-2 py-[5px] text-[12.5px] transition-colors",
+            caminhoAtual === "/kanban/hoje"
+              ? "bg-realce-medio font-medium text-tinta"
+              : "text-tinta-2 hover:bg-realce-fraco",
+          )}
+        >
+          <CalendarCheck size={14} className="text-tinta-3" />
+          Hoje
+        </Link>
         <Link
           href={hrefEtiquetas}
           className={clsx(

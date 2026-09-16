@@ -240,6 +240,7 @@ export function PaletaComandos({
         ["Modelos", "/modelos", <FileText key="m" size={14} />],
         ["Web Clipper", "/clipper", <FileText key="w" size={14} />],
         ["Lixeira das anotações", "/lixeira", <FileText key="l" size={14} />],
+        ["Hoje (Kanban)", "/kanban/hoje", <KanbanSquare key="kh" size={14} />],
         ["Etiquetas do Kanban", "/kanban/etiquetas", <KanbanSquare key="ke" size={14} />],
         ["Senhas", "/senhas", <FileText key="s" size={14} />],
         ["Links", "/links", <Bookmark key="lk" size={14} />],

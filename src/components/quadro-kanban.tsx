@@ -10,6 +10,9 @@ import {
   ChevronRight,
   ChevronsLeftRight,
   Gauge,
+  KanbanSquare,
+  CalendarDays,
+  List,
   Copy,
   Flag,
   FlagOff,
@@ -108,6 +111,7 @@ import { DialogoConfirmar, DialogoNome } from "./dialogos";
 import { SeletorEtiquetasKanban } from "./seletor-etiquetas-kanban";
 import { TituloEditavel } from "./titulo-editavel";
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, RotuloMenu, SeparadorMenu } from "./ui";
+import { VisaoCalendario, VisaoLista } from "./visoes-kanban";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
 /** As seis cores da paleta, para a cor própria de um cartão. */
@@ -161,6 +165,7 @@ export function QuadroKanban({
   conteudo,
   etiquetasKanban,
   sprints,
+  tarefaInicial = null,
 }: {
   /** O quadro em si: nome, cor, ícone. */
   quadro: ResumoQuadro;
@@ -168,6 +173,8 @@ export function QuadroKanban({
   conteudo: Quadro;
   etiquetasKanban: EtiquetaKanban[];
   sprints: SprintKanban[];
+  /** Caminho de uma tarefa para abrir no painel assim que o quadro monta. */
+  tarefaInicial?: string | null;
 }) {
   const roteador = useRouter();
   const colunas = conteudo.config.colunas;
@@ -193,7 +200,7 @@ export function QuadroKanban({
   }, [quadro.nome, colunas.join("|"), assinaturaTarefas]);
 
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
-  const [tarefaAberta, definirTarefaAberta] = useState<string | null>(null);
+  const [tarefaAberta, definirTarefaAberta] = useState<string | null>(tarefaInicial);
   // O cartão que os atalhos de uma tecla afetam: o aberto no painel, senão o sob o mouse.
   const [tarefaSobMouse, definirTarefaSobMouse] = useState<string | null>(null);
   // Painel lateral por padrão; tela cheia quando a pessoa expande (lembrado).
@@ -281,6 +288,27 @@ export function QuadroKanban({
   const [criandoColuna, definirCriandoColuna] = useState(false);
   const [colunaParaWip, definirColunaParaWip] = useState<string | null>(null);
   const [ajustandoArquivo, definirAjustandoArquivo] = useState(false);
+  // Quadro · Lista · Calendário sobre o mesmo filtro — lembrado por quadro.
+  type Visao = "quadro" | "lista" | "calendario";
+  const chaveVisao = `kanban-visao:${quadro.nome}`;
+  const [visao, definirVisao] = useState<Visao>("quadro");
+  useEffect(() => {
+    try {
+      const salva = localStorage.getItem(chaveVisao);
+      if (salva === "lista" || salva === "calendario") definirVisao(salva);
+      else definirVisao("quadro");
+    } catch {
+      definirVisao("quadro");
+    }
+  }, [chaveVisao]);
+  function mudarVisao(proxima: Visao) {
+    definirVisao(proxima);
+    try {
+      localStorage.setItem(chaveVisao, proxima);
+    } catch {
+      // Sem armazenamento: vale só para esta sessão.
+    }
+  }
   // Mover para uma coluna cheia (acima do WIP) pede confirmação antes.
   const [movimentoPendente, definirMovimentoPendente] = useState<{ origem: string; coluna: ColunaKanban } | null>(null);
   // Colunas recolhidas numa faixa fina — lembrado por quadro.
@@ -685,13 +713,35 @@ export function QuadroKanban({
           </button>
         ) : null}
 
-        <BotaoIcone
-          rotulo="Nova coluna"
-          onClick={() => definirCriandoColuna(true)}
-          className="ml-auto"
-        >
-          <Plus size={14} />
-        </BotaoIcone>
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-linha p-0.5" role="group" aria-label="Visão">
+          {(
+            [
+              ["quadro", "Quadro", <KanbanSquare key="q" size={13} />],
+              ["lista", "Lista", <List key="l" size={13} />],
+              ["calendario", "Calendário", <CalendarDays key="c" size={13} />],
+            ] as const
+          ).map(([id, rotulo, icone]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => mudarVisao(id)}
+              aria-pressed={visao === id}
+              className={clsx(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] transition-colors",
+                visao === id ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:text-tinta",
+              )}
+            >
+              {icone}
+              {rotulo}
+            </button>
+          ))}
+        </div>
+
+        {visao === "quadro" ? (
+          <BotaoIcone rotulo="Nova coluna" onClick={() => definirCriandoColuna(true)}>
+            <Plus size={14} />
+          </BotaoIcone>
+        ) : null}
       </div>
 
       {aviso ? (
@@ -710,6 +760,28 @@ export function QuadroKanban({
       ) : null}
 
       <div className="flex min-h-0 flex-1">
+      {visao === "lista" ? (
+        <VisaoLista
+          tarefas={Object.values(mapa).filter(passaNoFiltro)}
+          colunas={colunas}
+          sprints={sprints}
+          etiquetasKanban={etiquetasKanban}
+          sigla={sigla}
+          hoje={hojeISO()}
+          colunaConcluida={conteudo.config.colunaConcluida}
+          tarefaAberta={tarefaAberta}
+          aoAbrir={(caminho) => abrirTarefa(caminho)}
+        />
+      ) : visao === "calendario" ? (
+        <VisaoCalendario
+          tarefas={Object.values(mapa).filter(passaNoFiltro)}
+          hoje={hojeISO()}
+          colunaConcluida={conteudo.config.colunaConcluida}
+          sigla={sigla}
+          tarefaAberta={tarefaAberta}
+          aoAbrir={(caminho) => abrirTarefa(caminho)}
+        />
+      ) : (
       <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto px-4 py-4">
         {colunas.map((coluna, indice) => {
           const caminhos = ordemLocal[coluna] ?? [];
@@ -969,6 +1041,7 @@ export function QuadroKanban({
           );
         })}
       </div>
+      )}
 
       {tarefaAberta && mapa[tarefaAberta] && modoTarefa === "painel" ? (
         <PainelTarefa

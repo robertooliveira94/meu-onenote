@@ -733,6 +733,54 @@ export async function buscarTarefas(termo: string, limite = 8): Promise<TarefaAc
 /** Uma tarefa com prazo estourado ou vencendo hoje — o que o aviso do hub precisa mostrar. */
 export type TarefaComPrazo = TarefaAchada & { prazo: string };
 
+/** Uma tarefa na tela "Hoje": tudo que o cartão compacto mostra, mais o quadro de onde veio. */
+export type TarefaAgendada = TarefaKanban & { quadro: string };
+
+export type TarefasAgendadas = {
+  atrasadas: TarefaAgendada[];
+  hoje: TarefaAgendada[];
+  /** Nos próximos 7 dias, depois de hoje. */
+  semana: TarefaAgendada[];
+  depois: TarefaAgendada[];
+};
+
+/**
+ * Todas as tarefas com prazo, de todos os quadros, agrupadas em Atrasadas ·
+ * Hoje · Esta semana · Depois — a tela que se abre de manhã. Ignora a coluna
+ * de conclusão de cada quadro e o arquivo. `hoje` vem do navegador
+ * (AAAA-MM-DD), pelo fuso da pessoa.
+ */
+export async function listarTarefasComPrazo(hoje: string): Promise<TarefasAgendadas> {
+  const indice = await lerIndice();
+  const configs = new Map<string, Promise<ConfigQuadro>>();
+  const grupos: TarefasAgendadas = { atrasadas: [], hoje: [], semana: [], depois: [] };
+  const limiteDaSemana = new Date(`${hoje}T00:00:00`);
+  limiteDaSemana.setDate(limiteDaSemana.getDate() + 7);
+  const fimDaSemana = limiteDaSemana.toISOString().slice(0, 10);
+
+  for (const [caminho, meta] of Object.entries(indice.notas)) {
+    const prazo = meta.prazoKanban;
+    if (!prazo || !caminho.startsWith(`${PASTA_KANBAN}/`)) continue;
+    const partes = caminho.split("/");
+    if (partes.length !== 4) continue;
+    const [, quadro, coluna] = partes;
+    if (coluna === PASTA_ARQUIVO) continue;
+    if (!configs.has(quadro)) configs.set(quadro, garantirQuadro(quadro));
+    const config = await configs.get(quadro)!;
+    if (coluna === config.colunaConcluida) continue;
+    const tarefa: TarefaAgendada = { ...montarTarefa(caminho, coluna, indice), quadro };
+    if (prazo < hoje) grupos.atrasadas.push(tarefa);
+    else if (prazo === hoje) grupos.hoje.push(tarefa);
+    else if (prazo <= fimDaSemana) grupos.semana.push(tarefa);
+    else grupos.depois.push(tarefa);
+  }
+
+  const porPrazo = (a: TarefaAgendada, b: TarefaAgendada) =>
+    (a.prazo ?? "").localeCompare(b.prazo ?? "") || a.titulo.localeCompare(b.titulo, "pt-BR");
+  for (const grupo of Object.values(grupos)) grupo.sort(porPrazo);
+  return grupos;
+}
+
 /**
  * Tarefas de qualquer quadro com prazo até `hoje` (AAAA-MM-DD), separadas em
  * atrasadas (prazo antes de hoje) e as que vencem hoje. Só pelo índice — o

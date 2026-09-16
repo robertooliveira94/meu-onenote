@@ -37,6 +37,11 @@ export function urlDoQuadro(quadro: string): string {
   return `/kanban/${codificar(quadro)}`;
 }
 
+/** O quadro já com uma tarefa aberta no painel — é o que a tela "Hoje" usa para levar até ela. */
+export function urlDaTarefaNoQuadro(quadro: string, caminho: string): string {
+  return `${urlDoQuadro(quadro)}?tarefa=${encodeURIComponent(caminho)}`;
+}
+
 /** A tela do arquivo de um quadro — as tarefas concluídas que saíram do quadro. */
 export function urlDoArquivoDoQuadro(quadro: string): string {
   return `/kanban/${codificar(quadro)}/arquivo`;
@@ -81,9 +86,9 @@ export function quadroDaUrl(pathname: string): string | null {
   const semPrefixo = decodeURIComponent(pathname).replace(/^\/kanban\//, "");
   if (semPrefixo === pathname) return null;
   const nome = semPrefixo.split("/")[0] || null;
-  // `/kanban/etiquetas` é a tela de cadastro, não um quadro chamado
-  // "etiquetas" — a rota literal ganha do segmento dinâmico no Next.
-  return nome === "etiquetas" ? null : nome;
+  // `/kanban/etiquetas` e `/kanban/hoje` são telas fixas, não quadros com
+  // esses nomes — a rota literal ganha do segmento dinâmico no Next.
+  return nome === "etiquetas" || nome === "hoje" ? null : nome;
 }
 
 /**
@@ -118,6 +123,27 @@ export function formatarDataHora(iso: string): string {
 }
 
 /** "hoje", "ontem", "12 de ago" — usado nas listas. */
+/**
+ * Uma data sem hora ("AAAA-MM-DD", como o prazo das tarefas) em palavras:
+ * "hoje", "amanhã", "ontem", senão "16 de set." (com o ano se for outro).
+ * Não passa por `formatarDataCurta`, que para o dia de hoje mostra a hora —
+ * prazo não tem hora.
+ */
+export function formatarDia(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const data = new Date(ano, mes - 1, dia);
+  const hoje = new Date();
+  const diferenca = Math.round((data.getTime() - new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime()) / 86_400_000);
+  if (diferenca === 0) return "hoje";
+  if (diferenca === 1) return "amanhã";
+  if (diferenca === -1) return "ontem";
+  return data.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    ...(ano !== hoje.getFullYear() ? { year: "numeric" } : {}),
+  });
+}
+
 export function formatarDataCurta(iso: string): string {
   const data = new Date(iso);
   const hoje = new Date();

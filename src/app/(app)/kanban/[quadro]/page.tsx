@@ -17,10 +17,14 @@ export const dynamic = "force-dynamic";
  */
 export default async function TelaDoQuadro({
   params,
+  searchParams,
 }: {
   params: Promise<{ quadro: string }>;
+  /** `?tarefa=<caminho>` abre o painel daquela tarefa ao chegar (vindo da tela "Hoje" ou da paleta). */
+  searchParams: Promise<{ tarefa?: string }>;
 }) {
   const nome = decodeURIComponent((await params).quadro);
+  const { tarefa: tarefaInicial } = await searchParams;
   const quadros = await listarQuadros();
   const atual = quadros.find((item) => item.nome === nome);
   if (!atual) notFound();
@@ -37,6 +41,7 @@ export default async function TelaDoQuadro({
       conteudo={conteudo}
       etiquetasKanban={etiquetasKanban}
       sprints={sprints}
+      tarefaInicial={tarefaInicial ?? null}
     />
   );
 }
