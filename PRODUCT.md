@@ -297,12 +297,50 @@ limpas e abríveis em qualquer editor.
   - **Prioridade** (Baixa/Média/Alta/Urgente, com cor) e **prazo** (data
     opcional, cartão destaca em vermelho quando atrasado e a tarefa ainda
     não está na coluna de conclusão) por tarefa.
-  - **Sprints**: agrupador simples e global (sem datas nem burndown) — cria
-    uma sprint com um nome, vincula tarefas de qualquer quadro a ela,
-    filtra o quadro por sprint.
+  - **Sprints**: agrupador global — cria uma sprint com um nome, vincula
+    tarefas de qualquer quadro a ela, filtra o quadro por sprint. Início e
+    fim opcionais (só para saber quando é; sem burndown) e **"Fechar
+    sprint"**, que pergunta o que fazer com o que sobrou: mover para outra
+    sprint aberta ou soltar. Fechada some dos seletores.
+  - **Identificador curto** por tarefa ("CLD-14"): sigla do quadro (primeira
+    letra + duas consoantes) e um número sequencial que não se reusa —
+    referência falável, como no Linear e no Jira. Tarefas de antes ganham o
+    número na primeira abertura do quadro, na ordem de criação.
+  - **Estimativa** P/M/G por tarefa (1/2/3 pontos), com a soma "Σ" no
+    cabeçalho da coluna. **Cor própria do cartão** (faixa fina no topo, uma
+    das seis da paleta) para agrupar sem criar etiqueta. **Repetir**
+    (dia/semana/mês): ao entrar na coluna de conclusão, nasce uma cópia na
+    primeira coluna com o próximo prazo, subtarefas desmarcadas.
   - **Filtro do quadro** por etiqueta, prioridade ou sprint — no topo do
     quadro, sem sair da tela; mostra quantas tarefas batem de quantas
     existem na coluna.
+  - **Três visões sobre o mesmo filtro**: Quadro, **Lista** (tabela
+    ordenável por qualquer coluna — "tudo que vence esta semana, por
+    prioridade") e **Calendário** (o mês com cada tarefa no dia do prazo).
+    Lembrado por quadro. A tela **Hoje** (`/kanban/hoje`) junta tudo que
+    tem prazo, de todos os quadros, em Atrasadas · Hoje · Esta semana ·
+    Depois; clicar leva ao quadro com a tarefa já aberta.
+  - **Colunas** recolhem numa faixa fina (nome na vertical, contagem),
+    têm **limite de WIP** opcional (o cabeçalho fica "4/3" em vermelho ao
+    passar e mover mais uma para lá pede confirmação) e um "Adicionar
+    tarefa" fixo no rodapé, sempre à vista.
+  - **Arquivar**: tarefa concluída sai do quadro para `_arquivo/` — é
+    histórico, não lixeira. Pelo menu do cartão, por "Arquivar tudo" na
+    coluna de conclusão, ou sozinha depois de N dias lá (30 por padrão, 0
+    desliga; só para tarefas movidas depois desta versão). A tela
+    `/kanban/<Quadro>/arquivo` procura e desarquiva.
+  - **Adição rápida**: no campo de tarefa nova, `Revisar !alta #financeiro
+    @sexta ~sprint3 =M` já cria com prioridade, etiqueta, prazo (hoje,
+    amanhã, dia da semana, 20/09), sprint e estimativa — as pastilhas
+    aparecem embaixo do campo antes do Enter; o que não casa fica no título.
+  - **Seleção múltipla**: Ctrl+clique soma, Shift+clique pega o intervalo
+    na coluna; uma barra embaixo move, muda prioridade, arquiva ou exclui
+    em lote. Esc limpa.
+  - **Atalhos** sobre a tarefa aberta ou sob o mouse: `e` abre, `d` abre no
+    prazo, `f` favorita, `1–4` prioridade, `←/→` movem de coluna; `n` cria.
+  - **Envelhecimento**: parada há 14+ dias na mesma coluna, fora da
+    conclusão, o cartão esmaece e diz "há N dias aqui" — é como se acha o
+    que travou sem ninguém ter marcado impedimento.
   - **Menu de três pontos no cartão** (some ao passar o mouse): mover para
     outra coluna, mudar prioridade, duplicar tarefa (etiqueta/prioridade/
     prazo vêm junto, dependências não), favoritar e excluir — sem precisar
@@ -325,16 +363,22 @@ limpas e abríveis em qualquer editor.
     quadro de longe. Diferente de "Bloqueado por", que é dependência de
     outra tarefa: aqui o bloqueio é externo (esperando terceiro, faltando
     informação).
-  - **Data de criação** visível no rodapé de cada cartão.
+  - **Cartão com rodapé de posições fixas**: prazo · checklist ·
+    comentários à esquerda, estimativa · cadeado · prioridade à direita;
+    identificador em cima (a data de criação no tooltip dele). O olho acha
+    o prazo no mesmo lugar em qualquer cartão.
   - **Renomear com dois cliques** no título — só com o cartão aberto. No
     cartão pequeno do quadro, o clique é sempre "abrir": a área é apertada
     demais para disputar com um duplo clique.
-  - **Editor da tarefa**: título editável no topo, descrição em markdown
-    que abre só com a caixa de edição (sem prévia lado a lado) — um botão
-    "Salvar" embaixo dela grava e troca pra visualização renderizada; um
-    "Editar" volta pra caixa de texto. Abaixo dela, as subtarefas e o mural
-    de comentários. Impedimento, prioridade, prazo, sprint, etiquetas e
-    "Bloqueado por" ficam numa coluna à direita, separados do conteúdo.
+  - **A tarefa abre num painel lateral** de 460px ao lado do quadro, não
+    num modal: o quadro continua visível e rolável, clicar noutro cartão
+    troca o conteúdo, Esc fecha, e um botão expande para a tela cheia (o
+    diálogo de antes, para descrições longas) — modo lembrado. No painel,
+    as propriedades (impedimento, prioridade, prazo, sprint, etiquetas,
+    "bloqueado por", estimativa, repetição, cor) vêm em cima, em duas
+    colunas, e a descrição em markdown, as subtarefas e o mural de
+    comentários embaixo. A descrição abre só com a caixa de edição — um
+    "Salvar" grava e troca para a visualização renderizada.
 - **Senhas** (`/senhas`): um cofre de senhas em `.kdbx` de verdade (formato
   do KeePass, Argon2id + AES-256) — o arquivo abre também no KeePassXC,
   KeePassDX etc., sem "exportar para outra plataforma", só copiar o

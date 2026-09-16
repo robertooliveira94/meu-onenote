@@ -21,6 +21,7 @@ import type {
   Comentario,
   ConfigQuadro,
   Estimativa,
+  ExtrasDaTarefa,
   Indice,
   Prioridade,
   Quadro,
@@ -356,6 +357,7 @@ export async function criarTarefa(
   coluna: ColunaKanban,
   titulo: string,
   conteudoInicial = "",
+  extras: ExtrasDaTarefa = {},
 ): Promise<string> {
   const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(coluna)) throw new Error("Coluna não existe");
@@ -375,9 +377,50 @@ export async function criarTarefa(
       ordem: Date.now(),
       numeroKanban: maiorNumeroDoQuadro(indice, quadro) + 1,
       movidoEm: agora,
+      ...(extras.prioridade ? { prioridadeKanban: extras.prioridade } : {}),
+      ...(extras.etiquetas?.length ? { etiquetasKanban: [...new Set(extras.etiquetas)] } : {}),
+      ...(extras.prazo ? { prazoKanban: extras.prazo } : {}),
+      ...(extras.sprintId ? { sprintKanban: extras.sprintId } : {}),
+      ...(extras.estimativa ? { estimativaKanban: extras.estimativa } : {}),
     };
   });
   return caminho;
+}
+
+/** O prazo seguinte de uma tarefa que se repete: +1 dia, +7 dias ou +1 mês a partir do prazo (ou de hoje). */
+function proximoPrazo(prazoAtual: string | undefined, recorrencia: Recorrencia): string {
+  const base = prazoAtual ? new Date(`${prazoAtual}T00:00:00`) : new Date();
+  const data = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  if (recorrencia === "diaria") data.setDate(data.getDate() + 1);
+  else if (recorrencia === "semanal") data.setDate(data.getDate() + 7);
+  else data.setMonth(data.getMonth() + 1);
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Uma tarefa que se repete acabou de ser concluída: nasce a próxima na
+ * primeira coluna, com o prazo adiantado, mesmas etiquetas, prioridade,
+ * estimativa e repetição — subtarefas desmarcadas, sem comentários. A
+ * concluída fica onde está, como registro.
+ */
+async function gerarProximaOcorrencia(caminhoConcluida: string, quadro: string, config: ConfigQuadro): Promise<void> {
+  const indice = await lerIndice();
+  const entrada = indice.notas[caminhoConcluida];
+  if (!entrada?.recorrenciaKanban) return;
+  const conteudo = await fs.readFile(resolverCaminho(caminhoConcluida), "utf8").catch(() => "");
+  const nova = await criarTarefa(quadro, config.colunas[0], tituloDe(caminhoConcluida), conteudo, {
+    prioridade: entrada.prioridadeKanban ?? null,
+    etiquetas: entrada.etiquetasKanban ?? [],
+    prazo: proximoPrazo(entrada.prazoKanban, entrada.recorrenciaKanban),
+    estimativa: entrada.estimativaKanban ?? null,
+  });
+  await atualizarIndice((atual) => {
+    const criada = entradaDaNota(atual, nova);
+    criada.recorrenciaKanban = entrada.recorrenciaKanban;
+    if (entrada.subtarefasKanban?.length) {
+      criada.subtarefasKanban = entrada.subtarefasKanban.map((item) => ({ ...item, id: crypto.randomUUID(), feita: false }));
+    }
+  });
 }
 
 export async function lerTarefa(caminho: string): Promise<{ titulo: string; conteudo: string } | null> {
@@ -434,6 +477,7 @@ export async function moverTarefa(caminho: string, colunaDestino: ColunaKanban):
     atualizarDependenciasApósMover(indice, caminho, alvo);
     entradaDaNota(indice, alvo).movidoEm = new Date().toISOString();
   });
+  if (colunaDestino === config.colunaConcluida) await gerarProximaOcorrencia(alvo, quadro, config);
   return alvo;
 }
 

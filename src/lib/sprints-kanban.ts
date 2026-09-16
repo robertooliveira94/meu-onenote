@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { PASTA_KANBAN, PASTA_SISTEMA, RAIZ } from "./caminhos";
 import { atualizarIndice } from "./indice";
+import { PASTA_ARQUIVO, garantirQuadro } from "./kanban";
 import type { SprintKanban } from "./tipos";
 
 /**
@@ -66,6 +67,44 @@ export async function renomearSprint(id: string, nome: string): Promise<void> {
     if (!limpo) throw new Error("Dê um nome para a sprint");
     sprint.nome = limpo;
   });
+}
+
+/** Início e fim da sprint (ou `null` para tirar). */
+export async function definirDatasDaSprint(id: string, inicio: string | null, fim: string | null): Promise<void> {
+  await alterar((sprints) => {
+    const sprint = sprints.find((item) => item.id === id);
+    if (!sprint) throw new Error("Sprint não encontrada");
+    if (inicio && fim && fim < inicio) throw new Error("O fim vem antes do início");
+    sprint.inicio = inicio ?? undefined;
+    sprint.fim = fim ?? undefined;
+  });
+}
+
+/**
+ * Fechar a sprint: o que já está concluído fica registrado nela; o que
+ * sobrou vai para outra sprint (`destino`) ou fica sem sprint (`null`).
+ * Concluído = na coluna de conclusão do próprio quadro, ou no arquivo.
+ */
+export async function fecharSprint(id: string, destino: string | null): Promise<number> {
+  const configs = new Map<string, Awaited<ReturnType<typeof garantirQuadro>>>();
+  let movidas = 0;
+  await atualizarIndice(async (indice) => {
+    for (const [caminho, entrada] of Object.entries(indice.notas)) {
+      if (entrada.sprintKanban !== id || !caminho.startsWith(`${PASTA_KANBAN}/`)) continue;
+      const [, quadro, coluna] = caminho.split("/");
+      if (coluna === PASTA_ARQUIVO) continue;
+      if (!configs.has(quadro)) configs.set(quadro, await garantirQuadro(quadro));
+      if (coluna === configs.get(quadro)!.colunaConcluida) continue;
+      entrada.sprintKanban = destino ?? undefined;
+      movidas++;
+    }
+  });
+  await alterar((sprints) => {
+    const sprint = sprints.find((item) => item.id === id);
+    if (!sprint) throw new Error("Sprint não encontrada");
+    sprint.fechadaEm = new Date().toISOString();
+  });
+  return movidas;
 }
 
 /** Some com a sprint e desvincula todas as tarefas que estavam nela. */

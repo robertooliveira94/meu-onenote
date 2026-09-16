@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ChevronsLeftRight,
   Gauge,
+  CheckCheck,
   KanbanSquare,
   CalendarDays,
   List,
@@ -48,6 +49,8 @@ import {
   acaoCriarSprint,
   acaoCriarTarefa,
   acaoDefinirColunaConcluida,
+  acaoDefinirDatasDaSprint,
+  acaoFecharSprint,
   acaoDefinirCorDaTarefa,
   acaoDefinirLimiteWip,
   acaoDefinirDependencias,
@@ -80,6 +83,7 @@ import {
   trazSubtarefa,
   trazTarefa,
 } from "@/lib/arrastar";
+import { interpretarAdicaoRapida } from "@/lib/adicao-rapida";
 import { useAtalho } from "@/lib/atalhos";
 import { juntar } from "@/lib/caminho-texto";
 import { CORES_CADERNO, CORES_PRIORIDADE } from "@/lib/cores";
@@ -203,6 +207,47 @@ export function QuadroKanban({
   const [tarefaAberta, definirTarefaAberta] = useState<string | null>(tarefaInicial);
   // O cartão que os atalhos de uma tecla afetam: o aberto no painel, senão o sob o mouse.
   const [tarefaSobMouse, definirTarefaSobMouse] = useState<string | null>(null);
+  // Seleção múltipla: Ctrl+clique soma, Shift+clique pega o intervalo na
+  // coluna; uma barra de ações em lote aparece embaixo enquanto houver
+  // seleção. Esc limpa.
+  const [selecionadas, definirSelecionadas] = useState<Set<string>>(new Set());
+  const [ultimaSelecionada, definirUltimaSelecionada] = useState<string | null>(null);
+  const [confirmandoExclusaoEmLote, definirConfirmandoExclusaoEmLote] = useState(false);
+  const [gerenciandoSprints, definirGerenciandoSprints] = useState(false);
+  function limparSelecao() {
+    definirSelecionadas(new Set());
+    definirUltimaSelecionada(null);
+  }
+  function selecionar(caminho: string, evento: React.MouseEvent) {
+    definirSelecionadas((atual) => {
+      const proximo = new Set(atual);
+      if (evento.shiftKey && ultimaSelecionada && mapa[ultimaSelecionada]?.coluna === mapa[caminho]?.coluna) {
+        const lista = ordemLocal[mapa[caminho].coluna] ?? [];
+        const a = lista.indexOf(ultimaSelecionada);
+        const b = lista.indexOf(caminho);
+        for (const item of lista.slice(Math.min(a, b), Math.max(a, b) + 1)) proximo.add(item);
+      } else if (proximo.has(caminho)) {
+        proximo.delete(caminho);
+      } else {
+        proximo.add(caminho);
+      }
+      return proximo;
+    });
+    definirUltimaSelecionada(caminho);
+  }
+  useAtalho("escape", {
+    grupo: "Kanban",
+    descricao: "Limpar a seleção",
+    ativo: selecionadas.size > 0 && tarefaAberta === null,
+    acao: limparSelecao,
+  });
+  /** Roda uma ação em cada selecionada, depois atualiza tudo de uma vez. */
+  async function emLote(acao: (caminho: string) => Promise<unknown>) {
+    const alvos = [...selecionadas].filter((caminho) => mapa[caminho]);
+    limparSelecao();
+    for (const caminho of alvos) await acao(caminho);
+    roteador.refresh();
+  }
   // Painel lateral por padrão; tela cheia quando a pessoa expande (lembrado).
   const [modoTarefa, definirModoTarefa] = useState<"painel" | "cheia">("painel");
   const [focarPrazo, definirFocarPrazo] = useState(false);
@@ -421,15 +466,17 @@ export function QuadroKanban({
     });
   }
 
-  async function criarTarefaRapida(coluna: ColunaKanban, titulo: string) {
-    const limpo = titulo.trim();
-    if (!limpo) {
+  /** "Revisar !alta #financeiro @sexta" → título limpo + as propriedades já preenchidas. */
+  async function criarTarefaRapida(coluna: ColunaKanban, texto: string) {
+    const { titulo, extras } = interpretarAdicaoRapida(texto, etiquetasKanban, sprints);
+    if (!titulo) {
       definirColunaAdicionando(null);
       return;
     }
-    const resposta = await acaoCriarTarefa(quadro.nome, coluna, limpo);
+    const resposta = await acaoCriarTarefa(quadro.nome, coluna, titulo, extras);
     definirColunaAdicionando(null);
     if (resposta.ok) roteador.refresh();
+    else definirAviso(resposta.erro);
   }
 
   async function arquivarTarefaAção(caminho: string) {
@@ -614,6 +661,15 @@ export function QuadroKanban({
                 Arquivar tudo em {conteudo.config.colunaConcluida}
               </ItemMenu>
               <ItemMenu
+                icone={<ListChecks size={13} />}
+                onClick={() => {
+                  fechar();
+                  definirGerenciandoSprints(true);
+                }}
+              >
+                Sprints: datas e fechamento
+              </ItemMenu>
+              <ItemMenu
                 icone={<Settings2 size={13} />}
                 onClick={() => {
                   fechar();
@@ -759,7 +815,7 @@ export function QuadroKanban({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
       {visao === "lista" ? (
         <VisaoLista
           tarefas={Object.values(mapa).filter(passaNoFiltro)}
@@ -1002,6 +1058,8 @@ export function QuadroKanban({
                     }
                     aoSoltar={(origem, antes) => aoSoltarPertoDe(tarefa, origem, antes)}
                     aoAbrir={() => abrirTarefa(tarefa.caminho)}
+                    selecionada={selecionadas.has(tarefa.caminho)}
+                    aoSelecionar={(evento) => selecionar(tarefa.caminho, evento)}
                     aberta={tarefaAberta === tarefa.caminho}
                     sigla={sigla}
                     diasParada={ehConclusao ? 0 : diasNaColuna(tarefa)}
@@ -1019,6 +1077,8 @@ export function QuadroKanban({
 
                 {colunaAdicionando === coluna ? (
                   <CampoNovaTarefa
+                    etiquetasKanban={etiquetasKanban}
+                    sprints={sprints}
                     aoConfirmar={(titulo) => criarTarefaRapida(coluna, titulo)}
                     aoCancelar={() => definirColunaAdicionando(null)}
                   />
@@ -1042,6 +1102,83 @@ export function QuadroKanban({
         })}
       </div>
       )}
+
+      {selecionadas.size > 0 ? (
+        <div
+          role="toolbar"
+          aria-label="Ações nas tarefas selecionadas"
+          className="surgir absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-linha bg-superficie-alta px-2 py-1.5 shadow-[var(--sombra)]"
+        >
+          <span className="px-1.5 text-[12px] font-medium tabular-nums">
+            {selecionadas.size} {selecionadas.size === 1 ? "selecionada" : "selecionadas"}
+          </span>
+          <Menu
+            gatilho={(abrir) => (
+              <Botao variante="sutil" onClick={abrir}>
+                Mover para…
+              </Botao>
+            )}
+          >
+            {(fechar) =>
+              colunas.map((coluna) => (
+                <ItemMenu
+                  key={coluna}
+                  onClick={() => {
+                    fechar();
+                    emLote((caminho) => acaoMoverTarefa(caminho, coluna));
+                  }}
+                >
+                  {coluna}
+                </ItemMenu>
+              ))
+            }
+          </Menu>
+          <Menu
+            gatilho={(abrir) => (
+              <Botao variante="sutil" onClick={abrir}>
+                Prioridade…
+              </Botao>
+            )}
+          >
+            {(fechar) => (
+              <>
+                {PRIORIDADES.map((prioridade) => (
+                  <ItemMenu
+                    key={prioridade}
+                    icone={<Flag size={13} style={{ color: CORES_PRIORIDADE[prioridade] }} />}
+                    onClick={() => {
+                      fechar();
+                      emLote((caminho) => acaoDefinirPrioridade(caminho, prioridade));
+                    }}
+                  >
+                    {RUBRICA_PRIORIDADE[prioridade]}
+                  </ItemMenu>
+                ))}
+                <ItemMenu
+                  icone={<FlagOff size={13} />}
+                  onClick={() => {
+                    fechar();
+                    emLote((caminho) => acaoDefinirPrioridade(caminho, null));
+                  }}
+                >
+                  Sem prioridade
+                </ItemMenu>
+              </>
+            )}
+          </Menu>
+          <Botao variante="sutil" onClick={() => emLote((caminho) => acaoArquivarTarefa(caminho))}>
+            <Archive size={13} />
+            Arquivar
+          </Botao>
+          <Botao variante="sutil" onClick={() => definirConfirmandoExclusaoEmLote(true)}>
+            <Trash2 size={13} />
+            Excluir
+          </Botao>
+          <BotaoIcone rotulo="Limpar seleção (Esc)" onClick={limparSelecao} className="size-6">
+            <X size={13} />
+          </BotaoIcone>
+        </div>
+      ) : null}
 
       {tarefaAberta && mapa[tarefaAberta] && modoTarefa === "painel" ? (
         <PainelTarefa
@@ -1111,6 +1248,23 @@ export function QuadroKanban({
           return resposta.ok ? null : resposta.erro;
         }}
       />
+
+      <DialogoConfirmar
+        aberto={confirmandoExclusaoEmLote}
+        titulo={`Excluir ${selecionadas.size} ${selecionadas.size === 1 ? "tarefa" : "tarefas"}?`}
+        descricao="Vão para a lixeira, dá para restaurar depois."
+        textoBotao="Mandar para a lixeira"
+        aoFechar={() => definirConfirmandoExclusaoEmLote(false)}
+        aoConfirmar={async () => {
+          definirConfirmandoExclusaoEmLote(false);
+          await emLote((caminho) => acaoExcluirTarefa(caminho));
+          return null;
+        }}
+      />
+
+      {gerenciandoSprints ? (
+        <DialogoSprints sprints={sprints} aoFechar={() => definirGerenciandoSprints(false)} />
+      ) : null}
 
       <DialogoNome
         aberto={ajustandoArquivo}
@@ -1250,12 +1404,14 @@ function SeletorSprintConteudo({
     roteador.refresh();
   }
 
+  const abertas = sprints.filter((sprint) => !sprint.fechadaEm);
+
   return (
     <div className="max-h-64 overflow-y-auto">
-      {sprints.length === 0 ? (
-        <p className="px-2 py-2 text-[12px] leading-snug text-tinta-3">Nenhuma sprint cadastrada ainda.</p>
+      {abertas.length === 0 ? (
+        <p className="px-2 py-2 text-[12px] leading-snug text-tinta-3">Nenhuma sprint aberta.</p>
       ) : (
-        sprints.map((sprint) => (
+        abertas.map((sprint) => (
           <div key={sprint.id} className="group/sprint flex items-center gap-1">
             <button
               type="button"
@@ -1264,6 +1420,11 @@ function SeletorSprintConteudo({
             >
               <ListChecks size={12} className="shrink-0 text-tinta-3" />
               <span className="flex-1 truncate">{sprint.nome}</span>
+              {sprint.fim ? (
+                <span className="shrink-0 text-[10.5px] text-tinta-3 tabular-nums" title={`Até ${sprint.fim}`}>
+                  {sprint.fim.slice(8, 10)}/{sprint.fim.slice(5, 7)}
+                </span>
+              ) : null}
               {selecionada === sprint.id ? <Check size={13} style={{ color: "var(--realce)" }} /> : null}
             </button>
             <button
@@ -1319,6 +1480,125 @@ function SeletorSprintConteudo({
   );
 }
 
+/**
+ * Sprints com o que a lista do seletor não tem espaço para mostrar: início
+ * e fim opcionais, e o "Fechar sprint" — que pergunta o que fazer com o que
+ * sobrou (mover para outra sprint aberta, ou soltar). Sem burndown.
+ */
+function DialogoSprints({ sprints, aoFechar }: { sprints: SprintKanban[]; aoFechar: () => void }) {
+  const roteador = useRouter();
+  const [fechando, definirFechando] = useState<SprintKanban | null>(null);
+  const [destino, definirDestino] = useState<string | null>(null);
+  const [erro, definirErro] = useState<string | null>(null);
+  const abertas = sprints.filter((sprint) => !sprint.fechadaEm);
+  const fechadas = sprints.filter((sprint) => sprint.fechadaEm);
+
+  async function mudarData(sprint: SprintKanban, campo: "inicio" | "fim", valor: string) {
+    const inicio = campo === "inicio" ? valor || null : (sprint.inicio ?? null);
+    const fim = campo === "fim" ? valor || null : (sprint.fim ?? null);
+    const resposta = await acaoDefinirDatasDaSprint(sprint.id, inicio, fim);
+    if (!resposta.ok) definirErro(resposta.erro);
+    else {
+      definirErro(null);
+      roteador.refresh();
+    }
+  }
+
+  async function fechar() {
+    if (!fechando) return;
+    const resposta = await acaoFecharSprint(fechando.id, destino);
+    if (!resposta.ok) {
+      definirErro(resposta.erro);
+      return;
+    }
+    definirFechando(null);
+    definirDestino(null);
+    roteador.refresh();
+  }
+
+  return (
+    <Dialogo titulo="Sprints" descricao="Início e fim são só para saber quando é; fechar a sprint decide o que fazer com o que sobrou." aberto largura="max-w-lg" aoFechar={aoFechar}>
+      {abertas.length === 0 ? (
+        <p className="py-3 text-[12.5px] text-tinta-3">Nenhuma sprint aberta. Crie uma pelo filtro “Sprint” do quadro.</p>
+      ) : (
+        <ul className="space-y-2">
+          {abertas.map((sprint) => (
+            <li key={sprint.id} className="rounded-lg border border-linha bg-superficie p-2.5">
+              <div className="flex items-center gap-2">
+                <ListChecks size={13} className="shrink-0 text-tinta-3" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{sprint.nome}</span>
+                <Botao variante="sutil" onClick={() => definirFechando(sprint)}>
+                  <CheckCheck size={13} />
+                  Fechar sprint
+                </Botao>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">
+                  Início
+                  <input
+                    type="date"
+                    defaultValue={sprint.inicio ?? ""}
+                    onChange={(evento) => mudarData(sprint, "inicio", evento.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-linha bg-superficie-alta px-2 py-1 text-[12.5px] font-normal tracking-normal text-tinta normal-case focus:border-[var(--realce)] focus:outline-none"
+                  />
+                </label>
+                <label className="text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">
+                  Fim
+                  <input
+                    type="date"
+                    defaultValue={sprint.fim ?? ""}
+                    onChange={(evento) => mudarData(sprint, "fim", evento.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-linha bg-superficie-alta px-2 py-1 text-[12.5px] font-normal tracking-normal text-tinta normal-case focus:border-[var(--realce)] focus:outline-none"
+                  />
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {fechando ? (
+        <div className="mt-4 rounded-lg border border-linha bg-superficie p-3">
+          <p className="text-[12.5px] font-medium">Fechar “{fechando.nome}”</p>
+          <p className="mt-0.5 text-[12px] text-tinta-2">
+            O que já está concluído fica registrado nela. O que sobrou:
+          </p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-[12.5px]">
+              <input type="radio" name="destino" checked={destino === null} onChange={() => definirDestino(null)} />
+              fica sem sprint
+            </label>
+            {abertas
+              .filter((sprint) => sprint.id !== fechando.id)
+              .map((sprint) => (
+                <label key={sprint.id} className="flex items-center gap-2 text-[12.5px]">
+                  <input type="radio" name="destino" checked={destino === sprint.id} onChange={() => definirDestino(sprint.id)} />
+                  vai para {sprint.nome}
+                </label>
+              ))}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <Botao variante="sutil" onClick={() => definirFechando(null)}>
+              Cancelar
+            </Botao>
+            <Botao variante="primario" onClick={fechar}>
+              <CheckCheck size={13} />
+              Fechar sprint
+            </Botao>
+          </div>
+        </div>
+      ) : null}
+
+      {fechadas.length > 0 ? (
+        <p className="mt-4 text-[11.5px] text-tinta-3">
+          Fechadas: {fechadas.map((sprint) => sprint.nome).join(", ")}. Continuam no filtro do quadro pelo histórico das tarefas.
+        </p>
+      ) : null}
+      <Aviso>{erro}</Aviso>
+    </Dialogo>
+  );
+}
+
 function CartaoTarefa({
   tarefa,
   etiquetasKanban,
@@ -1332,6 +1612,8 @@ function CartaoTarefa({
   aoSairDeCima,
   aoSoltar,
   aoAbrir,
+  selecionada,
+  aoSelecionar,
   aberta,
   sigla,
   diasParada,
@@ -1366,6 +1648,9 @@ function CartaoTarefa({
   aoSairDeCima: () => void;
   aoSoltar: (origem: string, antes: boolean) => void;
   aoAbrir: () => void;
+  /** Faz parte da seleção múltipla (Ctrl/Shift+clique). */
+  selecionada: boolean;
+  aoSelecionar: (evento: React.MouseEvent) => void;
   aoMoverPara: (coluna: string) => void;
   aoDuplicar: () => void;
   aoArquivar: () => void;
@@ -1421,16 +1706,26 @@ function CartaoTarefa({
           const antes = evento.clientY < retangulo.top + retangulo.height / 2;
           aoSoltar(lerCaminhoDeTarefa(evento), antes);
         }}
-        onClick={aoAbrir}
+        onClick={(evento) => {
+          // Ctrl/Cmd/Shift + clique seleciona em vez de abrir.
+          if (evento.ctrlKey || evento.metaKey || evento.shiftKey) {
+            evento.preventDefault();
+            aoSelecionar(evento);
+            return;
+          }
+          aoAbrir();
+        }}
         onKeyDown={(evento) => {
           if (evento.key === "Enter" || evento.key === " ") {
             evento.preventDefault();
             aoAbrir();
           }
         }}
+        aria-pressed={selecionada || undefined}
         className={clsx(
           "cartao block w-full cursor-grab overflow-hidden pr-7 text-left active:cursor-grabbing",
           aberta && "cartao-aberto",
+          selecionada && "ring-2 ring-[var(--realce)] ring-offset-1 ring-offset-superficie",
           impedida && "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]",
           // Parado há semanas na mesma coluna: esmaece um pouco — é como se
           // acha o que travou sem ninguém ter marcado impedimento.
@@ -1687,15 +1982,25 @@ function CartaoTarefa({
   );
 }
 
+/**
+ * O campo de tarefa nova, com a adição rápida: enquanto se digita, o que
+ * `!`, `#`, `@`, `~` e `=` já reconheceram aparece em pastilhas embaixo —
+ * dá para ver "Alta · Financeiro · 18/09" antes de dar Enter.
+ */
 function CampoNovaTarefa({
+  etiquetasKanban,
+  sprints,
   aoConfirmar,
   aoCancelar,
 }: {
+  etiquetasKanban: EtiquetaKanban[];
+  sprints: SprintKanban[];
   aoConfirmar: (titulo: string) => void;
   aoCancelar: () => void;
 }) {
   const [valor, definirValor] = useState("");
   const campo = useRef<HTMLTextAreaElement>(null);
+  const previa = interpretarAdicaoRapida(valor, etiquetasKanban, sprints);
 
   useEffect(() => {
     campo.current?.focus();
@@ -1715,10 +2020,25 @@ function CampoNovaTarefa({
           if (evento.key === "Escape") aoCancelar();
         }}
         onBlur={() => aoConfirmar(valor)}
-        placeholder="Título da tarefa…"
+        placeholder="Título… (!alta #etiqueta @sexta ~sprint =M)"
         rows={2}
         className="w-full resize-none bg-transparent text-[13px] text-tinta placeholder:text-tinta-3 focus:outline-none"
       />
+      {previa.reconhecidos.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {previa.reconhecidos.map((item) => (
+            <span
+              key={item.original}
+              className="pastilha text-tinta-2"
+              style={{ background: "var(--realce-fraco)" }}
+              title={item.original}
+            >
+              {item.tipo === "prioridade" ? <Flag size={10} /> : item.tipo === "prazo" ? <Calendar size={10} /> : null}
+              {item.rotulo}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

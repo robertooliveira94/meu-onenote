@@ -16,8 +16,9 @@ import {
   renomearQuadro,
   reordenarQuadrosPara,
 } from "@/lib/quadros";
-import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban";
+import { criarSprint, definirDatasDaSprint, excluirSprint, fecharSprint, renomearSprint } from "@/lib/sprints-kanban";
 import { ESTIMATIVAS, PRIORIDADES, RECORRENCIAS } from "@/lib/tipos";
+import type { ExtrasDaTarefa } from "@/lib/tipos";
 import {
   adicionarComentario,
   arquivarConcluidas,
@@ -92,9 +93,29 @@ export async function acaoListarQuadro(quadro: string): Promise<Quadro> {
   return listarQuadro(caminhoValido.parse(quadro));
 }
 
-export async function acaoCriarTarefa(quadro: string, coluna: ColunaKanban, titulo: string): Promise<Resposta> {
+const dataValida = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const extrasValidos = z.object({
+  prioridade: prioridadeValida.nullable().optional(),
+  etiquetas: z.array(z.string().max(80)).max(20).optional(),
+  prazo: dataValida.nullable().optional(),
+  sprintId: z.string().max(80).nullable().optional(),
+  estimativa: estimativaValida.nullable().optional(),
+});
+
+export async function acaoCriarTarefa(
+  quadro: string,
+  coluna: ColunaKanban,
+  titulo: string,
+  extras: ExtrasDaTarefa = {},
+): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await criarTarefa(caminhoValido.parse(quadro), colunaValida.parse(coluna), z.string().max(200).parse(titulo));
+    await criarTarefa(
+      caminhoValido.parse(quadro),
+      colunaValida.parse(coluna),
+      z.string().max(200).parse(titulo),
+      "",
+      extrasValidos.parse(extras),
+    );
   });
   atualizarTudo();
   return resposta;
@@ -435,6 +456,29 @@ export async function acaoCriarSprint(nome: string): Promise<Resposta> {
   });
   atualizarTudo();
   return resposta;
+}
+
+export async function acaoDefinirDatasDaSprint(id: string, inicio: string | null, fim: string | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await definirDatasDaSprint(
+      z.string().max(60).parse(id),
+      inicio === null ? null : dataValida.parse(inicio),
+      fim === null ? null : dataValida.parse(fim),
+    );
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+/** Fecha a sprint; o que sobrou vai para `destino` (outra sprint) ou fica solto (`null`). Devolve quantas sobraram. */
+export async function acaoFecharSprint(id: string, destino: string | null): Promise<Resposta> {
+  try {
+    const movidas = await fecharSprint(z.string().max(60).parse(id), destino === null ? null : z.string().max(60).parse(destino));
+    atualizarTudo();
+    return { ok: true, mensagem: String(movidas) };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para fechar a sprint" };
+  }
 }
 
 export async function acaoRenomearSprint(id: string, nome: string): Promise<Resposta> {

@@ -475,7 +475,31 @@ desenhar um cartão inteiro ao redor.
   caderno + wash de fundo que o resto do sistema usa pra "você está aqui".
   Recolhida, a faixa mostra "caderno › seção" na vertical.
 - **Coluna de quadros (só no Kanban):** mesmo esqueleto — cabeçalho, a
-  lista de quadros com a cor de cada um, rodapé com "Etiquetas do Kanban".
+  lista de quadros com a cor de cada um, rodapé com "Hoje" e "Etiquetas do
+  Kanban".
+- **Painel da tarefa (Kanban):** `aside` de 460px à direita das colunas,
+  com o `cartao-aberto` (wash forte do realce) como fundo, borda esquerda
+  `--linha`; cabeçalho com identificador em mono 10px `tinta-3`, título
+  editável 15px bold, botões de expandir e fechar. Campos curtos em
+  `grid-cols-2`; os largos (impedimento, etiquetas, bloqueado por,
+  repetir, cor) em `col-span-2`. A tela cheia é o `Dialogo` `max-w-4xl` com
+  `grid-cols-[1fr_220px]`.
+- **Cartão do Kanban:** identificador mono 10px em cima, título 13px
+  medium, chips de etiqueta/sprint, e um rodapé de 10.5px `tinta-3` com
+  posições fixas — prazo · checklist · comentários à esquerda, estimativa
+  (caixinha com borda) · cadeado · bandeira de prioridade à direita.
+  Borda esquerda de 3px na cor da coluna (vermelha se impedida); cor
+  própria como `inset 0 3px 0` no topo; selecionado = `ring-2` em
+  `--realce`; envelhecido = `opacity-85`. Coluna recolhida = faixa de 40px
+  com `.texto-vertical`; acima do WIP = contagem "4/3" e borda em
+  `--perigo`.
+- **Visões do Kanban:** alternador segmentado (borda `--linha`, item ativo
+  `bg-realce-medio`) na barra de filtros. Lista = `table` de 12.5px com
+  cabeçalho versalete `sticky`; calendário = grade `grid-cols-7` com
+  `gap-px` sobre `bg-linha`, dia de hoje em bolinha `--realce`, chip de
+  tarefa 10.5px com borda esquerda na cor da prioridade (vermelho se
+  atrasada, riscado se concluída). Barra de ações em lote = pílula
+  flutuante `surgir` centrada embaixo, `bg-superficie-alta` com sombra.
 - **Abas de notas (só em Anotações):** faixa acima do conteúdo, `bg-superficie`
   com borda embaixo; cada aba é um `role="tab"` de 12px, `rounded-t-lg`, a
   ativa em `bg-papel` com borda `--linha` e uma faixinha da cor do papel
