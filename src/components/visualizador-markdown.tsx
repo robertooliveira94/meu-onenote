@@ -52,6 +52,15 @@ function tituloOuMarcaVazia(nivel: 1 | 2 | 3 | 4 | 5 | 6) {
   };
 }
 
+/** Desfaz o `%20` de um caminho relativo do markdown; o que não estiver codificado passa como está. */
+function decodificar(caminho: string): string {
+  try {
+    return decodeURI(caminho);
+  } catch {
+    return caminho;
+  }
+}
+
 /** "Pessoal/Financeiro/orçamento.md" → "Pessoal › Financeiro › orçamento" */
 function trilhaDoCaminho(caminho: string): string {
   const partes = caminho.split("/");
@@ -109,9 +118,16 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
       h6: tituloOuMarcaVazia(6),
       a({ href, children }) {
         if (!href?.startsWith("wikilink:")) {
-          // Link comum do markdown — mesmo comportamento de sempre.
+          // Endereço relativo (`_anexos/orcamento.pdf`, como o app grava ao
+          // arrastar um arquivo) vira a rota que serve o anexo — senão o
+          // navegador o resolveria contra a URL da nota e daria 404. Link
+          // comum (http, âncora, rota do app) passa como está.
+          const relativo = Boolean(href) && !/^(https?:|mailto:|#|\/)/.test(href!);
+          // O markdown guarda o caminho codificado (`Or%C3%A7amento%202026.pdf`);
+          // `urlDaMidia` codifica de novo, então decodifica antes.
+          const destino = relativo ? urlDaMidia(juntar(pastaBase ?? "", decodificar(href!))) : href;
           return (
-            <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer">
+            <a href={destino} target={relativo || href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer">
               {children}
             </a>
           );
@@ -144,7 +160,7 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
         // (`_anexos/foo.png`, como o app grava ao colar) vira a rota que
         // serve o arquivo de dentro de dados/.
         const absoluta = /^(https?:)?\/\//.test(src) || src.startsWith("/");
-        const url = absoluta ? src : urlDaMidia(juntar(pastaBase ?? "", src));
+        const url = absoluta ? src : urlDaMidia(juntar(pastaBase ?? "", decodificar(src)));
         // eslint-disable-next-line @next/next/no-img-element
         return <img src={url} alt={alt ?? ""} loading="lazy" />;
       },

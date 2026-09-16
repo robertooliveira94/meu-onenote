@@ -12,6 +12,7 @@ import {
   escreverNota,
   lerNota,
   listarNotas,
+  listarTitulos,
   moverItem,
   renomearItem,
   reordenarNota,
@@ -30,6 +31,7 @@ import { atualizarIndice, entradaDaNota, entradaDaPasta } from "@/lib/indice";
 import { apagarDeVez, enviarParaLixeira, esvaziarLixeira, restaurar } from "@/lib/lixeira";
 import { criarModelo, editarModelo, excluirModelo, lerModelo } from "@/lib/modelos";
 import { urlDaNota, urlDaSecao } from "@/lib/rotas";
+import type { TituloDeNota } from "@/lib/arquivos";
 import type { ResultadoBusca, ResumoNota, VersaoHistorico } from "@/lib/tipos";
 
 /**
@@ -311,6 +313,41 @@ export async function acaoColarImagem(
   }
 }
 
+/**
+ * Um arquivo arrastado (ou colado) para o editor: PDF, planilha, texto,
+ * imagem. Mesma pasta `_anexos/` da imagem colada, mas guardando o nome
+ * original — `![](_anexos/orcamento.pdf)` diz o que é; `1789514655033.pdf`
+ * não. A lista de extensões é a mesma que a rota `/midia` aceita servir;
+ * o que não estiver nela não entra, porque também não abriria depois.
+ */
+const EXTENSAO_ANEXO_VALIDA = z.enum([
+  "png", "jpg", "jpeg", "gif", "webp",
+  "pdf", "txt", "md", "csv", "json", "zip",
+  "docx", "xlsx", "pptx",
+]);
+
+export async function acaoSalvarAnexoDaNota(
+  caminhoDaNota: string,
+  nomeDoArquivo: string,
+  dadosBase64: string,
+): Promise<Resposta> {
+  try {
+    const caminho = caminhoValido.parse(caminhoDaNota);
+    const nome = z.string().min(1).max(200).parse(nomeDoArquivo);
+    const ponto = nome.lastIndexOf(".");
+    const extensao = EXTENSAO_ANEXO_VALIDA.parse(ponto === -1 ? "" : nome.slice(ponto + 1).toLowerCase());
+    const base = ponto === -1 ? nome : nome.slice(0, ponto);
+    const bytes = Buffer.from(z.string().max(25_000_000).parse(dadosBase64), "base64");
+    if (bytes.byteLength === 0) throw new Error("Arquivo vazio");
+    if (bytes.byteLength > LIMITE_ANEXO_BYTES) throw new Error("Arquivo grande demais (máximo 15 MB)");
+    const caminhoRelativo = await salvarAnexo(caminho, extensao, bytes, base);
+    return { ok: true, mensagem: caminhoRelativo };
+  } catch (erro) {
+    if (erro instanceof z.ZodError) return { ok: false, erro: "Esse tipo de arquivo não é aceito como anexo." };
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para anexar o arquivo" };
+  }
+}
+
 export async function acaoConverterFormato(
   caminho: string,
   formato: "md" | "txt",
@@ -516,6 +553,11 @@ export async function acaoExportarTudo(): Promise<{ nome: string; conteudo: stri
 }
 
 // ------------------------------------------------------------------- busca
+
+/** Os títulos de todas as notas, para o autocomplete de `[[` no editor. */
+export async function acaoTitulosDeNotas(): Promise<TituloDeNota[]> {
+  return listarTitulos();
+}
 
 export async function acaoBuscar(termo: string): Promise<ResultadoBusca[]> {
   return buscar(z.string().max(120).parse(termo));

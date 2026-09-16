@@ -6,9 +6,12 @@ import { resolverCaminho } from "@/lib/caminhos";
 import { caminhoDaUrl } from "@/lib/rotas";
 
 /**
- * Serve os anexos colados nas notas (ver `_anexos/` ao lado de cada página).
- * Só imagens — mesmo sendo um app local de um usuário só, esta rota não deve
- * virar um jeito de ler qualquer arquivo dentro de `dados/` pela URL.
+ * Serve os anexos das notas (ver `_anexos/` ao lado de cada página): as
+ * imagens coladas e os arquivos arrastados para o editor. Só o que está
+ * nesta tabela — mesmo sendo um app local de um usuário só, esta rota não
+ * deve virar um jeito de ler qualquer arquivo dentro de `dados/` pela URL.
+ * SVG fica de fora de propósito: pode carregar script, e seria servido na
+ * origem do app.
  */
 const TIPOS: Record<string, string> = {
   png: "image/png",
@@ -16,6 +19,15 @@ const TIPOS: Record<string, string> = {
   jpeg: "image/jpeg",
   gif: "image/gif",
   webp: "image/webp",
+  pdf: "application/pdf",
+  txt: "text/plain; charset=utf-8",
+  md: "text/markdown; charset=utf-8",
+  csv: "text/csv; charset=utf-8",
+  json: "application/json",
+  zip: "application/zip",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
 export async function GET(

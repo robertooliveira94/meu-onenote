@@ -4,6 +4,7 @@ import { PaginaNota } from "@/components/nota";
 import { lerArvore, lerNota } from "@/lib/arquivos";
 import { listarEtiquetas } from "@/lib/etiquetas";
 import { linksDaNota, listarBacklinks } from "@/lib/links";
+import { listarModelos } from "@/lib/modelos";
 import { caminhoDaUrl } from "@/lib/rotas";
 
 export default async function TelaDaNota({
@@ -18,9 +19,10 @@ export default async function TelaDaNota({
   const nota = await lerNota(caminho);
   if (!nota) notFound();
 
-  const [etiquetas, cadernos, mapaDeLinks, backlinks, busca] = await Promise.all([
+  const [etiquetas, cadernos, modelos, mapaDeLinks, backlinks, busca] = await Promise.all([
     listarEtiquetas(),
     lerArvore(),
+    listarModelos(),
     linksDaNota(nota.conteudo),
     listarBacklinks(caminho),
     searchParams,
@@ -32,6 +34,7 @@ export default async function TelaDaNota({
       key={caminho}
       nota={nota}
       etiquetas={etiquetas}
+      modelos={modelos}
       editandoInicial={busca.editando === "1"}
       iconeDoCaderno={cadernos.find((caderno) => caderno.nome === caminho.split("/")[0])?.icone ?? "📓"}
       mapaDeLinks={mapaDeLinks}

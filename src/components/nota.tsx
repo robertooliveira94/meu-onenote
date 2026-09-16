@@ -28,25 +28,44 @@ import {
   acaoAlternarFavorita,
   acaoColarImagem,
   acaoConverterFormato,
+  acaoDefinirEtiquetasDaNota,
   acaoRenomear,
+  acaoSalvarAnexoDaNota,
   acaoSalvarNota,
+  acaoTitulosDeNotas,
 } from "@/app/acoes";
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
+import { coordenadasDoCursor } from "@/lib/cursor-editor";
+import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/editor-teclado";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { useModoFoco } from "@/lib/foco";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
+import {
+  COMANDO_IMAGEM,
+  aplicarComando,
+  aplicarLink,
+  detectarGatilho,
+  limparGatilho,
+  sugestoesDeComando,
+  sugestoesDeEtiqueta,
+  sugestoesDeLink,
+  type Gatilho,
+  type Sugestao,
+  type TituloParaLink,
+} from "@/lib/sugestoes-editor";
 import { extrairTitulos } from "@/lib/sumario";
 import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
-import type { Etiqueta, Nota } from "@/lib/tipos";
+import type { Etiqueta, Modelo, Nota } from "@/lib/tipos";
 import { useAtalho } from "@/lib/atalhos";
 import { useZoomTexto } from "@/lib/zoom";
 
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
+import { SugestoesEditor } from "./sugestoes-editor";
 import { SumarioNota } from "./sumario-nota";
 import { TituloEditavel } from "./titulo-editavel";
 import { AlcaRedimensionar, Botao, BotaoIcone, ItemMenu, Menu } from "./ui";
@@ -84,6 +103,7 @@ function arquivoParaBase64(arquivo: File): Promise<string> {
 export function PaginaNota({
   nota,
   etiquetas,
+  modelos,
   editandoInicial,
   iconeDoCaderno,
   mapaDeLinks,
@@ -92,6 +112,8 @@ export function PaginaNota({
 }: {
   nota: Nota;
   etiquetas: Etiqueta[];
+  /** Para o comando `/modelo` colar um modelo no ponto do cursor. */
+  modelos: Modelo[];
   editandoInicial: boolean;
   iconeDoCaderno: string;
   /** Título normalizado → caminho resolvido dos `[[links]]` desta nota, calculado no servidor. */
@@ -166,6 +188,17 @@ export function PaginaNota({
   const [sumarioVisivel, definirSumarioVisivel] = useState(true);
   const [favorita, definirFavorita] = useState(nota.favorita);
   const [avisoImagem, definirAvisoImagem] = useState<string | null>(null);
+  // As etiquetas da nota, em estado: o `#` do editor aplica uma sem passar
+  // pelo seletor do cabeçalho, e o seletor precisa acompanhar.
+  const [etiquetasAtuais, definirEtiquetasAtuais] = useState(nota.etiquetas);
+  // Todos os títulos do vault, para o `[[` — carregados uma vez, ao entrar
+  // em edição, e filtrados aqui a cada tecla.
+  const [titulosParaLink, definirTitulosParaLink] = useState<TituloParaLink[] | null>(null);
+  const [gatilho, definirGatilho] = useState<Gatilho | null>(null);
+  const [posicaoSugestoes, definirPosicaoSugestoes] = useState({ esquerda: 0, topo: 0 });
+  const [sugestaoAtiva, definirSugestaoAtiva] = useState(0);
+  const colunaEditor = useRef<HTMLDivElement>(null);
+  const seletorDeArquivo = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const painelLeitura = useRef<HTMLDivElement | null>(null);
   const zoom = useZoomTexto();
@@ -356,19 +389,188 @@ export function PaginaNota({
     [],
   );
 
-  /** Ctrl+B e Ctrl+I fazem o mesmo que os botões da barra. */
+  // ------------------------------------------------------------ sugestões
+
+  const sugestoes = useMemo<Sugestao[]>(() => {
+    if (!gatilho) return [];
+    if (gatilho.tipo === "wikilink") return sugestoesDeLink(gatilho.termo, titulosParaLink ?? []);
+    if (gatilho.tipo === "etiqueta") return sugestoesDeEtiqueta(gatilho.termo, etiquetas, etiquetasAtuais);
+    return sugestoesDeComando(gatilho.termo, modelos);
+  }, [gatilho, titulosParaLink, etiquetas, etiquetasAtuais, modelos]);
+
+  useEffect(() => {
+    if (editando && ehMarkdown && titulosParaLink === null) {
+      acaoTitulosDeNotas().then(definirTitulosParaLink).catch(() => definirTitulosParaLink([]));
+    }
+  }, [editando, ehMarkdown, titulosParaLink]);
+
+  /**
+   * Depois de cada tecla ou clique: há um `[[`, `#` ou `/` logo atrás do
+   * cursor? Se sim, a caixinha abre (ou segue) colada nele.
+   */
+  const atualizarSugestoes = useCallback(
+    (campo: HTMLTextAreaElement) => {
+      if (!ehMarkdown) return;
+      const achado = campo.selectionStart === campo.selectionEnd ? detectarGatilho(campo.value, campo.selectionStart) : null;
+      if (!achado) {
+        if (gatilho) definirGatilho(null);
+        return;
+      }
+      const mudouDeGatilho = !gatilho || gatilho.tipo !== achado.tipo || gatilho.inicio !== achado.inicio;
+      if (mudouDeGatilho) definirSugestaoAtiva(0);
+      definirGatilho(achado);
+
+      // Posição relativa à coluna do editor, que é quem posiciona a caixa.
+      const cursor = coordenadasDoCursor(campo);
+      const coluna = colunaEditor.current?.getBoundingClientRect();
+      const caixa = campo.getBoundingClientRect();
+      const esquerda = caixa.left - (coluna?.left ?? 0) + cursor.esquerda;
+      const topo = caixa.top - (coluna?.top ?? 0) + cursor.topo + cursor.alturaDaLinha + 4;
+      const larguraDaColuna = coluna?.width ?? Number.POSITIVE_INFINITY;
+      definirPosicaoSugestoes({ esquerda: Math.max(8, Math.min(esquerda, larguraDaColuna - 288)), topo });
+    },
+    [ehMarkdown, gatilho],
+  );
+
+  /** Aplica a sugestão escolhida no texto (ou dispara o que ela pede). */
+  const escolherSugestao = useCallback(
+    async (item: Sugestao) => {
+      const campo = area.current;
+      if (!campo || !gatilho) return;
+      const selecao = { texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd };
+      definirGatilho(null);
+
+      if (gatilho.tipo === "wikilink") {
+        const resultado = aplicarLink(selecao, gatilho, item.rotulo);
+        aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+        return;
+      }
+
+      if (gatilho.tipo === "etiqueta") {
+        // `#urg` + escolha → a etiqueta entra na nota e o `#urg` some do
+        // texto: etiqueta aqui é metadado do índice, não palavra do arquivo.
+        const resultado = limparGatilho(selecao, gatilho);
+        aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+        const proximas = [...etiquetasAtuais, item.id];
+        definirEtiquetasAtuais(proximas);
+        await acaoDefinirEtiquetasDaNota(nota.caminho, proximas);
+        return;
+      }
+
+      if (item.id === COMANDO_IMAGEM) {
+        const resultado = limparGatilho(selecao, gatilho);
+        aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+        seletorDeArquivo.current?.click();
+        return;
+      }
+      const resultado = aplicarComando(selecao, gatilho, item.id, modelos);
+      aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    },
+    [gatilho, etiquetasAtuais, modelos, nota.caminho, aplicarNoCampo],
+  );
+
+  // ------------------------------------------------------------ teclado
+
+  /**
+   * O que um editor faz e um `<textarea>` cru não: setas e Enter na caixa de
+   * sugestões quando ela está aberta; Enter continuando a lista; Tab
+   * indentando; Ctrl+B/I como os botões da barra. Alt+setas e Ctrl+D moram
+   * no registro de atalhos (logo abaixo), para a folha `?` listá-los. Tudo o
+   * que não for nosso segue para o navegador.
+   */
   function aoTeclarNoCampo(evento: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (!ehMarkdown) return;
-    const atalho = atalhoDeFormatacao(evento);
-    if (!atalho) return;
-
-    evento.preventDefault();
     const campo = evento.currentTarget;
-    const resultado = envolver(
-      { texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd },
-      atalho === "negrito" ? "**" : "*",
-    );
-    aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    const selecao = { texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd };
+    const aplicar = (resultado: { texto: string; inicio: number; fim: number } | null) => {
+      if (!resultado) return;
+      evento.preventDefault();
+      aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    };
+
+    if (gatilho) {
+      if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
+        evento.preventDefault();
+        if (sugestoes.length === 0) return;
+        const passo = evento.key === "ArrowDown" ? 1 : -1;
+        definirSugestaoAtiva((atual) => (atual + passo + sugestoes.length) % sugestoes.length);
+        return;
+      }
+      if ((evento.key === "Enter" || evento.key === "Tab") && sugestoes[sugestaoAtiva]) {
+        evento.preventDefault();
+        void escolherSugestao(sugestoes[sugestaoAtiva]);
+        return;
+      }
+      if (evento.key === "Escape") {
+        evento.preventDefault();
+        evento.stopPropagation();
+        definirGatilho(null);
+        return;
+      }
+    }
+
+    const atalho = atalhoDeFormatacao(evento);
+    if (atalho) {
+      aplicar(envolver(selecao, atalho === "negrito" ? "**" : "*"));
+      return;
+    }
+    if (evento.key === "Enter" && !evento.shiftKey && !evento.ctrlKey && !evento.altKey) {
+      aplicar(continuarLista(selecao));
+      return;
+    }
+    if (evento.key === "Tab") {
+      aplicar(indentar(selecao, evento.shiftKey ? -1 : 1));
+      return;
+    }
+  }
+
+  /** Roda uma operação de "texto + seleção" no campo, vinda de um atalho do registro. */
+  const operarNoCampo = useCallback(
+    (operacao: (selecao: { texto: string; inicio: number; fim: number }) => { texto: string; inicio: number; fim: number } | null) => {
+      const campo = area.current;
+      if (!campo) return;
+      const resultado = operacao({ texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd });
+      if (resultado) aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    },
+    [aplicarNoCampo],
+  );
+  const atalhosDoEditor = { grupo: "Anotações", mesmoEmCampo: true, ativo: editando && ehMarkdown };
+  useAtalho("alt+arrowup", { ...atalhosDoEditor, descricao: "Mover a linha para cima", acao: () => operarNoCampo((s) => moverLinha(s, -1)) });
+  useAtalho("alt+arrowdown", { ...atalhosDoEditor, descricao: "Mover a linha para baixo", acao: () => operarNoCampo((s) => moverLinha(s, 1)) });
+  useAtalho("ctrl+d", { ...atalhosDoEditor, descricao: "Duplicar a linha", acao: () => operarNoCampo(duplicarLinha) });
+
+  // ------------------------------------------------------------ anexos
+
+  /** Um arquivo arrastado (ou escolhido pelo `/imagem`) vira anexo e entra como imagem ou link. */
+  async function anexarArquivos(arquivos: FileList | File[]) {
+    const campo = area.current;
+    if (!campo) return;
+    for (const arquivo of Array.from(arquivos)) {
+      definirAvisoImagem(null);
+      const base64 = await arquivoParaBase64(arquivo);
+      const resposta = await acaoSalvarAnexoDaNota(nota.caminho, arquivo.name, base64);
+      if (!resposta.ok || !resposta.mensagem) {
+        definirAvisoImagem(resposta.ok ? "Não deu para anexar o arquivo." : resposta.erro);
+        continue;
+      }
+      const ehImagem = arquivo.type.startsWith("image/");
+      // Espaço e acento no nome quebram o link em markdown (`(Orçamento
+      // 2026.pdf)` não é um destino válido); codificado, é link em qualquer
+      // leitor — o visualizador decodifica de volta ao servir.
+      const destino = encodeURI(resposta.mensagem);
+      const trecho = ehImagem ? `![](${destino})` : `[${arquivo.name}](${destino})`;
+      const resultado = inserirBloco(
+        { texto: campo.value, inicio: campo.selectionStart, fim: campo.selectionEnd },
+        trecho,
+      );
+      aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    }
+  }
+
+  function aoSoltarNoCampo(evento: React.DragEvent<HTMLTextAreaElement>) {
+    if (!evento.dataTransfer.files.length) return; // Texto arrastado: o navegador cuida.
+    evento.preventDefault();
+    void anexarArquivos(evento.dataTransfer.files);
   }
 
   /** Clicar numa tarefa em modo leitura já grava — sem precisar entrar em edição. */
@@ -539,8 +741,11 @@ export function PaginaNota({
             <span className="truncate">{secoes.join(" / ")}</span>
           </span>
           <SeletorEtiquetas
+            // A chave remonta o seletor quando o `#` do editor aplica uma
+            // etiqueta por fora dele — ele guarda a lista em estado próprio.
+            key={etiquetasAtuais.join(",")}
             caminho={nota.caminho}
-            etiquetasDaNota={nota.etiquetas}
+            etiquetasDaNota={etiquetasAtuais}
             todasEtiquetas={etiquetas}
           />
           <span className="ml-auto shrink-0 text-[11px] text-tinta-3">
@@ -562,12 +767,33 @@ export function PaginaNota({
                   por cima das duas: ela age no que está escrito à esquerda,
                   e atravessar a prévia sugeria que agia nela também. */}
               <div
+                ref={colunaEditor}
                 className={clsx(
                   "relative flex flex-col overflow-hidden",
                   divididoEmDois ? "shrink-0" : "min-w-0 flex-1",
                 )}
                 style={divididoEmDois ? { width: divisorEditor.largura } : undefined}
               >
+                {gatilho ? (
+                  <SugestoesEditor
+                    tipo={gatilho.tipo}
+                    itens={sugestoes}
+                    ativo={sugestaoAtiva}
+                    posicao={posicaoSugestoes}
+                    aoEscolher={(item) => void escolherSugestao(item)}
+                    aoPassarPorCima={definirSugestaoAtiva}
+                  />
+                ) : null}
+                <input
+                  ref={seletorDeArquivo}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(evento) => {
+                    if (evento.target.files) void anexarArquivos(evento.target.files);
+                    evento.target.value = "";
+                  }}
+                />
               <BarraFormatacao
                 formato={nota.formato}
                 campo={area}
@@ -644,13 +870,28 @@ export function PaginaNota({
                     ref={area}
                     // Não controlado de propósito — ver `aplicarNoCampo`.
                     defaultValue={conteudo}
-                    onChange={(evento) => definirConteudo(evento.target.value)}
+                    onChange={(evento) => {
+                      definirConteudo(evento.target.value);
+                      atualizarSugestoes(evento.target);
+                    }}
                     onKeyDown={aoTeclarNoCampo}
+                    onKeyUp={(evento) => {
+                      // Setas e cliques mudam o cursor sem mudar o texto.
+                      if (evento.key.startsWith("Arrow") || evento.key === "Home" || evento.key === "End") {
+                        atualizarSugestoes(evento.currentTarget);
+                      }
+                    }}
+                    onClick={(evento) => atualizarSugestoes(evento.currentTarget)}
+                    onBlur={() => definirGatilho(null)}
                     onPaste={aoColarNoCampo}
+                    onDragOver={(evento) => {
+                      if (evento.dataTransfer.types.includes("Files")) evento.preventDefault();
+                    }}
+                    onDrop={aoSoltarNoCampo}
                     spellCheck
                     placeholder={
                       ehMarkdown
-                        ? "Escreva em markdown. # título, - lista, - [ ] tarefa, **negrito**."
+                        ? "Escreva em markdown. # título, - lista, - [ ] tarefa. [[ liga uma página, / insere algo pronto."
                         : "Escreva à vontade."
                     }
                     className={clsx(

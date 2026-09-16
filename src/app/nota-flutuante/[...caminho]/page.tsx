@@ -4,6 +4,7 @@ import { PaginaNota } from "@/components/nota";
 import { lerNota } from "@/lib/arquivos";
 import { listarEtiquetas } from "@/lib/etiquetas";
 import { linksDaNota, listarBacklinks } from "@/lib/links";
+import { listarModelos } from "@/lib/modelos";
 import { caminhoDaUrl } from "@/lib/rotas";
 
 /**
@@ -23,8 +24,9 @@ export default async function TelaDaNotaFlutuante({
   const nota = await lerNota(caminho);
   if (!nota) notFound();
 
-  const [etiquetas, mapaDeLinks, backlinks] = await Promise.all([
+  const [etiquetas, modelos, mapaDeLinks, backlinks] = await Promise.all([
     listarEtiquetas(),
+    listarModelos(),
     linksDaNota(nota.conteudo),
     listarBacklinks(caminho),
   ]);
@@ -34,6 +36,7 @@ export default async function TelaDaNotaFlutuante({
       <PaginaNota
         nota={nota}
         etiquetas={etiquetas}
+        modelos={modelos}
         editandoInicial={false}
         iconeDoCaderno=""
         mapaDeLinks={mapaDeLinks}

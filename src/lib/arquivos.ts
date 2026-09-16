@@ -377,12 +377,15 @@ export async function salvarAnexo(
   caminhoDaNota: string,
   extensao: string,
   bytes: Buffer,
+  /** Nome de partida do arquivo (sem extensão). Sem ele, o carimbo de hora — o caso da imagem colada, que não tem nome. */
+  nomeBase?: string,
 ): Promise<string> {
   const pastaDaNota = pastaDe(caminhoDaNota);
   const pastaAnexos = juntar(pastaDaNota, "_anexos");
   await fs.mkdir(resolverCaminho(pastaAnexos), { recursive: true });
 
-  const nome = await nomeDisponivel(pastaAnexos, String(Date.now()), extensao);
+  const base = (nomeBase ? limparNome(nomeBase) : "") || String(Date.now());
+  const nome = await nomeDisponivel(pastaAnexos, base, extensao);
   const caminho = juntar(pastaAnexos, nome);
   await fs.writeFile(resolverCaminho(caminho), bytes);
 
@@ -632,6 +635,25 @@ export async function reordenarPastasPara(ordemDosCaminhos: string[]): Promise<v
  */
 function caminhosDeNota(indice: Indice): string[] {
   return Object.keys(indice.notas).filter((caminho) => !ehTarefaKanban(caminho));
+}
+
+/** Um título para o autocomplete de `[[` — nome e onde mora, sem abrir arquivo nenhum. */
+export type TituloDeNota = { titulo: string; caminho: string; trilha: string };
+
+/**
+ * Todos os títulos do vault, só pelo índice, para a lista de sugestões ao
+ * digitar `[[` no editor. Ordem alfabética: a filtragem fica no navegador,
+ * que já tem a lista inteira e responde a cada tecla sem ir ao servidor.
+ */
+export async function listarTitulos(): Promise<TituloDeNota[]> {
+  const indice = await lerIndice();
+  return caminhosDeNota(indice)
+    .map((caminho) => ({
+      caminho,
+      titulo: tituloDe(caminho),
+      trilha: caminho.split("/").slice(0, -1).join(" › "),
+    }))
+    .sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
 }
 
 export async function notasRecentes(limite = 8): Promise<ResumoNota[]> {
