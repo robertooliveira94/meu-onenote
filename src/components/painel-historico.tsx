@@ -3,9 +3,10 @@
 import clsx from "clsx";
 import { RotateCcw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { acaoLerVersao, acaoListarVersoes, acaoRestaurarVersao } from "@/app/acoes";
+import { diferencaDeLinhas, resumoDaDiferenca } from "@/lib/diferenca";
 import { formatarDataHora } from "@/lib/rotas";
 import type { VersaoHistorico } from "@/lib/tipos";
 
@@ -18,17 +19,26 @@ function descreverTamanho(bytes: number): string {
   return `${(bytes / 1024).toFixed(1).replace(".", ",")} kB`;
 }
 
+type Visao = "previa" | "comparar";
+
 /**
  * Painel de versões. O salvamento automático grava por cima do arquivo
  * enquanto se digita — este painel é o caminho de volta quando isso apaga algo
  * que fazia falta.
+ *
+ * "Comparar" mostra, linha a linha, o que muda entre a versão escolhida e o
+ * texto de agora — antes disso, restaurar era um salto no escuro: dava para
+ * ler a versão antiga, mas não para ver *o que* ela devolvia ou apagava.
  */
 export function PainelHistorico({
   caminho,
+  conteudoAtual,
   aoFechar,
   aoRestaurar,
 }: {
   caminho: string;
+  /** O texto de agora, para o modo "Comparar". */
+  conteudoAtual: string;
   aoFechar: () => void;
   aoRestaurar: (conteudo: string) => void;
 }) {
@@ -36,6 +46,7 @@ export function PainelHistorico({
   const [versoes, definirVersoes] = useState<VersaoHistorico[] | null>(null);
   const [selecionada, definirSelecionada] = useState<string | null>(null);
   const [previa, definirPrevia] = useState<string>("");
+  const [visao, definirVisao] = useState<Visao>("comparar");
   const [erro, definirErro] = useState<string | null>(null);
   const [ocupado, definirOcupado] = useState(false);
 
@@ -62,8 +73,17 @@ export function PainelHistorico({
     roteador.refresh();
   }
 
+  // Da versão escolhida para o texto de agora: "saiu" é o que restaurar
+  // devolve, "entrou" é o que restaurar apaga.
+  const diferenca = useMemo(
+    () => (selecionada ? diferencaDeLinhas(previa, conteudoAtual) : []),
+    [selecionada, previa, conteudoAtual],
+  );
+  const resumo = useMemo(() => resumoDaDiferenca(diferenca), [diferenca]);
+  const semMudanca = selecionada !== null && resumo.sairam === 0 && resumo.entraram === 0;
+
   return (
-    <aside className="flex w-[300px] shrink-0 flex-col border-l border-linha bg-superficie">
+    <aside className="flex w-[340px] shrink-0 flex-col border-l border-linha bg-superficie">
       <div className="flex items-center justify-between border-b border-linha px-3 py-2">
         <div>
           <p className="text-[12.5px] font-medium">Histórico</p>
@@ -74,7 +94,7 @@ export function PainelHistorico({
         </BotaoIcone>
       </div>
 
-      <div className="max-h-[42%] overflow-y-auto p-1.5">
+      <div className="max-h-[38%] overflow-y-auto p-1.5">
         {versoes === null ? (
           <p className="px-2 py-3 text-[12px] text-tinta-3">Carregando…</p>
         ) : versoes.length === 0 ? (
@@ -104,9 +124,50 @@ export function PainelHistorico({
 
       {selecionada ? (
         <div className="flex min-h-0 flex-1 flex-col border-t border-linha">
-          <pre className="editor-texto flex-1 overflow-auto p-3 text-tinta-2 whitespace-pre-wrap">
-            {previa}
-          </pre>
+          <div className="flex items-center gap-1 border-b border-linha px-2 py-1.5">
+            <Alternador ativo={visao === "comparar"} onClick={() => definirVisao("comparar")}>
+              Comparar
+            </Alternador>
+            <Alternador ativo={visao === "previa"} onClick={() => definirVisao("previa")}>
+              Prévia
+            </Alternador>
+            {visao === "comparar" ? (
+              <span className="ml-auto flex gap-2 font-mono text-[10.5px] tabular-nums">
+                <span className="text-[var(--realce)]">+{resumo.sairam}</span>
+                <span className="text-perigo">−{resumo.entraram}</span>
+              </span>
+            ) : null}
+          </div>
+
+          {visao === "previa" ? (
+            <pre className="editor-texto flex-1 overflow-auto p-3 text-tinta-2 whitespace-pre-wrap">{previa}</pre>
+          ) : semMudanca ? (
+            <p className="flex-1 px-3 py-4 text-[12px] leading-relaxed text-tinta-3">
+              Esta versão é igual ao texto de agora.
+            </p>
+          ) : (
+            <div className="flex-1 overflow-auto py-2">
+              {/* Lida de cima para baixo como "o que restaurar faz": verde é o
+                  que volta, vermelho é o que some. */}
+              {diferenca.map((linha, indice) => (
+                <div
+                  key={indice}
+                  className={clsx(
+                    "editor-texto flex gap-2 px-3 whitespace-pre-wrap",
+                    linha.tipo === "saiu" && "bg-[color-mix(in_srgb,var(--realce)_14%,transparent)] text-tinta",
+                    linha.tipo === "entrou" && "bg-[color-mix(in_srgb,var(--perigo)_12%,transparent)] text-tinta line-through decoration-perigo/60",
+                    linha.tipo === "igual" && "text-tinta-3",
+                  )}
+                >
+                  <span className="w-3 shrink-0 select-none text-tinta-3" aria-hidden>
+                    {linha.tipo === "saiu" ? "+" : linha.tipo === "entrou" ? "−" : " "}
+                  </span>
+                  <span className="min-w-0 flex-1">{linha.texto || " "}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="border-t border-linha p-2.5">
             <Aviso>{erro}</Aviso>
             <Botao variante="primario" className="w-full justify-center" onClick={restaurar} disabled={ocupado}>
@@ -120,5 +181,21 @@ export function PainelHistorico({
         </div>
       ) : null}
     </aside>
+  );
+}
+
+function Alternador({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      className={clsx(
+        "rounded-md px-2 py-0.5 text-[11.5px] transition-colors",
+        ativo ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco hover:text-tinta",
+      )}
+    >
+      {children}
+    </button>
   );
 }

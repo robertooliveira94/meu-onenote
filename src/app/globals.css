@@ -285,6 +285,52 @@ textarea:focus {
   display: none !important;
 }
 
+/*
+  Callouts (`> [!nota]`, `> [!dica]`, `> [!aviso]`, `> [!perigo]`…): um bloco
+  com faixa colorida à esquerda e título com ícone. A cor vem de uma variável
+  por tipo, para os temas escuros herdarem sem regra extra; o fundo é um
+  wash de 8% da mesma cor, como os cartões fazem com `--realce`.
+*/
+.prosa .callout {
+  --cor-callout: var(--realce);
+  margin: 1.1em 0;
+  padding: 0.7em 1em 0.7em 1.1em;
+  border-left: 3px solid var(--cor-callout);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cor-callout) 8%, transparent);
+}
+.prosa .callout > :last-child {
+  margin-bottom: 0;
+}
+.prosa .callout-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0 0 0.35em;
+  font-size: 0.86em;
+  font-weight: 700;
+  color: var(--cor-callout);
+}
+.prosa .callout-titulo:last-child {
+  margin-bottom: 0;
+}
+.prosa .callout-dica {
+  /* Ciano, não verde: o verde é o realce padrão dos cadernos e "nota" já o usa. */
+  --cor-callout: #0e9aa7;
+}
+.prosa .callout-aviso {
+  --cor-callout: #c98a1a;
+}
+.prosa .callout-perigo {
+  --cor-callout: var(--perigo);
+}
+.prosa .callout-info {
+  --cor-callout: #2d7ff9;
+}
+.prosa .callout-importante {
+  --cor-callout: #8a5cf6;
+}
+
 /* Nome escrito de cima para baixo, para caber na barra estreita de uma coluna
    recolhida sem virar sopa de letras. */
 .texto-vertical {

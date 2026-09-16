@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { AlertTriangle, Info, Lightbulb, OctagonAlert, StickyNote, Star } from "lucide-react";
 import { Children, isValidElement, memo, useMemo, useRef } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 import { juntar } from "@/lib/caminho-texto";
+import { rehypeCallouts, type TipoDeCallout } from "@/lib/rehype-callouts";
 import { converterWikilinks } from "@/lib/remark-wikilinks";
 import { identificadorDeTitulo } from "@/lib/sumario";
 import { urlDaMidia, urlDaNota } from "@/lib/rotas";
@@ -14,7 +16,16 @@ import { urlDaMidia, urlDaNota } from "@/lib/rotas";
 // Fora do componente de propósito: um array literal novo a cada render faria
 // o react-markdown achar que os plugins mudaram e reprocessar tudo à toa.
 const PLUGINS_REMARK = [remarkGfm];
-const PLUGINS_REHYPE = [rehypeHighlight];
+const PLUGINS_REHYPE = [rehypeCallouts, rehypeHighlight];
+
+const ICONE_DO_CALLOUT: Record<TipoDeCallout, React.ReactNode> = {
+  nota: <StickyNote size={14} />,
+  dica: <Lightbulb size={14} />,
+  aviso: <AlertTriangle size={14} />,
+  perigo: <OctagonAlert size={14} />,
+  info: <Info size={14} />,
+  importante: <Star size={14} />,
+};
 
 /** O texto puro de um título, atravessando negrito, código e links dentro dele. */
 function textoDoNo(no: React.ReactNode): string {
@@ -150,6 +161,22 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
           <Link href={urlDaNota(caminho)} title={trilhaDoCaminho(caminho)}>
             {children}
           </Link>
+        );
+      },
+      // Uma citação marcada pelo plugin de callouts vira um bloco com ícone e
+      // título; as outras continuam citações comuns.
+      blockquote({ node: _no, children, ...resto }) {
+        const tipo = (resto as Record<string, unknown>)["data-tipo"] as TipoDeCallout | undefined;
+        const titulo = (resto as Record<string, unknown>)["data-titulo"] as string | undefined;
+        if (!tipo) return <blockquote>{children}</blockquote>;
+        return (
+          <aside className={`callout callout-${tipo}`} role="note">
+            <p className="callout-titulo">
+              {ICONE_DO_CALLOUT[tipo]}
+              {titulo}
+            </p>
+            {children}
+          </aside>
         );
       },
       img({ src, alt }) {

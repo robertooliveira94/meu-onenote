@@ -64,6 +64,7 @@ import { useZoomTexto } from "@/lib/zoom";
 
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { PainelHistorico } from "./painel-historico";
+import { LocalizarNota } from "./localizar-nota";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
 import { SugestoesEditor } from "./sugestoes-editor";
 import { SumarioNota } from "./sumario-nota";
@@ -199,6 +200,7 @@ export function PaginaNota({
   const [sugestaoAtiva, definirSugestaoAtiva] = useState(0);
   const colunaEditor = useRef<HTMLDivElement>(null);
   const seletorDeArquivo = useRef<HTMLInputElement>(null);
+  const [localizar, definirLocalizar] = useState<{ substituir: boolean } | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const painelLeitura = useRef<HTMLDivElement | null>(null);
   const zoom = useZoomTexto();
@@ -252,6 +254,7 @@ export function PaginaNota({
   const concluirEdicao = useCallback(() => {
     if (!ehMarkdown) return;
     definirEditando(false);
+    definirLocalizar(null);
     if (conteudo === nota.conteudo) return;
     // Só aqui a casca se atualiza: o salvamento automático não revalida nada
     // (ver `acaoSalvarNota`), então é ao sair da edição que a lista de
@@ -369,20 +372,38 @@ export function PaginaNota({
    * ao apertar Enter, com a prévia mostrando mais "#" que o editor).
    *
    * A contrapartida: mudança feita por código (negrito, imagem colada,
-   * restaurar uma versão) precisa escrever no campo na mão — é o que esta
-   * função faz.
+   * restaurar uma versão, substituir todas) precisa escrever no campo na mão
+   * — é o que esta função faz.
+   *
+   * Escreve por `execCommand("insertText")` em vez de `campo.value = ...`:
+   * atribuir `.value` zera o desfazer do navegador, e um "substituir todas"
+   * sem Ctrl+Z seria um salto no escuro. Com `insertText` a troca inteira
+   * vira um passo do histórico nativo. É API antiga, mas é a única que faz
+   * isso num campo de texto; se um dia sumir, cai no `.value`.
    */
   const aplicarNoCampo = useCallback(
-    (texto: string, selecao?: { inicio: number; fim: number }) => {
+    (texto: string, selecao?: { inicio: number; fim: number }, focar = true) => {
       const campo = area.current;
-      if (campo) {
-        campo.value = texto;
-        if (selecao) {
-          requestAnimationFrame(() => {
-            campo.focus();
-            campo.setSelectionRange(selecao.inicio, selecao.fim);
-          });
+      if (campo && campo.value !== texto) {
+        const quemTinhaOFoco = document.activeElement as HTMLElement | null;
+        campo.focus();
+        campo.setSelectionRange(0, campo.value.length);
+        let escrito = false;
+        try {
+          escrito = document.execCommand("insertText", false, texto);
+        } catch {
+          escrito = false;
         }
+        if (!escrito || campo.value !== texto) campo.value = texto;
+        // A barra de buscar/substituir aplica sem tomar o foco de volta: a
+        // pessoa ainda está digitando nela.
+        if (!focar && quemTinhaOFoco && quemTinhaOFoco !== campo) quemTinhaOFoco.focus();
+      }
+      if (campo && selecao) {
+        requestAnimationFrame(() => {
+          if (focar) campo.focus();
+          campo.setSelectionRange(selecao.inicio, selecao.fim);
+        });
       }
       definirConteudo(texto);
     },
@@ -538,6 +559,8 @@ export function PaginaNota({
   useAtalho("alt+arrowup", { ...atalhosDoEditor, descricao: "Mover a linha para cima", acao: () => operarNoCampo((s) => moverLinha(s, -1)) });
   useAtalho("alt+arrowdown", { ...atalhosDoEditor, descricao: "Mover a linha para baixo", acao: () => operarNoCampo((s) => moverLinha(s, 1)) });
   useAtalho("ctrl+d", { ...atalhosDoEditor, descricao: "Duplicar a linha", acao: () => operarNoCampo(duplicarLinha) });
+  useAtalho("ctrl+f", { ...atalhosDoEditor, descricao: "Buscar na página", acao: () => definirLocalizar({ substituir: false }) });
+  useAtalho("ctrl+h", { ...atalhosDoEditor, descricao: "Substituir na página", acao: () => definirLocalizar({ substituir: true }) });
 
   // ------------------------------------------------------------ anexos
 
@@ -614,8 +637,10 @@ export function PaginaNota({
   }
 
   // Edição lado a lado: texto cru à esquerda, prévia à direita. Texto puro
-  // nunca divide (não tem o que pré-visualizar).
-  const divididoEmDois = ehMarkdown && previaVisivel;
+  // nunca divide (não tem o que pré-visualizar). Com o histórico aberto a
+  // prévia cede a vez: três painéis numa tela de notebook espremiam a prévia
+  // a uma coluna de letras, e a comparação de versões já mostra o texto.
+  const divididoEmDois = ehMarkdown && previaVisivel && !historicoAberto;
 
   const palavras = useMemo(() => contarPalavras(conteudo), [conteudo]);
   const minutosDeLeitura = tempoDeLeituraEmMinutos(palavras);
@@ -856,6 +881,20 @@ export function PaginaNota({
                 }
               />
 
+              {localizar ? (
+                <LocalizarNota
+                  // A chave reabre com o foco certo quando Ctrl+H chega com a barra já aberta.
+                  key={localizar.substituir ? "substituir" : "buscar"}
+                  campo={area}
+                  conteudo={conteudo}
+                  comSubstituir={localizar.substituir}
+                  aoAplicar={(resultado) =>
+                    aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim }, false)
+                  }
+                  aoFechar={() => definirLocalizar(null)}
+                />
+              ) : null}
+
               {avisoImagem ? (
                 <p className="border-b border-linha bg-[color-mix(in_srgb,var(--perigo)_8%,transparent)] px-7 py-1.5 text-[11.5px] text-perigo">
                   {avisoImagem}
@@ -989,6 +1028,7 @@ export function PaginaNota({
         {historicoAberto ? (
           <PainelHistorico
             caminho={nota.caminho}
+            conteudoAtual={conteudo}
             aoFechar={() => definirHistoricoAberto(false)}
             aoRestaurar={(texto) => {
               aplicarNoCampo(texto);
