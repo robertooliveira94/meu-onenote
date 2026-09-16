@@ -88,18 +88,71 @@ limpas e abríveis em qualquer editor.
   O título muda com dois cliques nele, na própria página — o arquivo é
   renomeado no disco junto, e o endereço acompanha. Perguntar o título antes
   era pedir a decisão mais difícil no pior momento: antes de existir texto.
+- **A navegação de Anotações é uma árvore só**: cadernos › seções ›
+  páginas numa coluna, no modelo do explorador do Obsidian. Vários
+  cadernos e seções podem ficar abertos ao mesmo tempo; o que estava
+  aberto é lembrado, e a trilha da página aberta abre sozinha. As páginas
+  aparecem em linhas (estrela se favorita, alfinete se fixada, título,
+  data) — cabem três vezes mais por tela do que os cartões de antes, que
+  continuam só no Início e nas Etiquetas. Ctrl+clique (ou botão do meio)
+  numa página abre ela numa aba nova sem sair da atual.
+- **Abas de notas abertas**, como num navegador: uma faixa acima do
+  conteúdo lembra por onde se passou. Clicar numa página substitui a aba
+  atual; Ctrl+clique abre ao lado; arrastar reordena; botão do meio ou
+  Alt+W fecha; Alt+PageUp/PageDown circulam (Ctrl+W e Ctrl+Tab são do
+  navegador, que não deixa a página interceptar). Renomear ou mover uma
+  nota leva a aba junto. Só a faixa — sem dividir a tela em painéis.
+- **Fixar página no topo da seção**: diferente de favoritar (que é global,
+  aparece no Início), fixar só põe a página em primeiro na lista da
+  própria seção. Um bit no índice, como a ordem manual.
 - Página em markdown abre em modo leitura por padrão (renderizado, com
-  realce de sintaxe); um botão "Editar" abre a edição lado a lado
-  (texto cru + prévia ao vivo). Um título ainda sem texto ("### " recém
+  realce de sintaxe), com a prosa limitada a ~70 caracteres por linha e
+  centralizada — passar disso cansa o olho; a medida acompanha o zoom do
+  texto. Um botão "Editar" abre a edição lado a lado (texto cru + prévia
+  ao vivo), com a barra de formatação dentro da coluna do texto. O
+  cabeçalho da nota tem duas linhas: título e ações; embaixo, trilha do
+  caderno, etiquetas e "412 palavras · 2 min". **Modo foco**
+  (`Ctrl+Shift+F`) some com trilho, coluna e cabeçalho e deixa só o texto;
+  Esc sai. Um **sumário** dos títulos aparece na margem direita a partir
+  de três títulos (`]` alterna): em leitura o título na tela fica
+  destacado e clicar rola até ele; em edição, clicar leva o cursor à linha. Um título ainda sem texto ("### " recém
   digitado) aparece na prévia como os próprios "#" em cinza, em vez de
   sumir da tela até o título ganhar palavras. Os `.txt` que sobraram de
   versões anteriores continuam abrindo no editor de texto puro, com a barra
   de formatação limitada ao que o formato suporta — mas o app não cria mais
   nenhum: página nova é sempre markdown.
-- As colunas de seções e de páginas se recolhem numa faixa fina, e a faixa
-  continua dizendo onde a pessoa está: o nome da seção aberta e o da página
-  aberta, escritos de cima para baixo. Clicar no nome abre a coluna de volta.
-- **Janela flutuante**: um botão na lista de páginas cria a página e abre
+- A coluna da árvore se recolhe numa faixa fina (`[`), e a faixa continua
+  dizendo onde a pessoa está: caderno › seção, escritos de cima para
+  baixo. Clicar no nome abre a coluna de volta.
+- **O editor se comporta como um editor**, mesmo sendo um campo de texto:
+  Enter continua a lista (numerada com o número seguinte, tarefa como
+  tarefa) e um item vazio encerra a lista; Tab/Shift+Tab indentam; Alt+↑/↓
+  movem a linha; Ctrl+D duplica; Ctrl+B/I formatam. Toda mudança feita por
+  código (negrito, substituir todas, restaurar versão) entra no desfazer
+  nativo — Ctrl+Z volta. Sugestões coladas no cursor: `[[` lista as páginas
+  do vault e insere `[[Título]]`; `#` no meio de uma linha aplica uma
+  etiqueta à nota (e some do texto — etiqueta é metadado, não palavra do
+  arquivo; no começo da linha continua sendo título); `/` insere tarefa,
+  tabela, data, hora, separador, citação, bloco de código, títulos, um
+  modelo cadastrado ou abre o seletor de arquivo. `Ctrl+F` / `Ctrl+H` em
+  edição buscam e substituem dentro da página ("3 de 12", uma ou todas).
+- **Arrastar um arquivo para o editor** (PDF, planilha, texto, imagem)
+  salva em `_anexos/` com o nome original e insere o link (imagem como
+  `![]()`); a lista de tipos aceitos é a mesma que o app serve — SVG fica
+  de fora por poder carregar script. Nomes com espaço ou acento vão
+  codificados no markdown, que é link válido em qualquer leitor.
+- **Callouts** `> [!nota]`, `[!dica]`, `[!aviso]`, `[!perigo]`, `[!info]`,
+  `[!importante]` viram blocos com faixa colorida, ícone e título; a
+  sintaxe é a do Obsidian, e noutro leitor continua sendo citação.
+- **Histórico compara antes de restaurar**: ao lado da prévia de uma
+  versão, "Comparar" mostra linha a linha o que restaurar devolve (verde)
+  e apaga (vermelho), com o resumo "+1 −1". Com o histórico aberto, a
+  prévia da edição cede a vez.
+- **Imprimir / salvar em PDF** pelo botão da nota: folha de estilo de
+  impressão do navegador, só o título e o texto, sem moldura — links
+  impressos com o endereço ao lado.
+- **Janela flutuante**: um item no menu da seção ("Nova página em janela
+  flutuante") cria a página e abre
   ela numa janela por cima da tela atual, em vez de navegar pra longe —
   arrastável pela barra do topo, redimensionável pelo canto, posição e
   tamanho lembrados entre usos. Fechar não perde nada (o autosave já

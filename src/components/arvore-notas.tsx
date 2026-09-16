@@ -14,6 +14,7 @@ import {
   MoveRight,
   Palette,
   Pencil,
+  Pin,
   Plus,
   Smile,
   Star,
@@ -25,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import {
   acaoAlternarFavorita,
+  acaoAlternarFixada,
   acaoConverterFormato,
   acaoCriarCaderno,
   acaoCriarPagina,
@@ -55,6 +57,7 @@ import {
   trazPagina,
   trazSecao,
 } from "@/lib/arrastar";
+import { useAbas } from "@/lib/abas";
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
@@ -129,6 +132,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
   const [acao, definirAcao] = useState<Acao>(null);
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const [, iniciarCriacaoDePagina] = useTransition();
+  const abas = useAbas();
 
   const trilha = trilhaDaUrl(caminhoAtual);
 
@@ -142,6 +146,10 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
     return inicial;
   });
   const montado = useRef(false);
+  // Mesma proteção do provedor de abas: o efeito de gravar roda no mesmo
+  // ciclo do de restaurar, e não pode escrever a trilha inicial por cima
+  // do que estava guardado.
+  const estadoInicial = useRef(abertos);
 
   useEffect(() => {
     try {
@@ -163,7 +171,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
   }, []);
 
   useEffect(() => {
-    if (!montado.current) return;
+    if (!montado.current || abertos === estadoInicial.current) return;
     try {
       localStorage.setItem(CHAVE_ABERTOS, JSON.stringify([...abertos]));
     } catch {
@@ -315,6 +323,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
     const paiAntigo = origem.slice(0, origem.lastIndexOf("/"));
     const resposta = await acaoMover(origem, destino);
     if (!resposta.ok) return;
+    if (resposta.mensagem) abas.renomear(origem, resposta.mensagem);
     invalidar(paiAntigo);
     invalidar(destino);
     definirAbertos((atual) => new Set(atual).add(destino));
@@ -440,6 +449,10 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
                         await acaoAlternarFavorita(nota.caminho);
                         atualizar(secao.caminho);
                       }}
+                      aoFixar={async (nota) => {
+                        await acaoAlternarFixada(nota.caminho);
+                        atualizar(secao.caminho);
+                      }}
                       aoConverter={async (nota) => {
                         const resposta = await acaoConverterFormato(nota.caminho, "md");
                         invalidar(secao.caminho);
@@ -455,6 +468,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
                       aoSoltarPagina={(origem, alvoCaminho, antes) =>
                         aoSoltarPagina(secao.caminho, origem, alvoCaminho, antes)
                       }
+                      aoAbrirAoLado={abas.abrirAoLado}
                     />
                   ))
                 )
@@ -521,6 +535,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
           const resposta = await acaoRenomear(alvo.caminho, nome);
           if (!resposta.ok) return resposta.erro;
           invalidar();
+          if (resposta.mensagem) abas.renomear(alvo.caminho, resposta.mensagem);
           if (alvo.nivel === "pagina" && resposta.mensagem) roteador.push(urlDaNota(resposta.mensagem));
           else roteador.refresh();
           return null;
@@ -538,6 +553,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
           const resposta = await acaoMover(alvo.caminho, destino);
           if (!resposta.ok) return resposta.erro;
           invalidar();
+          if (resposta.mensagem) abas.renomear(alvo.caminho, resposta.mensagem);
           definirAbertos((atual) => new Set(atual).add(destino));
           if (estaDentroDe(alvo.caminho) && resposta.mensagem) {
             roteador.push(
@@ -593,6 +609,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
           const resposta = await acaoExcluir(alvo.caminho);
           if (!resposta.ok) return resposta.erro;
           invalidar();
+          abas.remover(alvo.caminho);
           // Ficar no caderno recém-excluído mostraria uma tela fantasma.
           if (estaDentroDe(alvo.caminho)) roteador.push("/");
           else roteador.refresh();
@@ -619,6 +636,7 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
           const resposta = await acaoExcluir(alvo.caminho);
           if (!resposta.ok) return resposta.erro;
           invalidar();
+          abas.remover(alvo.caminho);
           if (estaDentroDe(alvo.caminho)) roteador.push(destino);
           else roteador.refresh();
           return null;
@@ -868,12 +886,14 @@ function RamoSecao({
   aoCriarPagina,
   aoCriarPaginaFlutuante,
   aoFavoritar,
+  aoFixar,
   aoConverter,
   aoReordenarItem,
   definirSobrevoo,
   aoSoltarSecao,
   aoSoltarPaginaDentro,
   aoSoltarPagina,
+  aoAbrirAoLado,
 }: {
   caderno: Caderno;
   secao: Secao;
@@ -888,12 +908,14 @@ function RamoSecao({
   aoCriarPagina: (secao: string) => void;
   aoCriarPaginaFlutuante: (secao: string) => void;
   aoFavoritar: (nota: ResumoNota) => void;
+  aoFixar: (nota: ResumoNota) => void;
   aoConverter: (nota: ResumoNota) => void;
   aoReordenarItem: (caminho: string, direcao: -1 | 1, tipo: "nota" | "pasta") => void;
   definirSobrevoo: (sobrevoo: Sobrevoo) => void;
   aoSoltarSecao: (origem: string, antes: boolean) => void;
   aoSoltarPaginaDentro: (origem: string) => void;
   aoSoltarPagina: (origem: string, alvoCaminho: string, antes: boolean) => void;
+  aoAbrirAoLado: (caminho: string, titulo: string) => void;
 }) {
   const ativa = trilhaSecao === secao.caminho;
   const alvo: Alvo = { nivel: "secao", caminho: secao.caminho, nome: secao.nome };
@@ -1094,6 +1116,7 @@ function RamoSecao({
               sobrevoo={sobrevoo?.caminho === nota.caminho ? sobrevoo : null}
               aoAgir={aoAgir}
               aoFavoritar={() => aoFavoritar(nota)}
+              aoFixar={() => aoFixar(nota)}
               aoConverter={() => aoConverter(nota)}
               aoReordenarItem={aoReordenarItem}
               aoPassarPorCima={(antes) =>
@@ -1101,6 +1124,7 @@ function RamoSecao({
               }
               aoSairDeCima={() => definirSobrevoo(null)}
               aoSoltar={(origem, antes) => aoSoltarPagina(origem, nota.caminho, antes)}
+              aoAbrirAoLado={() => aoAbrirAoLado(nota.caminho, nota.titulo)}
             />
           ))
         )
@@ -1121,11 +1145,13 @@ function LinhaPagina({
   sobrevoo,
   aoAgir,
   aoFavoritar,
+  aoFixar,
   aoConverter,
   aoReordenarItem,
   aoPassarPorCima,
   aoSairDeCima,
   aoSoltar,
+  aoAbrirAoLado,
 }: {
   nota: ResumoNota;
   ativa: boolean;
@@ -1133,11 +1159,13 @@ function LinhaPagina({
   sobrevoo: Sobrevoo;
   aoAgir: (acao: Acao) => void;
   aoFavoritar: () => void;
+  aoFixar: () => void;
   aoConverter: () => void;
   aoReordenarItem: (caminho: string, direcao: -1 | 1, tipo: "nota" | "pasta") => void;
   aoPassarPorCima: (antes: boolean) => void;
   aoSairDeCima: () => void;
   aoSoltar: (origem: string, antes: boolean) => void;
+  aoAbrirAoLado: () => void;
 }) {
   const alvo: Alvo = { nivel: "pagina", caminho: nota.caminho, nome: nota.titulo };
 
@@ -1178,8 +1206,24 @@ function LinhaPagina({
       <Link
         href={urlDaNota(nota.caminho)}
         title={nota.trecho || "página em branco"}
+        // Ctrl+clique e botão do meio: aba nova sem sair da atual, como num
+        // navegador. Tirados do navegador de propósito — abrir a mesma nota
+        // numa aba do Chrome não é o que se quer aqui.
+        onClick={(evento) => {
+          if (evento.ctrlKey || evento.metaKey) {
+            evento.preventDefault();
+            aoAbrirAoLado();
+          }
+        }}
+        onAuxClick={(evento) => {
+          if (evento.button === 1) {
+            evento.preventDefault();
+            aoAbrirAoLado();
+          }
+        }}
         className="linha-nav flex min-w-0 flex-1 items-center gap-1.5 pl-11"
       >
+        {nota.fixada ? <Pin size={10} className="shrink-0 text-tinta-3" aria-label="Fixada no topo" /> : null}
         {nota.favorita ? <Star size={10} className="shrink-0 fill-current text-[#c69214]" /> : null}
         <span
           className={clsx("min-w-0 flex-1 truncate text-[12.5px]", ativa ? "font-medium text-tinta" : "text-tinta-2")}
@@ -1209,6 +1253,15 @@ function LinhaPagina({
                 }}
               >
                 {nota.favorita ? "Tirar dos favoritos" : "Marcar como favorita"}
+              </ItemMenu>
+              <ItemMenu
+                icone={<Pin size={14} />}
+                onClick={() => {
+                  fechar();
+                  aoFixar();
+                }}
+              >
+                {nota.fixada ? "Desafixar do topo" : "Fixar no topo da seção"}
               </ItemMenu>
               <ItemMenu
                 icone={<Pencil size={14} />}

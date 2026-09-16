@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { AbasProvedor } from "@/lib/abas";
 import { AtalhosProvedor, useAtalho } from "@/lib/atalhos";
 import { useAvisosDePrazo } from "@/lib/avisos-prazo";
 import { ColunasProvedor, useColunas } from "@/lib/colunas";
@@ -10,6 +11,7 @@ import { PaletaProvedor, usePaleta } from "@/lib/paleta";
 import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
 import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
+import { AbasNotas } from "./abas-notas";
 import { BarraAplicacoes } from "./barra-aplicacoes";
 import { ColunaQuadros } from "./coluna-quadros";
 import { ColunaSecoes } from "./coluna-secoes";
@@ -44,22 +46,29 @@ export function Casca(props: {
   children: React.ReactNode;
 }) {
   return (
-    <ColunasProvedor>
-      <AtalhosProvedor>
-        <PaletaProvedor>
-          {/*
-            `useSearchParams` (usado só para saber qual pasta de links está
-            aberta) exige um limite de Suspense — sem isso o Next tenta pré-
-            renderizar a página inteira como estática e falha no build. Na
-            prática o valor já está disponível de cara em toda navegação no
-            cliente, então este fallback nunca chega a aparecer de verdade.
-          */}
-          <Suspense fallback={null}>
-            <CascaInterna {...props} />
-          </Suspense>
-        </PaletaProvedor>
-      </AtalhosProvedor>
-    </ColunasProvedor>
+    // `useSearchParams` (usado só para saber qual pasta de links está aberta)
+    // exige um limite de Suspense — sem isso o Next tenta pré-renderizar a
+    // página inteira como estática e falha no build. Na prática o valor já
+    // está disponível de cara em toda navegação no cliente, então este
+    // fallback nunca chega a aparecer de verdade.
+    //
+    // Os provedores ficam DENTRO do limite de propósito. Eles restauram
+    // estado do localStorage num efeito (coluna recolhida, abas abertas);
+    // fora do limite, hidratavam antes dele, o efeito rodava, e quando o
+    // conteúdo de dentro hidratava já via o estado restaurado — diferente do
+    // HTML do servidor, que o React acusava como erro de hidratação. Dentro,
+    // tudo hidrata junto e o efeito só roda depois.
+    <Suspense fallback={null}>
+      <ColunasProvedor>
+        <AtalhosProvedor>
+          <PaletaProvedor>
+            <AbasProvedor>
+              <CascaInterna {...props} />
+            </AbasProvedor>
+          </PaletaProvedor>
+        </AtalhosProvedor>
+      </ColunasProvedor>
+    </Suspense>
   );
 }
 
@@ -179,7 +188,10 @@ function CascaInterna({
         ) : appAtual === "kanban" ? (
           <ColunaQuadros quadros={quadros} />
         ) : null}
-        <main className="flex min-w-0 flex-1 overflow-hidden">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {appAtual === "notas" ? <AbasNotas /> : null}
+          <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
+        </div>
       </div>
       <AtalhosDoHub
         appAtual={appAtual}

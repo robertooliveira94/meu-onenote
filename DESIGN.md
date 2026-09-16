@@ -287,6 +287,19 @@ própria navegação (árvore de grupos/pastas) embutida. Sem grade
 responsiva além disso; o app assume uma janela de desktop (é um serviço
 local, não uma página pública).
 
+**Nota:** cabeçalho de duas linhas (título 24px extrabold + ações;
+metadados em 11.5px `tinta-3`), 86px de altura. Em leitura, o `<article>`
+leva `.coluna-leitura` — `max-width: calc(36 * 15.5px * var(--escala-texto))`,
+~70 caracteres por linha, centralizado, com a `.spinha-lombada` acompanhando.
+A edição lado a lado não limita: cada painel já é estreito. Modo foco é um
+`data-foco="1"` no `<html>`; tudo que some leva `.esconde-no-foco`, e uma
+regra só de CSS esconde. Callouts: `.callout` com faixa esquerda de 3px em
+`--cor-callout`, fundo de 8% da mesma cor, título em versalete com ícone;
+uma cor por tipo (nota = `--realce`, dica ciano `#0e9aa7`, aviso âmbar
+`#c98a1a`, perigo `--perigo`, info azul `#2d7ff9`, importante roxo
+`#8a5cf6`). Diff de versões: linha que volta em wash de `--realce`, linha
+que some em wash de `--perigo` riscada.
+
 **Densidade** é uma preferência da pessoa, não uma classe por tela: quatro
 variáveis em `:root` (`--esp-cartao-y: 10px`, `--esp-cartao-x: 14px`,
 `--esp-lista: 6px`, `--esp-nav-y: 6px`) dão o padding interno de `.cartao`,
@@ -463,6 +476,24 @@ desenhar um cartão inteiro ao redor.
   Recolhida, a faixa mostra "caderno › seção" na vertical.
 - **Coluna de quadros (só no Kanban):** mesmo esqueleto — cabeçalho, a
   lista de quadros com a cor de cada um, rodapé com "Etiquetas do Kanban".
+- **Abas de notas (só em Anotações):** faixa acima do conteúdo, `bg-superficie`
+  com borda embaixo; cada aba é um `role="tab"` de 12px, `rounded-t-lg`, a
+  ativa em `bg-papel` com borda `--linha` e uma faixinha da cor do papel
+  apagando a borda de baixo — a aba "desce" para o conteúdo. Inativas sem
+  borda, `text-tinta-2`, com o `×` só no hover. Linha de encaixe de 2px em
+  `--realce` na borda esquerda/direita da aba sobrevoada ao arrastar. Some
+  quando não há aba nenhuma.
+- **Sumário da nota:** `aside` de 200px à direita, `bg-superficie`, borda
+  esquerda; itens de 11.5px com um degrau de 10px por nível a partir do
+  menor nível da nota; o ativo em `bg-realce-medio`. Só com 3+ títulos.
+- **Caixa de sugestões do editor** (`[[`, `#`, `/`): `role="listbox"` de
+  280px colado ao cursor (posicionado por um espelho invisível do campo),
+  `bg-superficie-alta`, `rounded-xl`, cabeçalho em versalete com ícone do
+  tipo, itens de 12.5px com detalhe à direita em `tinta-3`, rodapé com
+  "↑↓ escolhe · Enter aplica · Esc fecha". O ativo em `bg-realce-medio`.
+- **Barra de buscar/substituir:** uma linha acima do editor, dois campos
+  de 150px, contagem "3 de 12" em `tinta-3` tabular, setas e botões de
+  texto; some com Esc.
 - **Paleta de comandos (`Ctrl+K`, `/`):** um `Dialogo` com campo de busca
   e uma lista única de resultados em seções rotuladas (`RotuloMenu`):
   Ações, Ir para, Notas, Tarefas, Links. Ações e Ir para filtram na hora

@@ -273,6 +273,7 @@ async function montarResumo(
     criadoEm: entrada?.criadoEm ?? new Date().toISOString(),
     atualizadoEm: entrada?.atualizadoEm ?? new Date().toISOString(),
     favorita: entrada?.favorita ?? false,
+    fixada: entrada?.fixada ?? false,
     etiquetas: entrada?.etiquetas ?? [],
   };
 }
@@ -349,8 +350,10 @@ export async function listarNotas(pasta: string): Promise<ResumoNota[]> {
     notas.push(await montarResumo(juntar(pasta, entrada.name), indice));
   }
 
+  // Fixadas primeiro, depois a ordem manual, depois o nome.
   notas.sort(
     (a, b) =>
+      Number(b.fixada) - Number(a.fixada) ||
       (indice.notas[a.caminho]?.ordem ?? 0) - (indice.notas[b.caminho]?.ordem ?? 0) ||
       a.titulo.localeCompare(b.titulo, "pt-BR"),
   );

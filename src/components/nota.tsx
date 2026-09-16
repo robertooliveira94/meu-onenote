@@ -16,6 +16,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Pencil,
+  Printer,
   Star,
   ZoomIn,
   ZoomOut,
@@ -40,6 +41,7 @@ import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
 import { coordenadasDoCursor } from "@/lib/cursor-editor";
 import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/editor-teclado";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
+import { useAbas } from "@/lib/abas";
 import { useModoFoco } from "@/lib/foco";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
@@ -206,6 +208,11 @@ export function PaginaNota({
   const zoom = useZoomTexto();
   const fundoEditor = useFundoEditor();
   const modoFoco = useModoFoco();
+  const abas = useAbas();
+  // A aba desta nota mostra o título de verdade (a faixa só conhecia o nome do arquivo).
+  useEffect(() => {
+    abas.atualizarTitulo(nota.caminho, nota.titulo);
+  }, [abas, nota.caminho, nota.titulo]);
   // Duas refs no mesmo elemento: a do zoom (Ctrl+roda) e a do sumário, que
   // precisa do painel rolável para saber qual título está na tela. Devolver o
   // retorno de `refRolagem` preserva a limpeza do ouvinte de `wheel`.
@@ -677,6 +684,7 @@ export function PaginaNota({
               aoRenomear={async (novoTitulo) => {
                 const resposta = await acaoRenomear(nota.caminho, novoTitulo);
                 if (!resposta.ok) return resposta.erro;
+                if (resposta.mensagem) abas.renomear(nota.caminho, resposta.mensagem);
                 // O endereço tem o nome do arquivo: sem trocar, a página
                 // aberta apontaria para um arquivo que não existe mais.
                 if (resposta.mensagem) {
@@ -722,6 +730,10 @@ export function PaginaNota({
                 <ListTree size={15} className={sumarioVisivel ? "text-tinta" : undefined} />
               </BotaoIcone>
             ) : null}
+
+            <BotaoIcone rotulo="Imprimir ou salvar em PDF" onClick={() => window.print()}>
+              <Printer size={15} />
+            </BotaoIcone>
 
             <BotaoIcone
               rotulo={modoFoco.foco ? "Sair do modo foco (Esc)" : "Modo foco (Ctrl+Shift+F)"}

@@ -778,3 +778,82 @@ textarea:focus {
     filter 0.15s ease,
     transform 0.15s ease;
 }
+
+/*
+  Impressão / salvar em PDF (botão da nota → `window.print()`): só o texto da
+  página, sem a moldura. Não é um exportador — é a folha de estilo de
+  impressão do navegador bem feita, que resolve "manda esta nota em PDF" sem
+  dependência nenhuma. Em edição, imprime a prévia; sem prévia, o texto cru.
+*/
+@media print {
+  .esconde-no-foco:not(header),
+  [role="tablist"],
+  [role="search"],
+  aside:not(.callout),
+  .barra-ativa {
+    display: none !important;
+  }
+  /* Do cabeçalho da nota só o título vai para o papel: nem botões, nem a
+     linha de metadados. */
+  header.esconde-no-foco {
+    display: block !important;
+    border: 0;
+    padding: 0 0 8pt;
+    background: none;
+  }
+  header.esconde-no-foco > div:not(:has(h1)),
+  header.esconde-no-foco > div > :not(h1) {
+    display: none !important;
+  }
+  header.esconde-no-foco h1 {
+    max-width: none;
+    color: #000;
+  }
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    color: #000;
+  }
+  main,
+  main > *,
+  .coluna-leitura {
+    display: block;
+    height: auto;
+    max-width: none;
+    overflow: visible;
+  }
+  .coluna-leitura {
+    padding-left: 0;
+  }
+  .spinha-lombada {
+    display: none;
+  }
+  .prosa {
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+  }
+  .prosa h1,
+  .prosa h2 {
+    break-after: avoid;
+  }
+  .prosa pre,
+  .prosa table,
+  .prosa img,
+  .prosa .callout {
+    break-inside: avoid;
+  }
+  /* Link impresso sem o endereço é um link para lugar nenhum. */
+  .prosa a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #555;
+  }
+  .prosa .callout {
+    border: 1px solid #999;
+    border-left-width: 3px;
+    background: none;
+  }
+}

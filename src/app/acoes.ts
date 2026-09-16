@@ -361,6 +361,19 @@ export async function acaoConverterFormato(
   }
 }
 
+/** Fixar no topo da seção — um bit no índice, como a ordem manual. */
+export async function acaoAlternarFixada(caminho: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    await atualizarIndice((indice) => {
+      const entrada = entradaDaNota(indice, validado);
+      entrada.fixada = !entrada.fixada;
+    });
+  });
+  atualizarTudo();
+  return resposta;
+}
+
 export async function acaoAlternarFavorita(caminho: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
     const validado = caminhoValido.parse(caminho);
