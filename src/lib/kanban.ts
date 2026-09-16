@@ -20,12 +20,17 @@ import type {
   ColunaKanban,
   Comentario,
   ConfigQuadro,
+  Estimativa,
   Indice,
   Prioridade,
   Quadro,
+  Recorrencia,
   Subtarefa,
   TarefaKanban,
 } from "./tipos";
+
+/** Pasta, dentro do quadro, onde as tarefas arquivadas moram — fora das colunas, mas ainda no quadro. */
+export const PASTA_ARQUIVO = "_arquivo";
 
 /**
  * O conteúdo de um quadro Kanban. O Kanban é uma aplicação à parte das
@@ -130,10 +135,69 @@ function atualizarDependenciasApósMover(indice: Indice, de: string, para: strin
   }
 }
 
+/** Uma tarefa a partir do caminho e do que o índice sabe dela. */
+function montarTarefa(caminho: string, coluna: ColunaKanban, indice: Indice): TarefaKanban {
+  const meta = indice.notas[caminho];
+  const agora = new Date().toISOString();
+  return {
+    caminho,
+    titulo: tituloDe(caminho),
+    coluna,
+    criadoEm: meta?.criadoEm ?? agora,
+    atualizadoEm: meta?.atualizadoEm ?? agora,
+    etiquetas: meta?.etiquetasKanban ?? [],
+    favorita: meta?.favorita ?? false,
+    dependeDe: meta?.dependeDe ?? [],
+    prioridade: meta?.prioridadeKanban ?? null,
+    prazo: meta?.prazoKanban ?? null,
+    sprintId: meta?.sprintKanban ?? null,
+    subtarefas: meta?.subtarefasKanban ?? [],
+    comentarios: meta?.comentariosKanban ?? [],
+    impedimento: meta?.impedimentoKanban ?? null,
+    numero: meta?.numeroKanban ?? 0,
+    movidoEm: meta?.movidoEm ?? meta?.criadoEm ?? agora,
+    cor: meta?.corKanban ?? null,
+    estimativa: meta?.estimativaKanban ?? null,
+    recorrencia: meta?.recorrenciaKanban ?? null,
+  };
+}
+
+/** O maior número já dado a uma tarefa deste quadro (arquivadas incluídas — número não se reusa). */
+function maiorNumeroDoQuadro(indice: Indice, quadro: string): number {
+  const prefixo = `${PASTA_KANBAN}/${quadro}/`;
+  let maior = 0;
+  for (const [caminho, entrada] of Object.entries(indice.notas)) {
+    if (caminho.startsWith(prefixo) && (entrada.numeroKanban ?? 0) > maior) maior = entrada.numeroKanban!;
+  }
+  return maior;
+}
+
+/**
+ * Tarefas de antes do identificador curto não têm número. Na primeira vez
+ * que o quadro é listado, cada uma ganha o seu, na ordem em que foram
+ * criadas — assim a numeração antiga fica estável dali em diante.
+ */
+async function numerarTarefasSemNumero(quadro: string, indice: Indice): Promise<boolean> {
+  const prefixo = `${PASTA_KANBAN}/${quadro}/`;
+  const semNumero = Object.entries(indice.notas)
+    .filter(([caminho, entrada]) => caminho.startsWith(prefixo) && !entrada.numeroKanban && ehArquivoDeNota(nomeDe(caminho)))
+    .sort(([, a], [, b]) => a.criadoEm.localeCompare(b.criadoEm));
+  if (semNumero.length === 0) return false;
+  await atualizarIndice((atual) => {
+    let proximo = maiorNumeroDoQuadro(atual, quadro);
+    for (const [caminho] of semNumero) {
+      const entrada = atual.notas[caminho];
+      if (entrada && !entrada.numeroKanban) entrada.numeroKanban = ++proximo;
+    }
+  });
+  return true;
+}
+
 /** Todas as tarefas do quadro, já separadas por coluna e na ordem manual. */
 export async function listarQuadro(quadro: string): Promise<Quadro> {
   const config = await garantirQuadro(quadro);
-  const indice = await lerIndice();
+  let indice = await lerIndice();
+  if (await numerarTarefasSemNumero(quadro, indice)) indice = await lerIndice();
 
   const tarefasPorColuna: Record<string, TarefaKanban[]> = {};
   for (const coluna of config.colunas) {
@@ -148,24 +212,7 @@ export async function listarQuadro(quadro: string): Promise<Quadro> {
     const tarefas: TarefaKanban[] = [];
     for (const entrada of entradas) {
       if (!entrada.isFile() || !ehArquivoDeNota(entrada.name)) continue;
-      const caminho = juntar(pasta, entrada.name);
-      const meta = indice.notas[caminho];
-      tarefas.push({
-        caminho,
-        titulo: tituloDe(caminho),
-        coluna,
-        criadoEm: meta?.criadoEm ?? new Date().toISOString(),
-        atualizadoEm: meta?.atualizadoEm ?? new Date().toISOString(),
-        etiquetas: meta?.etiquetasKanban ?? [],
-        favorita: meta?.favorita ?? false,
-        dependeDe: meta?.dependeDe ?? [],
-        prioridade: meta?.prioridadeKanban ?? null,
-        prazo: meta?.prazoKanban ?? null,
-        sprintId: meta?.sprintKanban ?? null,
-        subtarefas: meta?.subtarefasKanban ?? [],
-        comentarios: meta?.comentariosKanban ?? [],
-        impedimento: meta?.impedimentoKanban ?? null,
-      });
+      tarefas.push(montarTarefa(juntar(pasta, entrada.name), coluna, indice));
     }
 
     tarefas.sort(
@@ -200,6 +247,8 @@ export async function criarTarefa(
       criadoEm: agora,
       atualizadoEm: agora,
       ordem: Date.now(),
+      numeroKanban: maiorNumeroDoQuadro(indice, quadro) + 1,
+      movidoEm: agora,
     };
   });
   return caminho;
@@ -257,6 +306,7 @@ export async function moverTarefa(caminho: string, colunaDestino: ColunaKanban):
   await atualizarIndice((indice) => {
     reapontar(indice, caminho, alvo);
     atualizarDependenciasApósMover(indice, caminho, alvo);
+    entradaDaNota(indice, alvo).movidoEm = new Date().toISOString();
   });
   return alvo;
 }
@@ -332,6 +382,24 @@ export async function definirDependencias(caminho: string, dependeDe: string[]):
 export async function definirPrioridade(caminho: string, prioridade: Prioridade | null): Promise<void> {
   await atualizarIndice((indice) => {
     entradaDaNota(indice, caminho).prioridadeKanban = prioridade ?? undefined;
+  });
+}
+
+export async function definirCorDaTarefa(caminho: string, cor: string | null): Promise<void> {
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).corKanban = cor ?? undefined;
+  });
+}
+
+export async function definirEstimativa(caminho: string, estimativa: Estimativa | null): Promise<void> {
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).estimativaKanban = estimativa ?? undefined;
+  });
+}
+
+export async function definirRecorrencia(caminho: string, recorrencia: Recorrencia | null): Promise<void> {
+  await atualizarIndice((indice) => {
+    entradaDaNota(indice, caminho).recorrenciaKanban = recorrencia ?? undefined;
   });
 }
 

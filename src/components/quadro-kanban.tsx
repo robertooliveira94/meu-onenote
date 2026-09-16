@@ -13,11 +13,14 @@ import {
   GripVertical,
   ListChecks,
   Lock,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   MoreHorizontal,
   OctagonAlert,
   Pencil,
   Plus,
+  Repeat,
   Send,
   Square,
   Star,
@@ -34,10 +37,13 @@ import {
   acaoCriarSprint,
   acaoCriarTarefa,
   acaoDefinirColunaConcluida,
+  acaoDefinirCorDaTarefa,
   acaoDefinirDependencias,
+  acaoDefinirEstimativa,
   acaoDefinirImpedimento,
   acaoDefinirPrazo,
   acaoDefinirPrioridade,
+  acaoDefinirRecorrencia,
   acaoDefinirSprintDaTarefa,
   acaoDefinirSubtarefas,
   acaoDuplicarTarefa,
@@ -64,15 +70,25 @@ import {
 } from "@/lib/arrastar";
 import { useAtalho } from "@/lib/atalhos";
 import { juntar } from "@/lib/caminho-texto";
-import { CORES_PRIORIDADE } from "@/lib/cores";
+import { CORES_CADERNO, CORES_PRIORIDADE } from "@/lib/cores";
 import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
-import { PRIORIDADES, RUBRICA_PRIORIDADE } from "@/lib/tipos";
+import { siglaDoQuadro } from "@/lib/sigla";
+import {
+  ESTIMATIVAS,
+  PONTOS_ESTIMATIVA,
+  PRIORIDADES,
+  RECORRENCIAS,
+  RUBRICA_PRIORIDADE,
+  RUBRICA_RECORRENCIA,
+} from "@/lib/tipos";
 import type {
   ColunaKanban,
   Comentario,
+  Estimativa,
   EtiquetaKanban,
   Prioridade,
   Quadro,
+  Recorrencia,
   ResumoQuadro,
   SprintKanban,
   Subtarefa,
@@ -84,6 +100,9 @@ import { SeletorEtiquetasKanban } from "./seletor-etiquetas-kanban";
 import { TituloEditavel } from "./titulo-editavel";
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, RotuloMenu, SeparadorMenu } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
+
+/** As seis cores da paleta, para a cor própria de um cartão. */
+const CORES_CARTAO = CORES_CADERNO;
 
 /** Cor de cada coluna — só um acento discreto no topo do cartão, não um fundo colorido inteiro. */
 const CORES_COLUNA = ["var(--tinta-3)", "var(--realce)", "#D85A30", "#639922", "#7C5CFC", "#2D7FF9"];
@@ -158,6 +177,34 @@ export function QuadroKanban({
 
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const [tarefaAberta, definirTarefaAberta] = useState<string | null>(null);
+  // Painel lateral por padrão; tela cheia quando a pessoa expande (lembrado).
+  const [modoTarefa, definirModoTarefa] = useState<"painel" | "cheia">("painel");
+  const [focarPrazo, definirFocarPrazo] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("kanban-tarefa-modo") === "cheia") definirModoTarefa("cheia");
+    } catch {
+      // Sem armazenamento: painel.
+    }
+  }, []);
+  function mudarModoTarefa(modo: "painel" | "cheia") {
+    definirModoTarefa(modo);
+    try {
+      localStorage.setItem("kanban-tarefa-modo", modo);
+    } catch {
+      // Sem armazenamento: vale só para esta sessão.
+    }
+  }
+  function abrirTarefa(caminho: string, comFocoNoPrazo = false) {
+    definirFocarPrazo(comFocoNoPrazo);
+    definirTarefaAberta(caminho);
+  }
+  useAtalho("escape", {
+    grupo: "Kanban",
+    descricao: "Fechar a tarefa aberta",
+    ativo: tarefaAberta !== null && modoTarefa === "painel",
+    acao: () => definirTarefaAberta(null),
+  });
   const [colunaAdicionando, definirColunaAdicionando] = useState<ColunaKanban | null>(null);
   const [aviso, definirAviso] = useState<string | null>(null);
   useAtalho("n", {
@@ -334,6 +381,31 @@ export function QuadroKanban({
     if (resposta.ok) roteador.refresh();
   }
 
+  const sigla = siglaDoQuadro(quadro.nome);
+
+  /** As props do editor da tarefa aberta — iguais no painel e na tela cheia. */
+  function propsDaTarefaAberta(caminho: string) {
+    return {
+      tarefa: mapa[caminho],
+      todasTarefas: Object.values(mapa),
+      etiquetasKanban,
+      nomeDoQuadro: quadro.nome,
+      sprints,
+      focarPrazo,
+      aoRenomear: (novoTitulo: string) => renomearTarefaAção(caminho, novoTitulo),
+      aoDefinirImpedimento: (motivo: string | null) => definirImpedimentoAção(caminho, motivo),
+      aoDefinirSubtarefas: (subtarefas: Subtarefa[]) => definirSubtarefasAção(caminho, subtarefas),
+      aoAdicionarComentario: (texto: string) => adicionarComentarioAção(caminho, texto),
+      aoExcluirComentario: (id: string) => excluirComentarioAção(caminho, id),
+      aoAtualizar: (patch: Partial<TarefaKanban>) =>
+        definirMapa((atual) => ({ ...atual, [caminho]: { ...atual[caminho], ...patch } })),
+      aoExcluir: () => {
+        definirTarefaAberta(null);
+        roteador.refresh();
+      },
+    };
+  }
+
   const etiquetaAtiva = filtroEtiqueta ? etiquetasKanban.find((e) => e.id === filtroEtiqueta) : null;
   const sprintAtiva = filtroSprint ? sprints.find((s) => s.id === filtroSprint) : null;
   const totalDeTarefas = Object.keys(mapa).length;
@@ -462,7 +534,8 @@ export function QuadroKanban({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto px-4 py-4">
         {colunas.map((coluna, indice) => {
           const caminhos = ordemLocal[coluna] ?? [];
           const tarefas = caminhos
@@ -598,7 +671,9 @@ export function QuadroKanban({
                       definirSobrevoo((atual) => (atual?.caminho === tarefa.caminho ? null : atual))
                     }
                     aoSoltar={(origem, antes) => aoSoltarPertoDe(tarefa, origem, antes)}
-                    aoAbrir={() => definirTarefaAberta(tarefa.caminho)}
+                    aoAbrir={() => abrirTarefa(tarefa.caminho)}
+                    aberta={tarefaAberta === tarefa.caminho}
+                    sigla={sigla}
                     aoMoverPara={(destino) => moverTarefaPara(tarefa.caminho, destino)}
                     aoDuplicar={() => duplicarTarefaAção(tarefa.caminho)}
                     aoFavoritar={() => favoritarAção(tarefa.caminho)}
@@ -620,26 +695,22 @@ export function QuadroKanban({
         })}
       </div>
 
-      {tarefaAberta && mapa[tarefaAberta] ? (
-        <DialogoTarefa
-          tarefa={mapa[tarefaAberta]}
-          todasTarefas={Object.values(mapa)}
-          etiquetasKanban={etiquetasKanban}
-          nomeDoQuadro={quadro.nome}
-          sprints={sprints}
+      {tarefaAberta && mapa[tarefaAberta] && modoTarefa === "painel" ? (
+        <PainelTarefa
+          key={tarefaAberta}
+          {...propsDaTarefaAberta(tarefaAberta)}
           aoFechar={() => definirTarefaAberta(null)}
-          aoRenomear={(novoTitulo) => renomearTarefaAção(tarefaAberta, novoTitulo)}
-          aoDefinirImpedimento={(motivo) => definirImpedimentoAção(tarefaAberta, motivo)}
-          aoDefinirSubtarefas={(subtarefas) => definirSubtarefasAção(tarefaAberta, subtarefas)}
-          aoAdicionarComentario={(texto) => adicionarComentarioAção(tarefaAberta, texto)}
-          aoExcluirComentario={(id) => excluirComentarioAção(tarefaAberta, id)}
-          aoAtualizar={(patch) =>
-            definirMapa((atual) => ({ ...atual, [tarefaAberta]: { ...atual[tarefaAberta], ...patch } }))
-          }
-          aoExcluir={() => {
-            definirTarefaAberta(null);
-            roteador.refresh();
-          }}
+          aoExpandir={() => mudarModoTarefa("cheia")}
+        />
+      ) : null}
+      </div>
+
+      {tarefaAberta && mapa[tarefaAberta] && modoTarefa === "cheia" ? (
+        <DialogoTarefa
+          key={tarefaAberta}
+          {...propsDaTarefaAberta(tarefaAberta)}
+          aoFechar={() => definirTarefaAberta(null)}
+          aoRecolher={() => mudarModoTarefa("painel")}
         />
       ) : null}
 
@@ -861,6 +932,8 @@ function CartaoTarefa({
   aoSairDeCima,
   aoSoltar,
   aoAbrir,
+  aberta,
+  sigla,
   aoMoverPara,
   aoDuplicar,
   aoFavoritar,
@@ -871,6 +944,10 @@ function CartaoTarefa({
   tarefa: TarefaKanban;
   etiquetasKanban: EtiquetaKanban[];
   sprints: SprintKanban[];
+  /** É a tarefa aberta no painel — ganha o mesmo destaque do cartão aberto das notas. */
+  aberta: boolean;
+  /** Sigla do quadro, para o identificador "TRB-14". */
+  sigla: string;
   /** Quantas dependências desta tarefa ainda não chegaram na coluna de conclusão. */
   pendentes: number;
   corDaColuna: string;
@@ -943,9 +1020,14 @@ function CartaoTarefa({
         }}
         className={clsx(
           "cartao block w-full cursor-grab overflow-hidden pr-7 text-left active:cursor-grabbing",
+          aberta && "cartao-aberto",
           impedida && "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]",
         )}
-        style={{ borderLeft: `3px solid ${impedida ? "var(--perigo)" : corDaColuna}` }}
+        style={{
+          borderLeft: `3px solid ${impedida ? "var(--perigo)" : corDaColuna}`,
+          // Cor própria do cartão: faixa fina no topo, sem tomar o fundo.
+          boxShadow: tarefa.cor ? `inset 0 3px 0 ${tarefa.cor}` : undefined,
+        }}
       >
         {impedida ? (
           <div
@@ -967,65 +1049,18 @@ function CartaoTarefa({
           </div>
         ) : null}
 
+        <p
+          className="mb-0.5 font-mono text-[10px] tracking-wide text-tinta-3"
+          title={`Criada em ${formatarDataHora(tarefa.criadoEm)}`}
+        >
+          {sigla}-{tarefa.numero}
+        </p>
         <div className="flex items-start gap-1.5">
-          {tarefa.prioridade ? (
-            <Flag
-              size={11}
-              className="mt-0.5 shrink-0"
-              style={{ color: CORES_PRIORIDADE[tarefa.prioridade] }}
-              aria-label={`Prioridade ${RUBRICA_PRIORIDADE[tarefa.prioridade]}`}
-            />
-          ) : null}
           {tarefa.favorita ? <Star size={11} className="mt-0.5 shrink-0 fill-current text-[#c69214]" /> : null}
           <span className="min-w-0 flex-1 text-[13px] leading-snug font-medium text-tinta">{tarefa.titulo}</span>
-          {pendentes > 0 ? (
-            <span
-              className="flex shrink-0 items-center gap-0.5 text-[10.5px] text-perigo"
-              title={`Bloqueada por ${pendentes} tarefa${pendentes === 1 ? "" : "s"} não concluída${pendentes === 1 ? "" : "s"}`}
-            >
-              <Lock size={11} />
-              {pendentes}
-            </span>
-          ) : null}
         </div>
-        {etiquetasDaTarefa.length > 0 ||
-        tarefa.prazo ||
-        sprint ||
-        tarefa.subtarefas.length > 0 ||
-        tarefa.comentarios.length > 0 ? (
+        {etiquetasDaTarefa.length > 0 || sprint ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {tarefa.subtarefas.length > 0 ? (
-              <span
-                className={clsx("pastilha", feitas === tarefa.subtarefas.length ? "text-[#639922]" : "text-tinta-2")}
-                style={{ background: "var(--realce-fraco)" }}
-                title={`${feitas} de ${tarefa.subtarefas.length} subtarefas concluídas`}
-              >
-                <CheckSquare size={10} />
-                {feitas}/{tarefa.subtarefas.length}
-              </span>
-            ) : null}
-            {tarefa.comentarios.length > 0 ? (
-              <span
-                className="pastilha text-tinta-2"
-                style={{ background: "var(--realce-fraco)" }}
-                title={`${tarefa.comentarios.length} ${tarefa.comentarios.length === 1 ? "comentário" : "comentários"}`}
-              >
-                <MessageSquare size={10} />
-                {tarefa.comentarios.length}
-              </span>
-            ) : null}
-            {tarefa.prazo ? (
-              <span
-                className={clsx(
-                  "pastilha",
-                  atrasada ? "text-perigo" : "text-tinta-2",
-                )}
-                style={{ background: atrasada ? "color-mix(in srgb, var(--perigo) 12%, transparent)" : "var(--realce-fraco)" }}
-              >
-                <Calendar size={10} />
-                {formatarPrazo(tarefa.prazo)}
-              </span>
-            ) : null}
             {sprint ? (
               <span className="pastilha text-tinta-2" style={{ background: "var(--realce-fraco)" }}>
                 <ListChecks size={10} />
@@ -1047,9 +1082,69 @@ function CartaoTarefa({
           </div>
         ) : null}
 
-        <p className="mt-1.5 text-[10.5px] text-tinta-3" title={`Criada em ${formatarDataHora(tarefa.criadoEm)}`}>
-          Criada {formatarDataCurta(tarefa.criadoEm)}
-        </p>
+        {/* Rodapé com posições fixas: à esquerda prazo · checklist · comentários,
+            à direita estimativa · cadeado · prioridade. O olho acha o prazo no
+            mesmo lugar em qualquer cartão — antes os indicadores apareciam na
+            ordem em que existiam. */}
+        {tarefa.prazo ||
+        tarefa.subtarefas.length > 0 ||
+        tarefa.comentarios.length > 0 ||
+        tarefa.estimativa ||
+        pendentes > 0 ||
+        tarefa.prioridade ? (
+          <div className="mt-2 flex items-center gap-2 text-[10.5px] text-tinta-3 tabular-nums">
+            {tarefa.prazo ? (
+              <span
+                className={clsx("flex items-center gap-1", atrasada && "font-semibold text-perigo")}
+                title={atrasada ? "Prazo estourado" : "Prazo"}
+              >
+                <Calendar size={10} />
+                {formatarPrazo(tarefa.prazo)}
+              </span>
+            ) : null}
+            {tarefa.subtarefas.length > 0 ? (
+              <span
+                className={clsx("flex items-center gap-1", feitas === tarefa.subtarefas.length && "text-[#639922]")}
+                title={`${feitas} de ${tarefa.subtarefas.length} subtarefas concluídas`}
+              >
+                <CheckSquare size={10} />
+                {feitas}/{tarefa.subtarefas.length}
+              </span>
+            ) : null}
+            {tarefa.comentarios.length > 0 ? (
+              <span
+                className="flex items-center gap-1"
+                title={`${tarefa.comentarios.length} ${tarefa.comentarios.length === 1 ? "comentário" : "comentários"}`}
+              >
+                <MessageSquare size={10} />
+                {tarefa.comentarios.length}
+              </span>
+            ) : null}
+            <span className="ml-auto flex items-center gap-2">
+              {tarefa.estimativa ? (
+                <span className="rounded border border-linha px-1 font-semibold" title={`Estimativa ${tarefa.estimativa}`}>
+                  {tarefa.estimativa}
+                </span>
+              ) : null}
+              {pendentes > 0 ? (
+                <span
+                  className="flex items-center gap-0.5 text-perigo"
+                  title={`Bloqueada por ${pendentes} tarefa${pendentes === 1 ? "" : "s"} não concluída${pendentes === 1 ? "" : "s"}`}
+                >
+                  <Lock size={10} />
+                  {pendentes}
+                </span>
+              ) : null}
+              {tarefa.prioridade ? (
+                <Flag
+                  size={11}
+                  style={{ color: CORES_PRIORIDADE[tarefa.prioridade] }}
+                  aria-label={`Prioridade ${RUBRICA_PRIORIDADE[tarefa.prioridade]}`}
+                />
+              ) : null}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="absolute top-1.5 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -1200,29 +1295,13 @@ function CampoNovaTarefa({
   );
 }
 
-/** Editor de uma tarefa: título, etiquetas, prioridade, prazo, sprint, dependências, corpo em markdown com prévia. */
-function DialogoTarefa({
-  tarefa,
-  todasTarefas,
-  etiquetasKanban,
-  nomeDoQuadro,
-  sprints,
-  aoFechar,
-  aoAtualizar,
-  aoExcluir,
-  aoRenomear,
-  aoDefinirImpedimento,
-  aoDefinirSubtarefas,
-  aoAdicionarComentario,
-  aoExcluirComentario,
-}: {
+type PropsConteudoTarefa = {
   tarefa: TarefaKanban;
   /** Todas as tarefas do quadro (qualquer coluna) — pra escolher dependência. */
   todasTarefas: TarefaKanban[];
   etiquetasKanban: EtiquetaKanban[];
   nomeDoQuadro: string;
   sprints: SprintKanban[];
-  aoFechar: () => void;
   /** Avisa o quadro pra atualizar a tarefa na hora (etiquetas, dependências…), sem esperar um refresh. */
   aoAtualizar: (patch: Partial<TarefaKanban>) => void;
   aoExcluir: () => void;
@@ -1232,7 +1311,35 @@ function DialogoTarefa({
   /** Devolve a mensagem de erro, ou `null` quando deu certo. */
   aoAdicionarComentario: (texto: string) => Promise<string | null>;
   aoExcluirComentario: (id: string) => void;
-}) {
+  /** Ao abrir, põe o foco no campo de prazo (atalho `d`). */
+  focarPrazo?: boolean;
+};
+
+/**
+ * O editor de uma tarefa: descrição em markdown, subtarefas, comentários e
+ * as propriedades (impedimento, prioridade, prazo, sprint, etiquetas,
+ * "bloqueado por", estimativa, repetição).
+ *
+ * É o mesmo conteúdo nas duas roupas: no painel lateral (`compacto`, tudo
+ * empilhado numa coluna de ~460px) e na tela cheia (duas colunas, como o
+ * diálogo de antes). O painel é o padrão porque o quadro continua à vista —
+ * ler uma tarefa, olhar a coluna, abrir a próxima, sem fechar e reabrir.
+ */
+function ConteudoTarefa({
+  tarefa,
+  todasTarefas,
+  etiquetasKanban,
+  nomeDoQuadro,
+  sprints,
+  aoAtualizar,
+  aoExcluir,
+  aoDefinirImpedimento,
+  aoDefinirSubtarefas,
+  aoAdicionarComentario,
+  aoExcluirComentario,
+  focarPrazo = false,
+  compacto,
+}: Omit<PropsConteudoTarefa, "aoRenomear"> & { compacto: boolean }) {
   const caminho = tarefa.caminho;
   const [carregando, definirCarregando] = useState(true);
   const [conteudo, definirConteudo] = useState("");
@@ -1241,9 +1348,11 @@ function DialogoTarefa({
   const [salvandoDescricao, definirSalvandoDescricao] = useState(false);
   const [confirmandoExclusao, definirConfirmandoExclusao] = useState(false);
   const [erro, definirErro] = useState<string | null>(null);
+  const campoPrazo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelado = false;
+    definirCarregando(true);
     acaoLerTarefa(caminho).then((lida) => {
       if (cancelado || !lida) return;
       definirConteudo(lida.conteudo);
@@ -1257,6 +1366,10 @@ function DialogoTarefa({
       cancelado = true;
     };
   }, [caminho]);
+
+  useEffect(() => {
+    if (focarPrazo && !carregando) campoPrazo.current?.focus();
+  }, [focarPrazo, carregando, caminho]);
 
   async function salvarDescricao() {
     definirSalvandoDescricao(true);
@@ -1299,27 +1412,27 @@ function DialogoTarefa({
     await acaoDefinirSprintDaTarefa(caminho, sprintId);
   }
 
-  return (
-    <Dialogo
-      titulo={tarefa.titulo || "Tarefa"}
-      aberto
-      largura="max-w-4xl"
-      realcado
-      aoFechar={aoFechar}
-      tituloPersonalizado={
-        <TituloEditavel
-          titulo={tarefa.titulo}
-          aoRenomear={aoRenomear}
-          className="text-[16px] leading-tight font-bold tracking-[-0.02em]"
-        />
-      }
-    >
-      {carregando ? (
-        <p className="py-8 text-center text-[12.5px] text-tinta-3">Carregando…</p>
-      ) : (
-        <>
-          <div className="mt-1 grid gap-6 sm:grid-cols-[1fr_220px]">
-            <div className="min-w-0">
+  async function mudarEstimativa(estimativa: Estimativa | null) {
+    aoAtualizar({ estimativa });
+    await acaoDefinirEstimativa(caminho, estimativa);
+  }
+
+  async function mudarRecorrencia(recorrencia: Recorrencia | null) {
+    aoAtualizar({ recorrencia });
+    await acaoDefinirRecorrencia(caminho, recorrencia);
+  }
+
+  async function mudarCor(cor: string | null) {
+    aoAtualizar({ cor });
+    await acaoDefinirCorDaTarefa(caminho, cor);
+  }
+
+  if (carregando) {
+    return <p className="py-8 text-center text-[12.5px] text-tinta-3">Carregando…</p>;
+  }
+
+  const principal = (
+    <div className="min-w-0">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Descrição</p>
                 {modoDescricao === "leitura" ? (
@@ -1381,9 +1494,13 @@ function DialogoTarefa({
 
               <Aviso>{erro}</Aviso>
             </div>
+  );
 
-            <div className="flex flex-col gap-4 sm:border-l sm:border-linha sm:pl-5">
-              <CampoLateral rotulo="Impedimento">
+  const lateral = (
+    // No painel, duas colunas de campos curtos (prioridade e prazo lado a
+    // lado, e assim por diante) para a descrição não descer demais.
+    <div className={clsx(compacto ? "grid grid-cols-2 gap-x-4 gap-y-3" : "flex flex-col gap-4 sm:border-l sm:border-linha sm:pl-5")}>
+              <CampoLateral rotulo="Impedimento" className="col-span-2">
                 <CampoImpedimento motivo={tarefa.impedimento} aoMudar={aoDefinirImpedimento} />
               </CampoLateral>
 
@@ -1443,6 +1560,7 @@ function DialogoTarefa({
                 <label className="flex w-full items-center gap-1.5 rounded-lg border border-linha px-2.5 py-1.5 text-[12.5px] text-tinta-2">
                   <Calendar size={12} className="shrink-0" />
                   <input
+                    ref={campoPrazo}
                     type="date"
                     value={tarefa.prazo ?? ""}
                     onChange={(evento) => mudarPrazo(evento.target.value || null)}
@@ -1485,7 +1603,7 @@ function DialogoTarefa({
                 </Menu>
               </CampoLateral>
 
-              <CampoLateral rotulo="Etiquetas">
+              <CampoLateral rotulo="Etiquetas" className="col-span-2">
                 <SeletorEtiquetasKanban
                   caminho={caminho}
                   quadro={nomeDoQuadro}
@@ -1495,7 +1613,7 @@ function DialogoTarefa({
                 />
               </CampoLateral>
 
-              <CampoLateral rotulo="Bloqueado por">
+              <CampoLateral rotulo="Bloqueado por" className="col-span-2">
                 <div className="flex flex-col gap-1.5">
                   {dependencias.map((dependencia) => (
                     <span
@@ -1558,23 +1676,136 @@ function DialogoTarefa({
                   </Menu>
                 </div>
               </CampoLateral>
-            </div>
-          </div>
 
-          <div className="mt-5 flex items-center justify-between border-t border-linha pt-3.5">
-            <button
-              type="button"
-              onClick={() => definirConfirmandoExclusao(true)}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-perigo hover:bg-[color-mix(in_srgb,var(--perigo)_10%,transparent)]"
-            >
-              <Trash2 size={13} />
-              Excluir tarefa
-            </button>
-            <Botao variante="sutil" onClick={aoFechar}>
-              <Check size={13} />
-              Fechar
-            </Botao>
-          </div>
+              <CampoLateral rotulo="Estimativa">
+                <div className="flex gap-1">
+                  {ESTIMATIVAS.map((opcao) => (
+                    <button
+                      key={opcao}
+                      type="button"
+                      onClick={() => mudarEstimativa(tarefa.estimativa === opcao ? null : opcao)}
+                      aria-pressed={tarefa.estimativa === opcao}
+                      title={`${opcao} — ${PONTOS_ESTIMATIVA[opcao]} ${PONTOS_ESTIMATIVA[opcao] === 1 ? "ponto" : "pontos"}`}
+                      className={clsx(
+                        "h-7 flex-1 rounded-lg border text-[12px] font-semibold transition-colors",
+                        tarefa.estimativa === opcao
+                          ? "border-[var(--realce)] bg-realce-medio text-tinta"
+                          : "border-linha text-tinta-2 hover:border-[var(--realce)] hover:text-tinta",
+                      )}
+                    >
+                      {opcao}
+                    </button>
+                  ))}
+                </div>
+              </CampoLateral>
+
+              <CampoLateral rotulo="Repetir" className="col-span-2">
+                <Menu
+                  alinhamento="direita"
+                  gatilho={(abrir) => (
+                    <button
+                      type="button"
+                      onClick={abrir}
+                      className="flex w-full items-center gap-1.5 rounded-lg border border-linha px-2.5 py-1.5 text-[12.5px] text-tinta-2 transition-colors hover:border-[var(--realce)] hover:text-tinta"
+                    >
+                      <Repeat size={12} className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        {tarefa.recorrencia ? RUBRICA_RECORRENCIA[tarefa.recorrencia] : "Não repete"}
+                      </span>
+                    </button>
+                  )}
+                >
+                  {(fechar) => (
+                    <>
+                      {RECORRENCIAS.map((opcao) => (
+                        <ItemMenu
+                          key={opcao}
+                          icone={<Check size={13} className={tarefa.recorrencia === opcao ? undefined : "invisible"} />}
+                          onClick={() => {
+                            fechar();
+                            mudarRecorrencia(opcao);
+                          }}
+                        >
+                          {RUBRICA_RECORRENCIA[opcao]}
+                        </ItemMenu>
+                      ))}
+                      {tarefa.recorrencia ? (
+                        <>
+                          <SeparadorMenu />
+                          <ItemMenu
+                            icone={<X size={13} />}
+                            onClick={() => {
+                              fechar();
+                              mudarRecorrencia(null);
+                            }}
+                          >
+                            Não repetir
+                          </ItemMenu>
+                        </>
+                      ) : null}
+                    </>
+                  )}
+                </Menu>
+                <p className="mt-1 text-[10.5px] leading-snug text-tinta-3">
+                  Ao concluir, nasce uma cópia na primeira coluna com o próximo prazo.
+                </p>
+              </CampoLateral>
+
+              <CampoLateral rotulo="Cor do cartão" className="col-span-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {CORES_CARTAO.map((cor) => (
+                    <button
+                      key={cor}
+                      type="button"
+                      onClick={() => mudarCor(tarefa.cor === cor ? null : cor)}
+                      aria-label={`Cor ${cor}`}
+                      aria-pressed={tarefa.cor === cor}
+                      className={clsx(
+                        "size-5 rounded-full border-2 transition-transform hover:scale-110",
+                        tarefa.cor === cor ? "border-tinta" : "border-transparent",
+                      )}
+                      style={{ background: cor }}
+                    />
+                  ))}
+                  {tarefa.cor ? (
+                    <button
+                      type="button"
+                      onClick={() => mudarCor(null)}
+                      className="text-[11px] text-tinta-3 underline decoration-dotted hover:text-tinta"
+                    >
+                      sem cor
+                    </button>
+                  ) : null}
+                </div>
+              </CampoLateral>
+            </div>
+  );
+
+  return (
+    <>
+      {compacto ? (
+        <div className="flex flex-col gap-5">
+          {lateral}
+          <div className="h-px bg-linha" />
+          {principal}
+        </div>
+      ) : (
+        <div className="mt-1 grid gap-6 sm:grid-cols-[1fr_220px]">
+          {principal}
+          {lateral}
+        </div>
+      )}
+
+      <div className="mt-5 flex items-center justify-between border-t border-linha pt-3.5">
+        <button
+          type="button"
+          onClick={() => definirConfirmandoExclusao(true)}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-perigo hover:bg-[color-mix(in_srgb,var(--perigo)_10%,transparent)]"
+        >
+          <Trash2 size={13} />
+          Excluir tarefa
+        </button>
+      </div>
 
           {confirmandoExclusao ? (
             <div className="mt-3 rounded-lg border border-linha bg-superficie p-3">
@@ -1598,8 +1829,80 @@ function DialogoTarefa({
               </div>
             </div>
           ) : null}
-        </>
-      )}
+    </>
+  );
+}
+
+/**
+ * A tarefa aberta num painel ao lado do quadro — o quadro continua visível
+ * e rolável, clicar noutro cartão troca o conteúdo, Esc fecha. O botão de
+ * expandir leva para a tela cheia quando a descrição é longa.
+ */
+function PainelTarefa({
+  aoFechar,
+  aoExpandir,
+  ...props
+}: PropsConteudoTarefa & { aoFechar: () => void; aoExpandir: () => void }) {
+  return (
+    <aside
+      className="cartao-aberto flex w-[460px] shrink-0 flex-col overflow-hidden rounded-none border-y-0 border-r-0 border-l border-linha"
+      aria-label={`Tarefa ${props.tarefa.titulo}`}
+    >
+      <div className="flex shrink-0 items-start gap-2 border-b border-linha px-4 pt-3 pb-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] tracking-wide text-tinta-3">
+            {siglaDoQuadro(props.nomeDoQuadro)}-{props.tarefa.numero} · {props.tarefa.coluna}
+          </p>
+          <TituloEditavel
+            titulo={props.tarefa.titulo}
+            aoRenomear={props.aoRenomear}
+            className="text-[15px] leading-tight font-bold tracking-[-0.02em]"
+          />
+        </div>
+        <BotaoIcone rotulo="Abrir em tela cheia" onClick={aoExpandir}>
+          <Maximize2 size={14} />
+        </BotaoIcone>
+        <BotaoIcone rotulo="Fechar (Esc)" onClick={aoFechar}>
+          <X size={15} />
+        </BotaoIcone>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <ConteudoTarefa {...props} compacto />
+      </div>
+    </aside>
+  );
+}
+
+/** A mesma tarefa em tela cheia — para descrições longas. */
+function DialogoTarefa({
+  aoFechar,
+  aoRecolher,
+  ...props
+}: PropsConteudoTarefa & { aoFechar: () => void; aoRecolher: () => void }) {
+  return (
+    <Dialogo
+      titulo={props.tarefa.titulo || "Tarefa"}
+      aberto
+      largura="max-w-4xl"
+      realcado
+      aoFechar={aoFechar}
+      tituloPersonalizado={
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 font-mono text-[10.5px] text-tinta-3">
+            {siglaDoQuadro(props.nomeDoQuadro)}-{props.tarefa.numero}
+          </span>
+          <TituloEditavel
+            titulo={props.tarefa.titulo}
+            aoRenomear={props.aoRenomear}
+            className="text-[16px] leading-tight font-bold tracking-[-0.02em]"
+          />
+          <BotaoIcone rotulo="Voltar para o painel lateral" onClick={aoRecolher} className="ml-auto shrink-0">
+            <Minimize2 size={14} />
+          </BotaoIcone>
+        </div>
+      }
+    >
+      <ConteudoTarefa {...props} compacto={false} />
     </Dialogo>
   );
 }
@@ -2037,9 +2340,9 @@ function CampoImpedimento({
 }
 
 /** Rótulo pequeno acima de um campo, na coluna lateral do editor de tarefa. */
-function CampoLateral({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+function CampoLateral({ rotulo, className, children }: { rotulo: string; className?: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className={className}>
       <p className="mb-1 text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">{rotulo}</p>
       {children}
     </div>

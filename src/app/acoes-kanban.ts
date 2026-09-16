@@ -17,7 +17,7 @@ import {
   reordenarQuadrosPara,
 } from "@/lib/quadros";
 import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban";
-import { PRIORIDADES } from "@/lib/tipos";
+import { ESTIMATIVAS, PRIORIDADES, RECORRENCIAS } from "@/lib/tipos";
 import {
   adicionarComentario,
   buscarTarefas,
@@ -28,7 +28,10 @@ import {
   definirEtiquetasDaTarefa,
   definirImpedimento,
   definirPrazo,
+  definirCorDaTarefa,
+  definirEstimativa,
   definirPrioridade,
+  definirRecorrencia,
   definirSprintDaTarefa,
   definirSubtarefas,
   duplicarTarefa,
@@ -57,6 +60,9 @@ import type { Resposta } from "./acoes";
 const caminhoValido = z.string().min(1).max(400);
 const colunaValida = z.string().min(1).max(40);
 const prioridadeValida = z.enum(PRIORIDADES);
+const estimativaValida = z.enum(ESTIMATIVAS);
+const recorrenciaValida = z.enum(RECORRENCIAS);
+const corValida = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 async function tentar(acao: () => Promise<void>): Promise<Resposta> {
   try {
@@ -183,6 +189,27 @@ export async function acaoDefinirPrioridade(caminho: string, prioridade: string 
     const validado = caminhoValido.parse(caminho);
     const valor = prioridade === null ? null : prioridadeValida.parse(prioridade);
     await definirPrioridade(validado, valor);
+  });
+}
+
+export async function acaoDefinirCorDaTarefa(caminho: string, cor: string | null): Promise<Resposta> {
+  return tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    await definirCorDaTarefa(validado, cor === null ? null : corValida.parse(cor));
+  });
+}
+
+export async function acaoDefinirEstimativa(caminho: string, estimativa: string | null): Promise<Resposta> {
+  return tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    await definirEstimativa(validado, estimativa === null ? null : estimativaValida.parse(estimativa));
+  });
+}
+
+export async function acaoDefinirRecorrencia(caminho: string, recorrencia: string | null): Promise<Resposta> {
+  return tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    await definirRecorrencia(validado, recorrencia === null ? null : recorrenciaValida.parse(recorrencia));
   });
 }
 
