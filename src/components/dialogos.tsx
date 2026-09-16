@@ -19,6 +19,7 @@ export function DialogoNome({
   rotulo,
   valorInicial = "",
   textoBotao,
+  permitirVazio = false,
   aoConfirmar,
   aoFechar,
 }: {
@@ -28,6 +29,8 @@ export function DialogoNome({
   rotulo: string;
   valorInicial?: string;
   textoBotao: string;
+  /** Aceita confirmar em branco — para campos em que "vazio" significa "tirar" (o limite de WIP). */
+  permitirVazio?: boolean;
   aoConfirmar: (nome: string) => Promise<string | null>;
   aoFechar: () => void;
 }) {
@@ -43,7 +46,7 @@ export function DialogoNome({
   }, [aberto, valorInicial]);
 
   async function confirmar() {
-    if (!valor.trim()) {
+    if (!valor.trim() && !permitirVazio) {
       definirErro("Dê um nome antes de continuar");
       return;
     }

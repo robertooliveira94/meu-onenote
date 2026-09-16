@@ -7,6 +7,8 @@ import {
   CheckSquare,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeftRight,
+  Gauge,
   Copy,
   Flag,
   FlagOff,
@@ -38,6 +40,7 @@ import {
   acaoCriarTarefa,
   acaoDefinirColunaConcluida,
   acaoDefinirCorDaTarefa,
+  acaoDefinirLimiteWip,
   acaoDefinirDependencias,
   acaoDefinirEstimativa,
   acaoDefinirImpedimento,
@@ -114,6 +117,14 @@ function hojeISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Quantos dias inteiros a tarefa está na coluna atual. */
+function diasNaColuna(tarefa: TarefaKanban): number {
+  return Math.floor((Date.now() - new Date(tarefa.movidoEm).getTime()) / 86_400_000);
+}
+
+/** A partir de quantos dias parada na mesma coluna um cartão "envelhece" (esmaece e avisa). */
+const DIAS_PARA_ENVELHECER = 14;
+
 function formatarPrazo(iso: string): string {
   const [ano, mes, dia] = iso.split("-");
   return `${dia}/${mes}/${ano.slice(2)}`;
@@ -177,6 +188,8 @@ export function QuadroKanban({
 
   const [sobrevoo, definirSobrevoo] = useState<Sobrevoo>(null);
   const [tarefaAberta, definirTarefaAberta] = useState<string | null>(null);
+  // O cartão que os atalhos de uma tecla afetam: o aberto no painel, senão o sob o mouse.
+  const [tarefaSobMouse, definirTarefaSobMouse] = useState<string | null>(null);
   // Painel lateral por padrão; tela cheia quando a pessoa expande (lembrado).
   const [modoTarefa, definirModoTarefa] = useState<"painel" | "cheia">("painel");
   const [focarPrazo, definirFocarPrazo] = useState(false);
@@ -205,6 +218,53 @@ export function QuadroKanban({
     ativo: tarefaAberta !== null && modoTarefa === "painel",
     acao: () => definirTarefaAberta(null),
   });
+
+  // Atalhos de uma tecla sobre "a tarefa": a aberta no painel, senão a sob
+  // o mouse. Tecla solta nunca dispara dentro de um campo (regra do registro).
+  const tarefaAlvo = tarefaAberta ?? tarefaSobMouse;
+  const atalhoDeTarefa = { grupo: "Kanban", ativo: tarefaAlvo !== null && Boolean(mapa[tarefaAlvo]) };
+  useAtalho("e", {
+    ...atalhoDeTarefa,
+    descricao: "Abrir a tarefa sob o mouse",
+    acao: () => tarefaAlvo && abrirTarefa(tarefaAlvo),
+  });
+  useAtalho("d", {
+    ...atalhoDeTarefa,
+    descricao: "Prazo da tarefa",
+    acao: () => tarefaAlvo && abrirTarefa(tarefaAlvo, true),
+  });
+  useAtalho("f", {
+    ...atalhoDeTarefa,
+    descricao: "Favoritar a tarefa",
+    acao: () => tarefaAlvo && favoritarAção(tarefaAlvo),
+  });
+  for (const [tecla, prioridade] of [["1", "baixa"], ["2", "media"], ["3", "alta"], ["4", "urgente"]] as const) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- lista fixa, mesma ordem em todo render
+    useAtalho(tecla, {
+      ...atalhoDeTarefa,
+      descricao: `Prioridade ${RUBRICA_PRIORIDADE[prioridade]}`,
+      acao: () =>
+        tarefaAlvo && definirPrioridadeAção(tarefaAlvo, mapa[tarefaAlvo]?.prioridade === prioridade ? null : prioridade),
+    });
+  }
+  useAtalho("arrowleft", {
+    ...atalhoDeTarefa,
+    descricao: "Mover a tarefa uma coluna à esquerda",
+    acao: () => {
+      if (!tarefaAlvo) return;
+      const indice = colunas.indexOf(mapa[tarefaAlvo].coluna);
+      if (indice > 0) moverTarefaPara(tarefaAlvo, colunas[indice - 1]);
+    },
+  });
+  useAtalho("arrowright", {
+    ...atalhoDeTarefa,
+    descricao: "Mover a tarefa uma coluna à direita",
+    acao: () => {
+      if (!tarefaAlvo) return;
+      const indice = colunas.indexOf(mapa[tarefaAlvo].coluna);
+      if (indice !== -1 && indice < colunas.length - 1) moverTarefaPara(tarefaAlvo, colunas[indice + 1]);
+    },
+  });
   const [colunaAdicionando, definirColunaAdicionando] = useState<ColunaKanban | null>(null);
   const [aviso, definirAviso] = useState<string | null>(null);
   useAtalho("n", {
@@ -213,6 +273,34 @@ export function QuadroKanban({
     acao: () => colunas[0] && definirColunaAdicionando(colunas[0]),
   });
   const [criandoColuna, definirCriandoColuna] = useState(false);
+  const [colunaParaWip, definirColunaParaWip] = useState<string | null>(null);
+  // Mover para uma coluna cheia (acima do WIP) pede confirmação antes.
+  const [movimentoPendente, definirMovimentoPendente] = useState<{ origem: string; coluna: ColunaKanban } | null>(null);
+  // Colunas recolhidas numa faixa fina — lembrado por quadro.
+  const chaveRecolhidas = `kanban-colunas-recolhidas:${quadro.nome}`;
+  const [recolhidas, definirRecolhidas] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const bruto = localStorage.getItem(chaveRecolhidas);
+      definirRecolhidas(new Set(bruto ? (JSON.parse(bruto) as string[]) : []));
+    } catch {
+      definirRecolhidas(new Set());
+    }
+  }, [chaveRecolhidas]);
+  function alternarRecolhida(coluna: string) {
+    definirRecolhidas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(coluna)) proximo.delete(coluna);
+      else proximo.add(coluna);
+      try {
+        localStorage.setItem(chaveRecolhidas, JSON.stringify([...proximo]));
+      } catch {
+        // Sem armazenamento: vale só para esta sessão.
+      }
+      return proximo;
+    });
+  }
+
   const [colunaParaRenomear, definirColunaParaRenomear] = useState<string | null>(null);
   const [colunaParaExcluir, definirColunaParaExcluir] = useState<string | null>(null);
   const [tarefaParaExcluir, definirTarefaParaExcluir] = useState<string | null>(null);
@@ -239,10 +327,23 @@ export function QuadroKanban({
     return true;
   }
 
+  /** Quantas tarefas a coluna tem agora (pelo estado local, que já reflete o arraste). */
+  function contagemDaColuna(coluna: ColunaKanban): number {
+    return (ordemLocal[coluna] ?? []).length;
+  }
+
   /** Move uma tarefa pra outra coluna — usado tanto pelo arraste quanto pelo menu do cartão. */
-  async function moverTarefaPara(origem: string, coluna: ColunaKanban) {
+  async function moverTarefaPara(origem: string, coluna: ColunaKanban, confirmadoAcimaDoWip = false) {
     const tarefaOrigem = mapa[origem];
     if (!tarefaOrigem || tarefaOrigem.coluna === coluna) return;
+
+    // Coluna já no limite de WIP: pergunta antes de empilhar mais uma —
+    // é o sinal mais barato de "você está começando coisa demais".
+    const limite = conteudo.config.wip?.[coluna];
+    if (limite && !confirmadoAcimaDoWip && contagemDaColuna(coluna) >= limite) {
+      definirMovimentoPendente({ origem, coluna });
+      return;
+    }
 
     if (coluna === conteudo.config.colunaConcluida) {
       const pendentes = dependenciasPendentes(tarefaOrigem, mapa, conteudo.config.colunaConcluida);
@@ -543,6 +644,47 @@ export function QuadroKanban({
             .filter((tarefa): tarefa is TarefaKanban => Boolean(tarefa));
           const tarefasVisiveis = tarefas.filter(passaNoFiltro);
           const cor = corDaColuna(indice);
+          const limiteWip = conteudo.config.wip?.[coluna];
+          const acimaDoWip = Boolean(limiteWip && tarefas.length > limiteWip);
+          const pontos = tarefas.reduce((soma, t) => soma + (t.estimativa ? PONTOS_ESTIMATIVA[t.estimativa] : 0), 0);
+          const ehConclusao = coluna === conteudo.config.colunaConcluida;
+
+          if (recolhidas.has(coluna)) {
+            // Faixa de 40px com o nome de cima para baixo — mesmo gesto das
+            // colunas de Anotações. Continua aceitando um cartão solto nela.
+            return (
+              <div
+                key={coluna}
+                onDragOver={(evento) => {
+                  if (!trazTarefa(evento)) return;
+                  evento.preventDefault();
+                  evento.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(evento) => {
+                  if (!trazTarefa(evento)) return;
+                  evento.preventDefault();
+                  moverTarefaPara(lerCaminhoDeTarefa(evento), coluna);
+                }}
+                className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-xl border border-linha bg-superficie pt-2 pb-3"
+                style={{ boxShadow: `inset 0 2px 0 ${cor}` }}
+              >
+                <BotaoIcone rotulo={`Mostrar a coluna ${coluna}`} onClick={() => alternarRecolhida(coluna)} className="size-6">
+                  <ChevronsLeftRight size={13} />
+                </BotaoIcone>
+                <button
+                  type="button"
+                  onClick={() => alternarRecolhida(coluna)}
+                  className="flex min-h-0 flex-1 flex-col items-center gap-1.5"
+                  title={`${coluna} · ${tarefas.length} ${tarefas.length === 1 ? "tarefa" : "tarefas"}`}
+                >
+                  <span className="texto-vertical text-[11.5px] font-bold text-tinta-2">{coluna}</span>
+                  <span className={clsx("text-[10.5px] tabular-nums", acimaDoWip ? "font-bold text-perigo" : "text-tinta-3")}>
+                    {tarefas.length}
+                  </span>
+                </button>
+              </div>
+            );
+          }
 
           return (
             <div
@@ -557,21 +699,34 @@ export function QuadroKanban({
                 evento.preventDefault();
                 moverTarefaPara(lerCaminhoDeTarefa(evento), coluna);
               }}
-              className="flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-linha bg-superficie"
+              className={clsx(
+                "flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-superficie",
+                acimaDoWip ? "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]" : "border-linha",
+              )}
             >
               <div
                 className="flex shrink-0 items-center gap-1 px-3 pt-2.5 pb-2"
                 style={{ boxShadow: `inset 0 2px 0 ${cor}` }}
               >
                 <span className="truncate text-[12.5px] font-bold tracking-[-0.01em]">{coluna}</span>
-                {coluna === conteudo.config.colunaConcluida ? (
+                {ehConclusao ? (
                   <span title="Coluna de conclusão — trava tarefas com dependência pendente">
                     <Check size={11} className="shrink-0 text-tinta-3" />
                   </span>
                 ) : null}
-                <span className="text-[11px] text-tinta-3 tabular-nums">
+                {/* Contagem, e "4/3" em vermelho quando passa do limite de WIP. */}
+                <span
+                  className={clsx("text-[11px] tabular-nums", acimaDoWip ? "font-bold text-perigo" : "text-tinta-3")}
+                  title={limiteWip ? `Limite de ${limiteWip} em andamento` : undefined}
+                >
                   {filtrosAtivos ? `${tarefasVisiveis.length}/${tarefas.length}` : tarefas.length}
+                  {limiteWip ? `/${limiteWip}` : ""}
                 </span>
+                {pontos > 0 ? (
+                  <span className="text-[10.5px] text-tinta-3 tabular-nums" title={`${pontos} pontos estimados`}>
+                    Σ{pontos}
+                  </span>
+                ) : null}
                 <div className="ml-auto flex items-center gap-0.5">
                   <BotaoIcone
                     rotulo={`Nova tarefa em ${coluna}`}
@@ -610,6 +765,24 @@ export function QuadroKanban({
                             Marcar como conclusão
                           </ItemMenu>
                         ) : null}
+                        <ItemMenu
+                          icone={<Gauge size={13} />}
+                          onClick={() => {
+                            fechar();
+                            definirColunaParaWip(coluna);
+                          }}
+                        >
+                          {limiteWip ? `Limite de WIP: ${limiteWip}` : "Limite de WIP…"}
+                        </ItemMenu>
+                        <ItemMenu
+                          icone={<ChevronsLeftRight size={13} />}
+                          onClick={() => {
+                            fechar();
+                            alternarRecolhida(coluna);
+                          }}
+                        >
+                          Recolher coluna
+                        </ItemMenu>
                         <SeparadorMenu />
                         <ItemMenu
                           icone={<ChevronLeft size={13} />}
@@ -674,6 +847,9 @@ export function QuadroKanban({
                     aoAbrir={() => abrirTarefa(tarefa.caminho)}
                     aberta={tarefaAberta === tarefa.caminho}
                     sigla={sigla}
+                    diasParada={ehConclusao ? 0 : diasNaColuna(tarefa)}
+                    aoEntrarMouse={() => definirTarefaSobMouse(tarefa.caminho)}
+                    aoSairMouse={() => definirTarefaSobMouse((atual) => (atual === tarefa.caminho ? null : atual))}
                     aoMoverPara={(destino) => moverTarefaPara(tarefa.caminho, destino)}
                     aoDuplicar={() => duplicarTarefaAção(tarefa.caminho)}
                     aoFavoritar={() => favoritarAção(tarefa.caminho)}
@@ -690,6 +866,19 @@ export function QuadroKanban({
                   />
                 ) : null}
               </div>
+
+              {/* Sempre à vista, no fim da coluna — o "+" do cabeçalho some
+                  de vista quando a lista é longa. */}
+              {colunaAdicionando === coluna ? null : (
+                <button
+                  type="button"
+                  onClick={() => definirColunaAdicionando(coluna)}
+                  className="flex shrink-0 items-center gap-1.5 border-t border-linha px-3 py-2 text-left text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+                >
+                  <Plus size={13} />
+                  Adicionar tarefa
+                </button>
+              )}
             </div>
           );
         })}
@@ -741,6 +930,41 @@ export function QuadroKanban({
           const resposta = await acaoRenomearColuna(quadro.nome, colunaParaRenomear, nome);
           if (resposta.ok) roteador.refresh();
           return resposta.ok ? null : resposta.erro;
+        }}
+      />
+
+      <DialogoNome
+        aberto={colunaParaWip !== null}
+        titulo={`Limite de WIP em ${colunaParaWip ?? ""}`}
+        descricao="Quantas tarefas cabem nesta coluna ao mesmo tempo. O cabeçalho fica vermelho ao passar, e mover mais uma para cá pede confirmação. Em branco tira o limite."
+        rotulo="Limite"
+        valorInicial={colunaParaWip ? String(conteudo.config.wip?.[colunaParaWip] ?? "") : ""}
+        textoBotao="Guardar"
+        permitirVazio
+        aoFechar={() => definirColunaParaWip(null)}
+        aoConfirmar={async (valor) => {
+          if (!colunaParaWip) return null;
+          const limpo = valor.trim();
+          const numero = limpo === "" ? null : Number.parseInt(limpo, 10);
+          if (numero !== null && (!Number.isInteger(numero) || numero < 1)) return "Informe um número inteiro maior que zero.";
+          const resposta = await acaoDefinirLimiteWip(quadro.nome, colunaParaWip, numero);
+          if (resposta.ok) roteador.refresh();
+          return resposta.ok ? null : resposta.erro;
+        }}
+      />
+
+      <DialogoConfirmar
+        aberto={movimentoPendente !== null}
+        titulo={`${movimentoPendente?.coluna ?? ""} já está no limite`}
+        descricao={`A coluna tem ${movimentoPendente ? contagemDaColuna(movimentoPendente.coluna) : 0} tarefas e o limite é ${movimentoPendente ? (conteudo.config.wip?.[movimentoPendente.coluna] ?? 0) : 0}. Mover assim mesmo?`}
+        textoBotao="Mover assim mesmo"
+        aoFechar={() => definirMovimentoPendente(null)}
+        aoConfirmar={async () => {
+          if (!movimentoPendente) return null;
+          const pendente = movimentoPendente;
+          definirMovimentoPendente(null);
+          await moverTarefaPara(pendente.origem, pendente.coluna, true);
+          return null;
         }}
       />
 
@@ -934,6 +1158,9 @@ function CartaoTarefa({
   aoAbrir,
   aberta,
   sigla,
+  diasParada,
+  aoEntrarMouse,
+  aoSairMouse,
   aoMoverPara,
   aoDuplicar,
   aoFavoritar,
@@ -948,6 +1175,10 @@ function CartaoTarefa({
   aberta: boolean;
   /** Sigla do quadro, para o identificador "TRB-14". */
   sigla: string;
+  /** Dias parada nesta coluna (0 na coluna de conclusão) — passando de 14, o cartão esmaece e avisa. */
+  diasParada: number;
+  aoEntrarMouse: () => void;
+  aoSairMouse: () => void;
   /** Quantas dependências desta tarefa ainda não chegaram na coluna de conclusão. */
   pendentes: number;
   corDaColuna: string;
@@ -971,9 +1202,10 @@ function CartaoTarefa({
   const sprint = tarefa.sprintId ? sprints.find((s) => s.id === tarefa.sprintId) : null;
   const feitas = tarefa.subtarefas.filter((item) => item.feita).length;
   const impedida = tarefa.impedimento !== null;
+  const envelhecida = diasParada >= DIAS_PARA_ENVELHECER;
 
   return (
-    <div className="group relative">
+    <div className="group relative" onMouseEnter={aoEntrarMouse} onMouseLeave={aoSairMouse}>
       {sobrevoo ? (
         <span
           className="pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full"
@@ -1022,6 +1254,9 @@ function CartaoTarefa({
           "cartao block w-full cursor-grab overflow-hidden pr-7 text-left active:cursor-grabbing",
           aberta && "cartao-aberto",
           impedida && "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]",
+          // Parado há semanas na mesma coluna: esmaece um pouco — é como se
+          // acha o que travou sem ninguém ter marcado impedimento.
+          envelhecida && !aberta && "opacity-85",
         )}
         style={{
           borderLeft: `3px solid ${impedida ? "var(--perigo)" : corDaColuna}`,
@@ -1080,6 +1315,12 @@ function CartaoTarefa({
               </span>
             ))}
           </div>
+        ) : null}
+
+        {envelhecida ? (
+          <p className="mt-1.5 text-[10.5px] text-tinta-3" title={`Nesta coluna desde ${formatarDataHora(tarefa.movidoEm)}`}>
+            há {diasParada} dias aqui
+          </p>
         ) : null}
 
         {/* Rodapé com posições fixas: à esquerda prazo · checklist · comentários,

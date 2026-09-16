@@ -98,7 +98,12 @@ export async function garantirQuadro(quadro: string): Promise<ConfigQuadro> {
       const lida = JSON.parse(await fs.readFile(caminhoCfg, "utf8")) as Partial<ConfigQuadro>;
       config =
         Array.isArray(lida.colunas) && lida.colunas.length > 0
-          ? { colunas: lida.colunas, colunaConcluida: lida.colunaConcluida ?? lida.colunas[lida.colunas.length - 1] }
+          ? {
+              colunas: lida.colunas,
+              colunaConcluida: lida.colunaConcluida ?? lida.colunas[lida.colunas.length - 1],
+              ...(lida.wip ? { wip: lida.wip } : {}),
+              ...(typeof lida.arquivarApos === "number" ? { arquivarApos: lida.arquivarApos } : {}),
+            }
           : configPadrao();
     } catch {
       config = configPadrao();
@@ -549,6 +554,24 @@ export async function definirColunaConcluida(quadro: string, nome: string): Prom
   const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(nome)) throw new Error("Coluna não encontrada");
   config.colunaConcluida = nome;
+  await salvarConfigQuadro(quadro, config);
+}
+
+/** Limite de WIP de uma coluna; `null` tira o limite. */
+export async function definirLimiteWip(quadro: string, coluna: string, limite: number | null): Promise<void> {
+  const config = await garantirQuadro(quadro);
+  if (!config.colunas.includes(coluna)) throw new Error("Coluna não encontrada");
+  const wip = { ...(config.wip ?? {}) };
+  if (limite === null) delete wip[coluna];
+  else wip[coluna] = limite;
+  config.wip = Object.keys(wip).length > 0 ? wip : undefined;
+  await salvarConfigQuadro(quadro, config);
+}
+
+/** Depois de quantos dias na coluna de conclusão a tarefa é arquivada sozinha (0 = nunca). */
+export async function definirArquivarApos(quadro: string, dias: number): Promise<void> {
+  const config = await garantirQuadro(quadro);
+  config.arquivarApos = dias;
   await salvarConfigQuadro(quadro, config);
 }
 

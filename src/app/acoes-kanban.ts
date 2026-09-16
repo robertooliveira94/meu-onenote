@@ -28,8 +28,10 @@ import {
   definirEtiquetasDaTarefa,
   definirImpedimento,
   definirPrazo,
+  definirArquivarApos,
   definirCorDaTarefa,
   definirEstimativa,
+  definirLimiteWip,
   definirPrioridade,
   definirRecorrencia,
   definirSprintDaTarefa,
@@ -374,6 +376,23 @@ export async function acaoReordenarColunas(quadro: string, novaOrdem: string[]):
 export async function acaoDefinirColunaConcluida(quadro: string, nome: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
     await definirColunaConcluida(caminhoValido.parse(quadro), colunaValida.parse(nome));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirLimiteWip(quadro: string, coluna: string, limite: number | null): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const valor = limite === null ? null : z.number().int().min(1).max(999).parse(limite);
+    await definirLimiteWip(caminhoValido.parse(quadro), colunaValida.parse(coluna), valor);
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoDefinirArquivarApos(quadro: string, dias: number): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await definirArquivarApos(caminhoValido.parse(quadro), z.number().int().min(0).max(3650).parse(dias));
   });
   atualizarTudo();
   return resposta;
