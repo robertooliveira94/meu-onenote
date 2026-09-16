@@ -20,6 +20,9 @@ import { criarSprint, excluirSprint, renomearSprint } from "@/lib/sprints-kanban
 import { ESTIMATIVAS, PRIORIDADES, RECORRENCIAS } from "@/lib/tipos";
 import {
   adicionarComentario,
+  arquivarConcluidas,
+  arquivarTarefa,
+  desarquivarTarefa,
   buscarTarefas,
   criarColuna,
   criarTarefa,
@@ -155,6 +158,32 @@ export async function acaoReordenarTarefasPara(pastaColuna: string, ordem: strin
 export async function acaoExcluirTarefa(caminho: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
     await excluirTarefa(caminhoValido.parse(caminho));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoArquivarTarefa(caminho: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await arquivarTarefa(caminhoValido.parse(caminho));
+  });
+  atualizarTudo();
+  return resposta;
+}
+
+export async function acaoArquivarConcluidas(quadro: string): Promise<Resposta> {
+  try {
+    const quantas = await arquivarConcluidas(caminhoValido.parse(quadro));
+    atualizarTudo();
+    return { ok: true, mensagem: String(quantas) };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para arquivar" };
+  }
+}
+
+export async function acaoDesarquivarTarefa(caminho: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    await desarquivarTarefa(caminhoValido.parse(caminho));
   });
   atualizarTudo();
   return resposta;

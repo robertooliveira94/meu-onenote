@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  Archive,
   Calendar,
   Check,
   CheckSquare,
@@ -24,18 +25,23 @@ import {
   Plus,
   Repeat,
   Send,
+  Settings2,
   Square,
   Star,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { acaoAlternarFavorita } from "@/app/acoes";
 import {
   acaoAdicionarComentario,
+  acaoArquivarConcluidas,
+  acaoArquivarTarefa,
   acaoCriarColuna,
+  acaoDefinirArquivarApos,
   acaoCriarSprint,
   acaoCriarTarefa,
   acaoDefinirColunaConcluida,
@@ -74,7 +80,7 @@ import {
 import { useAtalho } from "@/lib/atalhos";
 import { juntar } from "@/lib/caminho-texto";
 import { CORES_CADERNO, CORES_PRIORIDADE } from "@/lib/cores";
-import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
+import { formatarDataCurta, formatarDataHora, urlDoArquivoDoQuadro } from "@/lib/rotas";
 import { siglaDoQuadro } from "@/lib/sigla";
 import {
   ESTIMATIVAS,
@@ -274,6 +280,7 @@ export function QuadroKanban({
   });
   const [criandoColuna, definirCriandoColuna] = useState(false);
   const [colunaParaWip, definirColunaParaWip] = useState<string | null>(null);
+  const [ajustandoArquivo, definirAjustandoArquivo] = useState(false);
   // Mover para uma coluna cheia (acima do WIP) pede confirmação antes.
   const [movimentoPendente, definirMovimentoPendente] = useState<{ origem: string; coluna: ColunaKanban } | null>(null);
   // Colunas recolhidas numa faixa fina — lembrado por quadro.
@@ -397,6 +404,31 @@ export function QuadroKanban({
     if (resposta.ok) roteador.refresh();
   }
 
+  async function arquivarTarefaAção(caminho: string) {
+    const tarefa = mapa[caminho];
+    if (!tarefa) return;
+    // Some da tela na hora; o servidor confirma no refresh.
+    definirOrdemLocal((atual) => ({
+      ...atual,
+      [tarefa.coluna]: (atual[tarefa.coluna] ?? []).filter((item) => item !== caminho),
+    }));
+    if (tarefaAberta === caminho) definirTarefaAberta(null);
+    const resposta = await acaoArquivarTarefa(caminho);
+    if (!resposta.ok) definirAviso(resposta.erro);
+    roteador.refresh();
+  }
+
+  async function arquivarConcluidasAção() {
+    const resposta = await acaoArquivarConcluidas(quadro.nome);
+    if (resposta.ok) {
+      const quantas = Number(resposta.mensagem ?? 0);
+      definirAviso(quantas === 0 ? "Nada para arquivar." : `${quantas} ${quantas === 1 ? "tarefa arquivada" : "tarefas arquivadas"}.`);
+    } else {
+      definirAviso(resposta.erro);
+    }
+    roteador.refresh();
+  }
+
   async function duplicarTarefaAção(caminho: string) {
     const resposta = await acaoDuplicarTarefa(caminho);
     if (resposta.ok) roteador.refresh();
@@ -517,7 +549,7 @@ export function QuadroKanban({
         <span className="text-[18px] leading-none" aria-hidden>
           {quadro.icone}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-[16px] font-extrabold tracking-[-0.02em]">{quadro.nome}</h1>
           <p className="text-[11.5px] text-tinta-2">
             {totalDeTarefas === 0
@@ -525,6 +557,48 @@ export function QuadroKanban({
               : `${totalDeTarefas} ${totalDeTarefas === 1 ? "tarefa" : "tarefas"} · cada uma é um arquivo em ${quadro.caminho}/`}
           </p>
         </div>
+        <Link
+          href={urlDoArquivoDoQuadro(quadro.nome)}
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-2 transition-colors hover:bg-realce-fraco hover:text-tinta"
+          title="Tarefas concluídas que saíram do quadro"
+        >
+          <Archive size={13} />
+          Arquivo
+          {conteudo.arquivadas > 0 ? <span className="text-tinta-3 tabular-nums">{conteudo.arquivadas}</span> : null}
+        </Link>
+        <Menu
+          alinhamento="direita"
+          gatilho={(abrir) => (
+            <BotaoIcone rotulo="Ajustes do quadro" onClick={abrir}>
+              <Settings2 size={15} />
+            </BotaoIcone>
+          )}
+        >
+          {(fechar) => (
+            <>
+              <ItemMenu
+                icone={<Archive size={13} />}
+                onClick={() => {
+                  fechar();
+                  arquivarConcluidasAção();
+                }}
+              >
+                Arquivar tudo em {conteudo.config.colunaConcluida}
+              </ItemMenu>
+              <ItemMenu
+                icone={<Settings2 size={13} />}
+                onClick={() => {
+                  fechar();
+                  definirAjustandoArquivo(true);
+                }}
+              >
+                {(conteudo.config.arquivarApos ?? 30) === 0
+                  ? "Arquivar sozinho: nunca"
+                  : `Arquivar sozinho após ${conteudo.config.arquivarApos ?? 30} dias`}
+              </ItemMenu>
+            </>
+          )}
+        </Menu>
       </header>
 
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-linha bg-superficie px-6 py-2">
@@ -765,6 +839,17 @@ export function QuadroKanban({
                             Marcar como conclusão
                           </ItemMenu>
                         ) : null}
+                        {ehConclusao && tarefas.length > 0 ? (
+                          <ItemMenu
+                            icone={<Archive size={13} />}
+                            onClick={() => {
+                              fechar();
+                              arquivarConcluidasAção();
+                            }}
+                          >
+                            Arquivar tudo ({tarefas.length})
+                          </ItemMenu>
+                        ) : null}
                         <ItemMenu
                           icone={<Gauge size={13} />}
                           onClick={() => {
@@ -852,6 +937,7 @@ export function QuadroKanban({
                     aoSairMouse={() => definirTarefaSobMouse((atual) => (atual === tarefa.caminho ? null : atual))}
                     aoMoverPara={(destino) => moverTarefaPara(tarefa.caminho, destino)}
                     aoDuplicar={() => duplicarTarefaAção(tarefa.caminho)}
+                    aoArquivar={() => arquivarTarefaAção(tarefa.caminho)}
                     aoFavoritar={() => favoritarAção(tarefa.caminho)}
                     aoDefinirPrioridade={(prioridade) => definirPrioridadeAção(tarefa.caminho, prioridade)}
                     aoTirarImpedimento={() => definirImpedimentoAção(tarefa.caminho, null)}
@@ -948,6 +1034,23 @@ export function QuadroKanban({
           const numero = limpo === "" ? null : Number.parseInt(limpo, 10);
           if (numero !== null && (!Number.isInteger(numero) || numero < 1)) return "Informe um número inteiro maior que zero.";
           const resposta = await acaoDefinirLimiteWip(quadro.nome, colunaParaWip, numero);
+          if (resposta.ok) roteador.refresh();
+          return resposta.ok ? null : resposta.erro;
+        }}
+      />
+
+      <DialogoNome
+        aberto={ajustandoArquivo}
+        titulo="Arquivar sozinho"
+        descricao={`Depois de quantos dias em ${conteudo.config.colunaConcluida} a tarefa sai do quadro para o arquivo. 0 desliga. Só vale para tarefas movidas depois desta versão — as de antes ficam até alguém arquivar à mão.`}
+        rotulo="Dias"
+        valorInicial={String(conteudo.config.arquivarApos ?? 30)}
+        textoBotao="Guardar"
+        aoFechar={() => definirAjustandoArquivo(false)}
+        aoConfirmar={async (valor) => {
+          const dias = Number.parseInt(valor.trim(), 10);
+          if (!Number.isInteger(dias) || dias < 0) return "Informe um número de dias (0 desliga).";
+          const resposta = await acaoDefinirArquivarApos(quadro.nome, dias);
           if (resposta.ok) roteador.refresh();
           return resposta.ok ? null : resposta.erro;
         }}
@@ -1163,6 +1266,7 @@ function CartaoTarefa({
   aoSairMouse,
   aoMoverPara,
   aoDuplicar,
+  aoArquivar,
   aoFavoritar,
   aoDefinirPrioridade,
   aoTirarImpedimento,
@@ -1191,6 +1295,7 @@ function CartaoTarefa({
   aoAbrir: () => void;
   aoMoverPara: (coluna: string) => void;
   aoDuplicar: () => void;
+  aoArquivar: () => void;
   aoFavoritar: () => void;
   aoDefinirPrioridade: (prioridade: Prioridade | null) => void;
   aoTirarImpedimento: () => void;
@@ -1482,6 +1587,15 @@ function CartaoTarefa({
               ) : null}
 
               <SeparadorMenu />
+              <ItemMenu
+                icone={<Archive size={13} />}
+                onClick={() => {
+                  fechar();
+                  aoArquivar();
+                }}
+              >
+                Arquivar
+              </ItemMenu>
               <ItemMenu
                 icone={<Trash2 size={13} />}
                 perigo

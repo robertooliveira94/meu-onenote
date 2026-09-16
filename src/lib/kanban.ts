@@ -26,6 +26,7 @@ import type {
   Quadro,
   Recorrencia,
   Subtarefa,
+  TarefaArquivada,
   TarefaKanban,
 } from "./tipos";
 
@@ -198,11 +199,46 @@ async function numerarTarefasSemNumero(quadro: string, indice: Indice): Promise<
   return true;
 }
 
+const DIAS_PARA_ARQUIVAR_PADRAO = 30;
+
+/**
+ * Arquiva sozinho o que está na coluna de conclusão há mais dias que o
+ * limite do quadro. Só olha tarefas que têm `movidoEm` de verdade — as de
+ * antes desse campo existir ficam onde estão até alguém arquivar à mão;
+ * sumir com metade do "Feito" na primeira abertura seria um susto.
+ */
+async function arquivarVencidas(quadro: string, config: ConfigQuadro, indice: Indice): Promise<number> {
+  const dias = config.arquivarApos ?? DIAS_PARA_ARQUIVAR_PADRAO;
+  if (dias <= 0) return 0;
+  const limite = Date.now() - dias * 86_400_000;
+  const pasta = pastaDaColuna(quadro, config.colunaConcluida);
+  let arquivadas = 0;
+  for (const [caminho, entrada] of Object.entries(indice.notas)) {
+    if (!caminho.startsWith(`${pasta}/`) || !entrada.movidoEm) continue;
+    if (new Date(entrada.movidoEm).getTime() > limite) continue;
+    if (!(await existe(resolverCaminho(caminho)))) continue;
+    await arquivarTarefa(caminho);
+    arquivadas++;
+  }
+  return arquivadas;
+}
+
+async function contarArquivadas(quadro: string): Promise<number> {
+  try {
+    const entradas = await fs.readdir(resolverCaminho(juntar(PASTA_KANBAN, quadro, PASTA_ARQUIVO)), { withFileTypes: true });
+    return entradas.filter((entrada) => entrada.isFile() && ehArquivoDeNota(entrada.name)).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** Todas as tarefas do quadro, já separadas por coluna e na ordem manual. */
 export async function listarQuadro(quadro: string): Promise<Quadro> {
   const config = await garantirQuadro(quadro);
   let indice = await lerIndice();
   if (await numerarTarefasSemNumero(quadro, indice)) indice = await lerIndice();
+  if ((await arquivarVencidas(quadro, config, indice)) > 0) indice = await lerIndice();
+  const arquivadas = await contarArquivadas(quadro);
 
   const tarefasPorColuna: Record<string, TarefaKanban[]> = {};
   for (const coluna of config.colunas) {
@@ -227,7 +263,92 @@ export async function listarQuadro(quadro: string): Promise<Quadro> {
     );
     tarefasPorColuna[coluna] = tarefas;
   }
-  return { config, tarefas: tarefasPorColuna };
+  return { config, tarefas: tarefasPorColuna, arquivadas };
+}
+
+// ------------------------------------------------------------------ arquivo
+
+/**
+ * Arquivar tira a tarefa do quadro sem jogar fora: o arquivo vai para
+ * `_kanban/<Quadro>/_arquivo/`, ainda dentro do quadro, com tudo que era
+ * dela no índice. É histórico, não lixeira — dá para procurar e trazer de
+ * volta. Sem isto o "Feito" engorda para sempre.
+ */
+export async function arquivarTarefa(caminho: string): Promise<string> {
+  garantirForaDoSistema(caminho);
+  const quadro = segmentos(caminho)[1];
+  const pastaArquivo = juntar(PASTA_KANBAN, quadro, PASTA_ARQUIVO);
+  await fs.mkdir(resolverCaminho(pastaArquivo), { recursive: true });
+  const nome = await nomeDisponivel(pastaArquivo, tituloDe(caminho));
+  const alvo = juntar(pastaArquivo, nome);
+
+  await fs.rename(resolverCaminho(caminho), resolverCaminho(alvo));
+  await atualizarIndice((indice) => {
+    reapontar(indice, caminho, alvo);
+    atualizarDependenciasApósMover(indice, caminho, alvo);
+    entradaDaNota(indice, alvo).arquivadoEmKanban = new Date().toISOString();
+  });
+  return alvo;
+}
+
+/** Arquiva tudo que está na coluna de conclusão. Devolve quantas foram. */
+export async function arquivarConcluidas(quadro: string): Promise<number> {
+  const config = await garantirQuadro(quadro);
+  const pasta = pastaDaColuna(quadro, config.colunaConcluida);
+  let entradas: Dirent[];
+  try {
+    entradas = await fs.readdir(resolverCaminho(pasta), { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let quantas = 0;
+  for (const entrada of entradas) {
+    if (!entrada.isFile() || !ehArquivoDeNota(entrada.name)) continue;
+    await arquivarTarefa(juntar(pasta, entrada.name));
+    quantas++;
+  }
+  return quantas;
+}
+
+/** De volta ao quadro, na coluna de conclusão (de onde saiu). */
+export async function desarquivarTarefa(caminho: string): Promise<string> {
+  garantirForaDoSistema(caminho);
+  const quadro = segmentos(caminho)[1];
+  if (segmentos(caminho)[2] !== PASTA_ARQUIVO) throw new Error("Esta tarefa não está arquivada");
+  const config = await garantirQuadro(quadro);
+  const pastaDestino = pastaDaColuna(quadro, config.colunaConcluida);
+  const nome = await nomeDisponivel(pastaDestino, tituloDe(caminho));
+  const alvo = juntar(pastaDestino, nome);
+
+  await fs.rename(resolverCaminho(caminho), resolverCaminho(alvo));
+  await atualizarIndice((indice) => {
+    reapontar(indice, caminho, alvo);
+    atualizarDependenciasApósMover(indice, caminho, alvo);
+    const entrada = entradaDaNota(indice, alvo);
+    delete entrada.arquivadoEmKanban;
+    entrada.movidoEm = new Date().toISOString();
+  });
+  return alvo;
+}
+
+/** As tarefas arquivadas do quadro, da mais recente para a mais antiga. */
+export async function listarArquivadas(quadro: string): Promise<TarefaArquivada[]> {
+  const pasta = juntar(PASTA_KANBAN, quadro, PASTA_ARQUIVO);
+  let entradas: Dirent[];
+  try {
+    entradas = await fs.readdir(resolverCaminho(pasta), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const indice = await lerIndice();
+  const tarefas: TarefaArquivada[] = [];
+  for (const entrada of entradas) {
+    if (!entrada.isFile() || !ehArquivoDeNota(entrada.name)) continue;
+    const caminho = juntar(pasta, entrada.name);
+    const base = montarTarefa(caminho, PASTA_ARQUIVO, indice);
+    tarefas.push({ ...base, arquivadoEm: indice.notas[caminho]?.arquivadoEmKanban ?? base.atualizadoEm });
+  }
+  return tarefas.sort((a, b) => b.arquivadoEm.localeCompare(a.arquivadoEm));
 }
 
 export async function criarTarefa(
@@ -600,7 +721,7 @@ export async function buscarTarefas(termo: string, limite = 8): Promise<TarefaAc
   for (const caminho of Object.keys(indice.notas)) {
     if (!caminho.startsWith(`${PASTA_KANBAN}/`)) continue;
     const partes = caminho.split("/");
-    if (partes.length !== 4) continue;
+    if (partes.length !== 4 || partes[2] === PASTA_ARQUIVO) continue;
     const titulo = tituloDe(caminho);
     if (!normalizarTexto(titulo).includes(alvo)) continue;
     achadas.push({ caminho, titulo, quadro: partes[1], coluna: partes[2] });
@@ -634,6 +755,7 @@ export async function tarefasComPrazoVencendo(
     const partes = caminho.split("/");
     if (partes.length !== 4) continue;
     const [, quadro, coluna] = partes;
+    if (coluna === PASTA_ARQUIVO) continue;
     if (!configs.has(quadro)) configs.set(quadro, garantirQuadro(quadro));
     const config = await configs.get(quadro)!;
     if (coluna === config.colunaConcluida) continue;

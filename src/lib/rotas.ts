@@ -37,6 +37,11 @@ export function urlDoQuadro(quadro: string): string {
   return `/kanban/${codificar(quadro)}`;
 }
 
+/** A tela do arquivo de um quadro — as tarefas concluídas que saíram do quadro. */
+export function urlDoArquivoDoQuadro(quadro: string): string {
+  return `/kanban/${codificar(quadro)}/arquivo`;
+}
+
 /** Onde uma imagem colada numa nota fica servível — ver src/app/midia. */
 export function urlDaMidia(caminho: string): string {
   return `/midia/${codificar(caminho)}`;
