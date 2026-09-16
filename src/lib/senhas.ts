@@ -286,7 +286,11 @@ function textoDoCampo(valor: string | kdbxweb.ProtectedValue | undefined): strin
   return typeof valor === "string" ? valor : valor.getText();
 }
 
+/** A tag que marca uma entrada como favorita — legível também no KeePassXC. */
+const TAG_FAVORITA = "Favorito";
+
 function serializarEntrada(entrada: kdbxweb.KdbxEntry): EntradaSenha {
+  const grupo = entrada.parentGroup;
   return {
     id: entrada.uuid.id,
     titulo: textoDoCampo(entrada.fields.get("Title")),
@@ -294,7 +298,15 @@ function serializarEntrada(entrada: kdbxweb.KdbxEntry): EntradaSenha {
     senha: textoDoCampo(entrada.fields.get("Password")),
     url: textoDoCampo(entrada.fields.get("URL")),
     notas: textoDoCampo(entrada.fields.get("Notes")),
+    criadoEm: (entrada.times.creationTime ?? entrada.times.lastModTime ?? new Date()).toISOString(),
     atualizadoEm: (entrada.times.lastModTime ?? new Date()).toISOString(),
+    // O kdbxweb preenche lastAccessTime na criação; só conta como "uso" o
+    // que passou por `registrarAcesso` (usageCount > 0).
+    acessadoEm:
+      entrada.times.usageCount && entrada.times.lastAccessTime ? entrada.times.lastAccessTime.toISOString() : null,
+    favorita: entrada.tags.some((tag) => tag.toLowerCase() === TAG_FAVORITA.toLowerCase()),
+    grupoId: grupo?.uuid.id ?? "",
+    grupoNome: grupo?.name ?? "",
   };
 }
 
@@ -390,6 +402,30 @@ export async function atualizarEntrada(id: string, campos: CamposEntrada): Promi
 export async function moverEntrada(id: string, idNovoGrupo: string): Promise<GrupoSenhas> {
   const sessao = sessaoEmUso();
   sessao.db.move(encontrarEntrada(sessao.db, id), encontrarGrupo(sessao.db, idNovoGrupo));
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/** Liga/desliga a tag de favorita. */
+export async function favoritarEntrada(id: string, favorita: boolean): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
+  entrada.tags = entrada.tags.filter((tag) => tag.toLowerCase() !== TAG_FAVORITA.toLowerCase());
+  if (favorita) entrada.tags.push(TAG_FAVORITA);
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/**
+ * Um uso de verdade da entrada (copiou a senha, abriu o site): registra o
+ * momento nos tempos padrão do `.kdbx`, que é o que alimenta "Recentes".
+ * Não mexe em `lastModTime` — usar não é editar.
+ */
+export async function registrarAcesso(id: string): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
+  entrada.times.lastAccessTime = new Date();
+  entrada.times.usageCount = (entrada.times.usageCount ?? 0) + 1;
   marcarSujo(sessao);
   return obterArvore();
 }

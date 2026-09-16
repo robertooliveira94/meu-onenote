@@ -117,6 +117,14 @@ export async function acaoMoverEntrada(id: string, idNovoGrupo: string): Promise
   return comTratamento(() => senhas.moverEntrada(id, idNovoGrupo));
 }
 
+export async function acaoFavoritarEntrada(id: string, favorita: boolean): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.favoritarEntrada(id, favorita));
+}
+
+export async function acaoRegistrarAcesso(id: string): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.registrarAcesso(id));
+}
+
 export async function acaoExcluirEntrada(id: string): Promise<RespostaSenhas> {
   return comTratamento(() => senhas.excluirEntrada(id));
 }
