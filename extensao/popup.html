@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Meu bloco de anotações</title>
+    <style>
+      body {
+        margin: 0;
+        width: 260px;
+        font: 13px/1.4 -apple-system, system-ui, sans-serif;
+        background: #151d2b;
+        color: #e9eef6;
+      }
+      .cabecalho {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 16px 10px;
+        font-weight: 700;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 16px 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #1b2434;
+      }
+      .bolinha {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .bolinha.aberto {
+        background: #0ea47c;
+      }
+      .bolinha.trancado {
+        background: #7a8ba1;
+      }
+      .bolinha.offline {
+        background: #ff6369;
+      }
+      button {
+        display: block;
+        width: calc(100% - 32px);
+        margin: 0 16px 14px;
+        font: inherit;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        padding: 9px;
+        cursor: pointer;
+        background: #0ea47c;
+        color: #fff;
+      }
+      .rodape {
+        padding: 0 16px 14px;
+        color: #7a8ba1;
+        font-size: 11px;
+      }
+      .rodape a {
+        color: #7a8ba1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cabecalho">🔑 Senhas</div>
+    <div class="status" id="status">
+      <span class="bolinha" id="bolinha"></span>
+      <span id="texto">Verificando…</span>
+    </div>
+    <button id="abrir">Abrir o cofre</button>
+    <p class="rodape">Preenche e captura senhas em qualquer site — <a href="opcoes.html" target="_blank">preferências</a>.</p>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,3 @@
+/* Vazio de propósito: o banner e a dica de autopreenchimento moram dentro
+   de shadow DOM fechado (ver content.js), então nunca herdam nem vazam
+   estilo daqui — isso existe só porque o manifest pede um arquivo. */

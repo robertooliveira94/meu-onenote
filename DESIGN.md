@@ -624,15 +624,21 @@ um link), ele herda esse mesmo fundo tingido + faixa no topo em vez de
 ficar branco neutro — o popup "é" o cartão, só expandido.
 
 ### Cofre de Senhas e Links (aplicações com árvore própria)
-As duas seguem o mesmo vocabulário do resto do sistema em vez de inventar
+As duas partem do mesmo vocabulário do resto do sistema em vez de inventar
 um próprio: uma árvore de grupos/pastas (aninhamento livre, sem
-profundidade fixa) numa coluna à esquerda, com as folhas (senha, link)
-listadas à direita como `.cartao`. Links tinge a árvore com a cor da
-pasta ativa (mesma `--realce`); o cofre de senhas fica neutro (sem cor
-por grupo) porque a segurança do conteúdo, não a identidade visual, é o
-que importa ali. O cartão de link usa o favicon do próprio site como
-ícone quando existe, caindo no mesmo emblema colorido (`realce-medio` +
-ícone) que os outros cartões usam quando não existe.
+profundidade fixa) numa coluna à esquerda. Links tinge a árvore com a cor
+da pasta ativa (mesma `--realce`) e lista os links à direita como
+`.cartao`, com o favicon do próprio site como ícone quando existe, caindo
+no mesmo emblema colorido (`realce-medio` + ícone) que os outros cartões
+usam quando não existe. O cofre de senhas fica neutro (sem cor por grupo)
+porque a segurança do conteúdo, não a identidade visual, é o que importa
+ali, e usa três colunas em vez de duas: grupos (mais os nós virtuais
+Todas/Favoritas/Recentes acima da árvore e Lixeira no rodapé, mesmo
+`linha-nav`) · linhas compactas de 40px (não `.cartao` — densas demais pra
+isso, com favicon/inicial, título sobre usuário, ações só no hover) · um
+painel de detalhe fixo à direita, onde "Editar" troca pra edição no
+próprio painel em vez de abrir um modal (o modal, ali, fica só pra "Nova
+senha" e pro que é destrutivo).
 
 ## Do's and Don'ts
 

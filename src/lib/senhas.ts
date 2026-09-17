@@ -305,7 +305,7 @@ export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): 
   return "ok";
 }
 
-class CofreTrancado extends Error {
+export class CofreTrancado extends Error {
   constructor() {
     super("O cofre está trancado.");
   }
@@ -629,6 +629,89 @@ export async function excluirEntrada(id: string): Promise<GrupoSenhas> {
   sessao.db.remove(encontrarEntrada(sessao.db, id));
   marcarSujo(sessao);
   return obterArvore();
+}
+
+/** "https://www.exemplo.com/login?x=1" → "exemplo.com" — pra comparar entradas pelo site, não pela URL inteira. */
+function dominioDe(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+export type CredencialNavegador = { id: string; titulo: string; usuario: string; senha: string };
+
+/**
+ * Para a extensão do navegador oferecer autopreenchimento: as entradas
+ * cujo site bate com a página atual. Não é a árvore inteira — só o que a
+ * extensão precisa (nunca mais que isso sai daqui).
+ */
+export function buscarPorDominio(url: string): CredencialNavegador[] {
+  const db = usarSessao();
+  const dominio = dominioDe(url);
+  if (!dominio) return [];
+  const saida: CredencialNavegador[] = [];
+  for (const entrada of db.getDefaultGroup().allEntries()) {
+    if (entrada.parentGroup?.uuid.id === db.meta.recycleBinUuid?.id) continue;
+    const urlEntrada = textoDoCampo(entrada.fields.get("URL"));
+    if (dominioDe(urlEntrada) === dominio) {
+      saida.push({
+        id: entrada.uuid.id,
+        titulo: textoDoCampo(entrada.fields.get("Title")) || dominio,
+        usuario: textoDoCampo(entrada.fields.get("UserName")),
+        senha: textoDoCampo(entrada.fields.get("Password")),
+      });
+    }
+  }
+  return saida;
+}
+
+/** O grupo "Do navegador" (senhas capturadas pela extensão) — cria na hora se ainda não existe. */
+function grupoDoNavegador(db: kdbxweb.Kdbx): kdbxweb.KdbxGroup {
+  const existente = db.getDefaultGroup().groups.find((grupo) => grupo.name === "Do navegador");
+  return existente ?? db.createGroup(db.getDefaultGroup(), "Do navegador");
+}
+
+/**
+ * O que a extensão manda ao ver uma senha sendo enviada num site: se já
+ * existe uma entrada pra esse site+usuário, atualiza a senha (como o
+ * "atualizar senha?" do próprio Chrome); senão, cria uma nova em "Do
+ * navegador". Devolve o que aconteceu, pra extensão avisar a pessoa.
+ */
+export async function salvarDoNavegador(dados: {
+  url: string;
+  usuario: string;
+  senha: string;
+  titulo?: string;
+}): Promise<{ id: string; atualizada: boolean }> {
+  const sessao = sessaoEmUso();
+  const dominio = dominioDe(dados.url);
+  const existente = dominio
+    ? [...sessao.db.getDefaultGroup().allEntries()].find(
+        (entrada) =>
+          entrada.parentGroup?.uuid.id !== sessao.db.meta.recycleBinUuid?.id &&
+          dominioDe(textoDoCampo(entrada.fields.get("URL"))) === dominio &&
+          textoDoCampo(entrada.fields.get("UserName")) === dados.usuario,
+      )
+    : undefined;
+
+  if (existente) {
+    existente.pushHistory();
+    existente.fields.set("Password", kdbxweb.ProtectedValue.fromString(dados.senha));
+    existente.times.lastModTime = new Date();
+    sessao.db.cleanup({ historyRules: true });
+    marcarSujo(sessao);
+    return { id: existente.uuid.id, atualizada: true };
+  }
+
+  const entrada = sessao.db.createEntry(grupoDoNavegador(sessao.db));
+  entrada.fields.set("Title", dados.titulo?.trim() || dominio || dados.url);
+  entrada.fields.set("UserName", dados.usuario);
+  entrada.fields.set("Password", kdbxweb.ProtectedValue.fromString(dados.senha));
+  entrada.fields.set("URL", dados.url);
+  marcarSujo(sessao);
+  return { id: entrada.uuid.id, atualizada: false };
 }
 
 /** Garante que a lixeira interna do `.kdbx` existe e devolve o grupo dela. */

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Preferências — Meu bloco de anotações</title>
+    <style>
+      body {
+        margin: 0;
+        max-width: 420px;
+        padding: 24px;
+        font: 14px/1.5 -apple-system, system-ui, sans-serif;
+        background: #0e1420;
+        color: #e9eef6;
+      }
+      h1 {
+        font-size: 16px;
+      }
+      label {
+        display: block;
+        margin: 16px 0 6px;
+        font-size: 12px;
+        color: #9fadc0;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        background: #1b2434;
+        border: 1px solid #243044;
+        border-radius: 8px;
+        padding: 9px 12px;
+        color: #e9eef6;
+      }
+      button {
+        margin-top: 16px;
+        font: inherit;
+        font-weight: 600;
+        background: #0ea47c;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 16px;
+        cursor: pointer;
+      }
+      p.ajuda {
+        color: #7a8ba1;
+        font-size: 12px;
+      }
+      #salvo {
+        color: #0ea47c;
+        font-size: 12px;
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Meu bloco de anotações</h1>
+    <p class="ajuda">
+      Endereço onde o app roda no seu navegador (o mesmo da barra de endereço quando você abre o hub). Só muda se você
+      rodar numa porta diferente da padrão.
+    </p>
+    <label for="urlBase">Endereço do app</label>
+    <input id="urlBase" type="text" placeholder="http://localhost:3100" />
+    <div>
+      <button id="salvar">Salvar</button>
+      <span id="salvo" hidden>Salvo!</span>
+    </div>
+    <script src="opcoes.js"></script>
+  </body>
+</html>

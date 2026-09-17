@@ -383,20 +383,54 @@ limpas e abríveis em qualquer editor.
   do KeePass, Argon2id + AES-256) — o arquivo abre também no KeePassXC,
   KeePassDX etc., sem "exportar para outra plataforma", só copiar o
   arquivo. Tela de senha mestra cria um cofre novo ou importa um `.kdbx`
-  que a pessoa já tem. Destrancado, mostra uma árvore de grupos
-  (subgrupos à vontade, sem profundidade fixa) com senhas dentro de cada
-  um — criar, renomear, mover e excluir por arrastar ou pelo menu, exibir/
-  ocultar e copiar a senha com um clique (a área de transferência se
-  limpa sozinha depois de um tempo). Tranca sozinho depois de inatividade;
-  "Trocar senha mestra" recifra o cofre inteiro sem perder o conteúdo.
-  Exportação em CSV texto puro existe como plano B, com aviso de que sai
-  sem cifra nenhuma. Excluir o cofre inteiro é sem lixeira, sem desfazer —
-  por isso exige digitar uma palavra de confirmação antes de liberar o
-  botão (excluir um grupo dentro do cofre já é só um clique). Escrita em
-  disco é adiada ~1s após a última mudança
-  (o KDF do Argon2id é caro de recalcular a cada save) — as mudanças
-  aparecem na tela na hora, vindas da cópia em memória, então a navegação
-  não fica lenta esperando o disco.
+  que a pessoa já tem.
+  - **Três colunas**: grupos (com os nós virtuais **Todas**, **Favoritas**
+    e **Recentes** acima da árvore, e **Lixeira** no rodapé) · linhas de
+    40px (favicon do site ou inicial colorida, título sobre usuário,
+    copiar usuário/senha no hover) · um painel de detalhe fixo, onde
+    "Editar" troca pra edição no lugar — o modal só aparece pra "Nova
+    senha" e pro que é destrutivo. Busca em todos os grupos de uma vez
+    (título, usuário, site, notas), com o nome do grupo em cada resultado.
+    Favorita é uma tag do próprio `.kdbx` (o KeePassXC também mostra);
+    Recentes vem do último uso de verdade (copiar a senha, abrir o site).
+  - **Gerador de senha** embutido no formulário — aleatória (tamanho,
+    classes de caractere, evitar ambíguos) ou frase-senha (palavras em
+    português) — com **barra de força** (4 níveis) e aviso quando a senha
+    já está em outra entrada. **Data de validade** opcional, avisada na
+    tela quando vence ou já venceu. **Campos personalizados** (protegidos
+    ou não) além dos cinco padrão, e **anexos** — arquivos pequenos
+    guardados como binários do próprio `.kdbx` (até 5 MB).
+  - **Favicon por entrada**, buscado do próprio site (mesmo mecanismo de
+    Links) e guardado como ícone dentro do cofre — nunca em disco fora
+    dele. **TOTP**: cola o segredo ou a URI `otpauth://` inteira, código
+    de 6 dígitos com barra de tempo calculado no navegador. **Histórico**:
+    cada edição empilha uma versão no próprio `.kdbx`, com "Restaurar"
+    (a atual também vira histórico, então dá pra desfazer a
+    restauração). **Lixeira do cofre** exposta — restaurar, apagar de
+    vez ou esvaziar tudo, usando a lixeira interna do formato.
+  - **Relatório de saúde**, calculado na hora a partir do que já está na
+    tela: fracas, repetidas, sem trocar há mais de um ano, sem site e
+    vencidas. **Verificação de vazamentos** (Have I Been Pwned, por
+    k-anonimato — só 5 caracteres do hash saem da máquina) fica atrás de
+    um botão com a explicação, nunca automática.
+  - **Extensão de navegador** (pasta `extensao/`, Chrome/Manifest V3):
+    percebe uma senha sendo enviada num site e oferece salvar no cofre
+    (cria ou atualiza, por site + usuário); sugere preencher quando já
+    existe uma entrada pro site aberto. Fala com o app por rotas locais
+    dedicadas (`/senhas/extensao/…`), só funciona com o cofre destrancado.
+  - Exibir/ocultar e copiar a senha com um clique (a área de transferência
+    se limpa sozinha depois de um tempo); criar, renomear, mover e excluir
+    grupo/senha por arrastar ou pelo menu. **Trava configurável** (5/15/30
+    minutos ou nunca, mais "trancar ao fechar a aba") em
+    `_senhas/config.json`, fora do `.kdbx` por não ser segredo; "Trocar
+    senha mestra" recifra o cofre inteiro sem perder o conteúdo.
+    Exportação em CSV texto puro existe como plano B, com aviso de que sai
+    sem cifra nenhuma. Excluir o cofre inteiro é sem lixeira, sem desfazer
+    — por isso exige digitar uma palavra de confirmação antes de liberar o
+    botão. Escrita em disco é adiada ~1s após a última mudança (o KDF do
+    Argon2id é caro de recalcular a cada save) — as mudanças aparecem na
+    tela na hora, vindas da cópia em memória, então a navegação não fica
+    lenta esperando o disco.
 - **Links** (`/links`): um gerenciador de favoritos — pastas e subpastas
   (aninhamento livre, mesma forma de árvore do cofre de senhas, mas sem
   cifra: é um JSON simples), cada uma com cor e ícone próprios. Um link
