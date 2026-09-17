@@ -419,6 +419,10 @@ export type Link = {
   favicon: string | null;
   nota: string;
   favorito: boolean;
+  /** "Ler depois": nasce `false` (não lido) e vira `true` ao abrir o link — links de antes desta função vêm sempre `true`. */
+  lido: boolean;
+  /** Quantas vezes o link foi aberto por aqui — só pra ordenar "mais aberto", sem pretensão de analytics. */
+  aberturas: number;
   criadoEm: string;
   atualizadoEm: string;
 };

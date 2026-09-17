@@ -2,8 +2,10 @@
 
 import clsx from "clsx";
 import {
+  ArrowDownUp,
   Bookmark,
   ChevronRight,
+  Circle,
   ExternalLink,
   Folder,
   FolderPlus,
@@ -18,26 +20,35 @@ import {
   Search,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  acaoAcharDuplicado,
   acaoAtualizarLink,
   acaoBuscarMetadadosUrl,
   acaoCriarLink,
   acaoCriarPastaLink,
   acaoExcluirLink,
   acaoExcluirPastaLink,
+  acaoExcluirVarios,
   acaoFavoritarLink,
+  acaoFavoritarVarios,
   acaoImportarFavoritosHtml,
+  acaoMarcarComoAberto,
+  acaoMarcarVariosComoLido,
   acaoMoverLink,
   acaoMoverPastaLink,
+  acaoMoverVarios,
+  acaoReordenarLinks,
   acaoRenomearPastaLink,
   type RespostaLinks,
 } from "@/app/acoes-links";
 import {
+  calcularNovaOrdem,
   iniciarArrastoDeLink,
   iniciarArrastoDePastaLink,
   lerIdDeLink,
@@ -110,6 +121,10 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     () => [...todosOsLinks].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 9),
     [todosOsLinks],
   );
+  const naoLidos = useMemo(
+    () => todosOsLinks.filter((link) => !link.lido).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
+    [todosOsLinks],
+  );
 
   const [busca, definirBusca] = useState("");
   const buscando = busca.trim().length > 0;
@@ -170,6 +185,11 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     async (link: LinkSalvo) => void aplicarResposta(await acaoFavoritarLink(link.id, !link.favorito)),
     [aplicarResposta],
   );
+  /** Clicar num link pra visitar o site conta como "lido" — não espera a resposta pra não atrasar a navegação. */
+  const visitarLink = useCallback((link: LinkSalvo) => {
+    if (link.lido) return;
+    acaoMarcarComoAberto(link.id).then(aplicarResposta);
+  }, [aplicarResposta]);
 
   const [criandoDeUrl, definirCriandoDeUrl] = useState(false);
   /** Cria o link direto (colar/arrastar uma URL) — sem passar pelo diálogo: busca título e favicon sozinho. */
@@ -209,6 +229,34 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     if (links.length > 8 && !confirm(`Abrir ${links.length} links em novas abas?`)) return;
     for (const link of links) window.open(link.url, "_blank", "noopener,noreferrer");
   }, []);
+
+  const reordenarLinksDaPasta = useCallback(
+    async (idPasta: string, ordemIds: string[]) => void aplicarResposta(await acaoReordenarLinks(idPasta, ordemIds)),
+    [aplicarResposta],
+  );
+
+  /** Mover, favoritar, marcar lido/não lido ou excluir vários links de uma vez — a barra que aparece ao selecionar. */
+  const linksEmLote = useCallback(
+    async (
+      ids: string[],
+      acao: "mover" | "favoritar" | "lido" | "nao-lido" | "excluir",
+      idPastaDestino?: string,
+    ) => {
+      if (acao === "excluir" && !confirm(`Excluir ${ids.length} ${ids.length === 1 ? "link" : "links"}? Vai para a lixeira.`)) return;
+      const resposta =
+        acao === "mover" && idPastaDestino
+          ? await acaoMoverVarios(ids, idPastaDestino)
+          : acao === "favoritar"
+            ? await acaoFavoritarVarios(ids, true)
+            : acao === "lido"
+              ? await acaoMarcarVariosComoLido(ids, true)
+              : acao === "nao-lido"
+                ? await acaoMarcarVariosComoLido(ids, false)
+                : await acaoExcluirVarios(ids);
+      aplicarResposta(resposta);
+    },
+    [aplicarResposta],
+  );
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -261,22 +309,39 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           onRenomear={renomearPasta}
         />
         {buscando ? (
-          <ResultadosBusca termo={busca} resultados={resultadosBusca} onAbrir={abrirLink} onFavoritar={favoritarLink} />
+          <ResultadosBusca
+            termo={busca}
+            resultados={resultadosBusca}
+            onAbrir={abrirLink}
+            onFavoritar={favoritarLink}
+            onVisitar={visitarLink}
+          />
         ) : modo === "pasta" ? (
           <ColunaLinks
             pasta={pastaAtiva}
+            raiz={arvore}
             caminho={caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva]}
             criandoDeUrl={criandoDeUrl}
             onAbrir={abrirLink}
             onNovo={novoLink}
             onExcluir={definirExcluindoLink}
             onFavoritar={favoritarLink}
+            onVisitar={visitarLink}
             onSelecionarPasta={selecionarPasta}
             onCriarLinkRapido={criarLinkRapido}
             onAbrirTodos={abrirTodos}
+            onReordenar={reordenarLinksDaPasta}
+            onEmLote={linksEmLote}
           />
         ) : (
-          <InicioLinks favoritos={favoritos} recentes={recentes} onAbrir={abrirLink} onFavoritar={favoritarLink} />
+          <InicioLinks
+            favoritos={favoritos}
+            recentes={recentes}
+            naoLidos={naoLidos}
+            onAbrir={abrirLink}
+            onFavoritar={favoritarLink}
+            onVisitar={visitarLink}
+          />
         )}
       </div>
 
@@ -638,19 +703,43 @@ function trazUrlExterna(evento: React.DragEvent): boolean {
   return !trazLink(evento) && !trazPastaLink(evento) && evento.dataTransfer.types.includes("text/uri-list");
 }
 
+/** Nome + ícone dos quatro jeitos de ordenar os links de uma pasta. */
+const MODOS_ORDENACAO = [
+  ["manual", "Manual"],
+  ["nome", "Nome"],
+  ["data", "Mais recente"],
+  ["aberturas", "Mais aberto"],
+] as const;
+type ModoOrdenacao = (typeof MODOS_ORDENACAO)[number][0];
+
+function ordenarLinks(links: LinkSalvo[], modo: ModoOrdenacao): LinkSalvo[] {
+  if (modo === "manual") return links;
+  const copia = [...links];
+  if (modo === "nome") copia.sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+  else if (modo === "data") copia.sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+  else copia.sort((a, b) => b.aberturas - a.aberturas);
+  return copia;
+}
+
 function ColunaLinks({
   pasta,
+  raiz,
   caminho,
   criandoDeUrl,
   onAbrir,
   onNovo,
   onExcluir,
   onFavoritar,
+  onVisitar,
   onSelecionarPasta,
   onCriarLinkRapido,
   onAbrirTodos,
+  onReordenar,
+  onEmLote,
 }: {
   pasta: PastaLink;
+  /** A árvore inteira — só pra montar as opções de "mover para" no lote. */
+  raiz: PastaLink;
   /** Da raiz até esta pasta, inclusive — a trilha de navegação. */
   caminho: PastaLink[];
   criandoDeUrl: boolean;
@@ -658,11 +747,16 @@ function ColunaLinks({
   onNovo: () => void;
   onExcluir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
   onSelecionarPasta: (id: string) => void;
   onCriarLinkRapido: (url: string, idPasta: string) => void;
   onAbrirTodos: (links: LinkSalvo[]) => void;
+  onReordenar: (idPasta: string, ordemIds: string[]) => void;
+  onEmLote: (ids: string[], acao: "mover" | "favoritar" | "lido" | "nao-lido" | "excluir", idPastaDestino?: string) => void;
 }) {
   const [sobreUrl, definirSobreUrl] = useState(false);
+  const [selecionados, definirSelecionados] = useState<Set<string>>(new Set());
+  const ultimoSelecionado = useRef<string | null>(null);
 
   // Lista · Mosaico · Compacta — lembrado por pasta, mesmo padrão do toggle de visão do Kanban.
   type Visao = "lista" | "mosaico" | "compacta";
@@ -685,9 +779,69 @@ function ColunaLinks({
     }
   }
 
+  // A ordenação também é lembrada por pasta.
+  const chaveOrdenacao = `links-ordenacao:${pasta.id}`;
+  const [ordenacao, definirOrdenacaoEstado] = useState<ModoOrdenacao>("manual");
+  useEffect(() => {
+    try {
+      const salva = localStorage.getItem(chaveOrdenacao) as ModoOrdenacao | null;
+      definirOrdenacaoEstado(salva && MODOS_ORDENACAO.some(([id]) => id === salva) ? salva : "manual");
+    } catch {
+      definirOrdenacaoEstado("manual");
+    }
+  }, [chaveOrdenacao]);
+  function definirOrdenacao(proxima: ModoOrdenacao) {
+    definirOrdenacaoEstado(proxima);
+    try {
+      localStorage.setItem(chaveOrdenacao, proxima);
+    } catch {
+      // Sem armazenamento: vale só para esta sessão.
+    }
+  }
+
+  // Selecionar limpa sozinho ao trocar de pasta — senão a barra de lote
+  // ficaria de pé com ids de uma pasta que não é mais esta.
+  useEffect(() => {
+    definirSelecionados(new Set());
+  }, [pasta.id]);
+
+  const linksVisiveis = useMemo(() => ordenarLinks(pasta.links, ordenacao), [pasta.links, ordenacao]);
+
+  function selecionar(id: string, evento: React.MouseEvent) {
+    definirSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (evento.shiftKey && ultimoSelecionado.current) {
+        const ids = linksVisiveis.map((link) => link.id);
+        const a = ids.indexOf(ultimoSelecionado.current);
+        const b = ids.indexOf(id);
+        if (a !== -1 && b !== -1) {
+          for (const item of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) proximo.add(item);
+        }
+      } else if (proximo.has(id)) {
+        proximo.delete(id);
+      } else {
+        proximo.add(id);
+      }
+      return proximo;
+    });
+    ultimoSelecionado.current = id;
+  }
+  const limparSelecao = useCallback(() => definirSelecionados(new Set()), []);
+  useAtalho("escape", {
+    grupo: "Links",
+    descricao: "Limpar a seleção",
+    ativo: selecionados.size > 0,
+    acao: limparSelecao,
+  });
+
+  function reordenarComArrasto(origemId: string, alvoId: string, antes: boolean) {
+    const nova = calcularNovaOrdem(linksVisiveis.map((link) => link.id), origemId, alvoId, antes);
+    if (nova) onReordenar(pasta.id, nova);
+  }
+
   return (
     <div
-      className="flex min-w-0 flex-1 flex-col overflow-hidden bg-papel"
+      className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-papel"
       onDragOver={(evento) => {
         if (!trazUrlExterna(evento)) return;
         evento.preventDefault();
@@ -729,6 +883,29 @@ function ColunaLinks({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <Menu
+            gatilho={(abrir) => (
+              <Botao onClick={abrir}>
+                <ArrowDownUp size={13} />
+                {MODOS_ORDENACAO.find(([id]) => id === ordenacao)?.[1]}
+              </Botao>
+            )}
+          >
+            {(fechar) =>
+              MODOS_ORDENACAO.map(([id, rotulo]) => (
+                <ItemMenu
+                  key={id}
+                  onClick={() => {
+                    fechar();
+                    definirOrdenacao(id);
+                  }}
+                >
+                  {rotulo}
+                  {ordenacao === id ? " ✓" : ""}
+                </ItemMenu>
+              ))
+            }
+          </Menu>
           <div className="flex items-center gap-0.5 rounded-lg border border-linha p-0.5" role="group" aria-label="Visão">
             {(
               [
@@ -795,52 +972,186 @@ function ColunaLinks({
           </div>
         ) : visao === "mosaico" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
-            {pasta.links.map((link) => (
-              <TileLink key={link.id} link={link} onAbrir={onAbrir} onExcluir={onExcluir} onFavoritar={onFavoritar} />
+            {linksVisiveis.map((link) => (
+              <TileLink
+                key={link.id}
+                link={link}
+                selecionado={selecionados.has(link.id)}
+                onAbrir={onAbrir}
+                onExcluir={onExcluir}
+                onFavoritar={onFavoritar}
+                onVisitar={onVisitar}
+                onSelecionar={selecionar}
+              />
             ))}
           </div>
         ) : visao === "compacta" ? (
           <div>
-            {pasta.links.map((link) => (
-              <LinhaLinkCompacta key={link.id} link={link} onAbrir={onAbrir} onExcluir={onExcluir} onFavoritar={onFavoritar} />
+            {linksVisiveis.map((link) => (
+              <LinhaLinkCompacta
+                key={link.id}
+                link={link}
+                selecionado={selecionados.has(link.id)}
+                onAbrir={onAbrir}
+                onExcluir={onExcluir}
+                onFavoritar={onFavoritar}
+                onVisitar={onVisitar}
+                onSelecionar={selecionar}
+              />
             ))}
           </div>
         ) : (
-          pasta.links.map((link) => (
-            <LinhaLink key={link.id} link={link} onAbrir={onAbrir} onExcluir={onExcluir} onFavoritar={onFavoritar} />
+          linksVisiveis.map((link) => (
+            <LinhaLink
+              key={link.id}
+              link={link}
+              selecionado={selecionados.has(link.id)}
+              onAbrir={onAbrir}
+              onExcluir={onExcluir}
+              onFavoritar={onFavoritar}
+              onVisitar={onVisitar}
+              onSelecionar={selecionar}
+              onArrastarSobre={ordenacao === "manual" ? reordenarComArrasto : undefined}
+            />
           ))
         )}
       </div>
+
+      {selecionados.size > 0 ? (
+        <div
+          role="toolbar"
+          aria-label="Ações nos links selecionados"
+          className="surgir absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-linha bg-superficie-alta px-2 py-1.5 shadow-[var(--sombra)]"
+        >
+          <span className="px-1.5 text-[12px] font-medium tabular-nums">
+            {selecionados.size} {selecionados.size === 1 ? "selecionado" : "selecionados"}
+          </span>
+          <Menu
+            gatilho={(abrir) => (
+              <Botao onClick={abrir}>
+                <Folder size={13} />
+                Mover para…
+              </Botao>
+            )}
+          >
+            {(fechar) => opcoesDePastaMenu(raiz, 0, (idDestino) => {
+              fechar();
+              onEmLote([...selecionados], "mover", idDestino);
+              limparSelecao();
+            })}
+          </Menu>
+          <BotaoIcone
+            rotulo="Favoritar"
+            onClick={() => {
+              onEmLote([...selecionados], "favoritar");
+              limparSelecao();
+            }}
+          >
+            <Star size={14} />
+          </BotaoIcone>
+          <BotaoIcone
+            rotulo="Marcar como lido"
+            onClick={() => {
+              onEmLote([...selecionados], "lido");
+              limparSelecao();
+            }}
+          >
+            <Circle size={14} />
+          </BotaoIcone>
+          <BotaoIcone
+            rotulo="Excluir"
+            onClick={() => {
+              onEmLote([...selecionados], "excluir");
+              limparSelecao();
+            }}
+          >
+            <Trash2 size={14} />
+          </BotaoIcone>
+          <BotaoIcone rotulo="Limpar seleção (Esc)" onClick={limparSelecao}>
+            <X size={14} />
+          </BotaoIcone>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+/** A bolinha de "não lido" — mesma cor de realce em todo lugar que mostra um link. */
+function PontoNaoLido() {
+  return <span aria-label="Não lido" title="Não lido" className="size-1.5 shrink-0 rounded-full bg-[var(--realce)]" />;
+}
+
+/** `true` se o clique veio com modificador — nesses casos, o clique seleciona em vez de abrir o link/pasta. */
+function comModificador(evento: React.MouseEvent): boolean {
+  return evento.ctrlKey || evento.metaKey || evento.shiftKey;
+}
+
 const LinhaLink = memo(function LinhaLink({
   link,
+  selecionado,
   onAbrir,
   onExcluir,
   onFavoritar,
+  onVisitar,
+  onSelecionar,
+  onArrastarSobre,
 }: {
   link: LinkSalvo;
+  selecionado?: boolean;
   onAbrir: (link: LinkSalvo) => void;
   onExcluir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
+  onSelecionar?: (id: string, evento: React.MouseEvent) => void;
+  /** Presente só na ordenação Manual — soltar outro link aqui reordena os dois. */
+  onArrastarSobre?: (origemId: string, alvoId: string, antes: boolean) => void;
 }) {
+  const [sobre, definirSobre] = useState<"antes" | "depois" | null>(null);
   return (
     <div
       draggable
       onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
-      className="cartao group flex items-center gap-3"
+      onDragOver={(evento) => {
+        if (!onArrastarSobre || !trazLink(evento)) return;
+        evento.preventDefault();
+        const antes = evento.clientY < evento.currentTarget.getBoundingClientRect().top + evento.currentTarget.offsetHeight / 2;
+        definirSobre(antes ? "antes" : "depois");
+      }}
+      onDragLeave={() => definirSobre(null)}
+      onDrop={(evento) => {
+        if (!onArrastarSobre || !trazLink(evento)) return;
+        evento.preventDefault();
+        const origemId = lerIdDeLink(evento);
+        definirSobre(null);
+        if (origemId && origemId !== link.id) onArrastarSobre(origemId, link.id, sobre === "antes");
+      }}
+      className={clsx(
+        "cartao group relative flex items-center gap-3",
+        selecionado && "ring-2 ring-[var(--realce)]",
+        sobre === "antes" && "border-t-2 border-t-[var(--realce)]",
+        sobre === "depois" && "border-b-2 border-b-[var(--realce)]",
+      )}
     >
       <a
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={(evento) => {
+          if (onSelecionar && comModificador(evento)) {
+            evento.preventDefault();
+            onSelecionar(link.id, evento);
+            return;
+          }
+          onVisitar(link);
+        }}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
         <IconeDoLink link={link} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium text-tinta">{link.titulo}</p>
+          <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-tinta">
+            {!link.lido ? <PontoNaoLido /> : null}
+            <span className="truncate">{link.titulo}</span>
+          </p>
           <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
         </div>
       </a>
@@ -866,28 +1177,51 @@ const LinhaLink = memo(function LinhaLink({
 /** Linha de uma tela de página inicial de navegador: só o essencial numa faixa de 28px — pra quem tem dezenas de links numa pasta. */
 const LinhaLinkCompacta = memo(function LinhaLinkCompacta({
   link,
+  selecionado,
   onAbrir,
   onExcluir,
   onFavoritar,
+  onVisitar,
+  onSelecionar,
 }: {
   link: LinkSalvo;
+  selecionado?: boolean;
   onAbrir: (link: LinkSalvo) => void;
   onExcluir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
+  onSelecionar?: (id: string, evento: React.MouseEvent) => void;
 }) {
   return (
     <div
       draggable
       onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
-      className="linha-nav group flex items-center gap-2 rounded-md px-1.5 hover:bg-realce-fraco"
+      className={clsx(
+        "linha-nav group flex items-center gap-2 rounded-md px-1.5 hover:bg-realce-fraco",
+        selecionado && "ring-2 ring-[var(--realce)]",
+      )}
     >
-      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-2">
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(evento) => {
+          if (onSelecionar && comModificador(evento)) {
+            evento.preventDefault();
+            onSelecionar(link.id, evento);
+            return;
+          }
+          onVisitar(link);
+        }}
+        className="flex min-w-0 flex-1 items-center gap-2"
+      >
         {link.favicon ? (
           // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena o otimizador de imagens do Next pra isso.
           <img src={`/links/favicon/${link.favicon}`} alt="" className="size-4 shrink-0 rounded object-contain" />
         ) : (
           <Bookmark size={12} className="shrink-0 text-tinta-3" />
         )}
+        {!link.lido ? <PontoNaoLido /> : null}
         <p className="min-w-0 flex-1 truncate text-[12.5px] text-tinta">{link.titulo}</p>
         <p className="shrink-0 truncate text-[11px] text-tinta-3">{dominioDaUrl(link.url)}</p>
       </a>
@@ -913,23 +1247,45 @@ const LinhaLinkCompacta = memo(function LinhaLinkCompacta({
 /** Um quadrado de ~120px com o favicon grande no centro — o formato de página inicial de navegador, pra achar o link certo em meio segundo. */
 const TileLink = memo(function TileLink({
   link,
+  selecionado,
   onAbrir,
   onExcluir,
   onFavoritar,
+  onVisitar,
+  onSelecionar,
 }: {
   link: LinkSalvo;
+  selecionado?: boolean;
   onAbrir: (link: LinkSalvo) => void;
   /** Ausente na tela inicial e na busca (que atravessam pastas — excluir dali ficaria ambíguo sobre em qual pasta). */
   onExcluir?: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
+  onSelecionar?: (id: string, evento: React.MouseEvent) => void;
 }) {
   return (
     <div
       draggable
       onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
-      className="cartao group relative flex flex-col items-center gap-2 px-3 py-4 text-center"
+      className={clsx(
+        "cartao group relative flex flex-col items-center gap-2 px-3 py-4 text-center",
+        selecionado && "ring-2 ring-[var(--realce)]",
+      )}
     >
-      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2">
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(evento) => {
+          if (onSelecionar && comModificador(evento)) {
+            evento.preventDefault();
+            onSelecionar(link.id, evento);
+            return;
+          }
+          onVisitar(link);
+        }}
+        className="flex flex-col items-center gap-2"
+      >
         {link.favicon ? (
           // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena o otimizador de imagens do Next pra isso.
           <img
@@ -943,7 +1299,10 @@ const TileLink = memo(function TileLink({
           </div>
         )}
         <div className="min-w-0">
-          <p className="line-clamp-2 text-[12px] leading-tight font-medium text-tinta">{link.titulo}</p>
+          <p className="flex items-center justify-center gap-1 line-clamp-2 text-[12px] leading-tight font-medium text-tinta">
+            {!link.lido ? <PontoNaoLido /> : null}
+            {link.titulo}
+          </p>
           <p className="mt-0.5 truncate text-[10.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
         </div>
       </a>
@@ -980,13 +1339,17 @@ const TileLink = memo(function TileLink({
 function InicioLinks({
   favoritos,
   recentes,
+  naoLidos,
   onAbrir,
   onFavoritar,
+  onVisitar,
 }: {
   favoritos: LinkComPasta[];
   recentes: LinkComPasta[];
+  naoLidos: LinkComPasta[];
   onAbrir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
 }) {
   if (favoritos.length === 0 && recentes.length === 0) {
     return (
@@ -1001,6 +1364,19 @@ function InicioLinks({
   }
   return (
     <div className="min-w-0 flex-1 space-y-7 overflow-y-auto bg-papel px-5 py-5">
+      {naoLidos.length > 0 ? (
+        <section>
+          <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+            <Circle size={10} className="fill-current text-[var(--realce)]" />
+            Não lidos · {naoLidos.length}
+          </h2>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
+            {naoLidos.map((link) => (
+              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {favoritos.length > 0 ? (
         <section>
           <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
@@ -1009,7 +1385,7 @@ function InicioLinks({
           </h2>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
             {favoritos.map((link) => (
-              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
             ))}
           </div>
         </section>
@@ -1018,7 +1394,7 @@ function InicioLinks({
         <h2 className="mb-2 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Recentes</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
           {recentes.map((link) => (
-            <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+            <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
           ))}
         </div>
       </section>
@@ -1031,11 +1407,13 @@ function ResultadosBusca({
   resultados,
   onAbrir,
   onFavoritar,
+  onVisitar,
 }: {
   termo: string;
   resultados: LinkComPasta[];
   onAbrir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onVisitar: (link: LinkSalvo) => void;
 }) {
   return (
     <div className="min-w-0 flex-1 overflow-y-auto bg-papel px-5 py-5">
@@ -1046,7 +1424,7 @@ function ResultadosBusca({
       </p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
         {resultados.map((link) => (
-          <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+          <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
         ))}
       </div>
     </div>
@@ -1062,6 +1440,20 @@ function opcoesDePasta(pasta: PastaLink, profundidade: number): React.ReactNode[
       {pasta.icone} {pasta.nome}
     </option>,
     ...pasta.pastas.flatMap((sub) => opcoesDePasta(sub, profundidade + 1)),
+  ];
+}
+
+/** A mesma árvore de pastas, mas como itens de `Menu` clicáveis — usado no "Mover para…" do lote. */
+function opcoesDePastaMenu(pasta: PastaLink, profundidade: number, aoEscolher: (id: string) => void): React.ReactNode[] {
+  return [
+    <ItemMenu
+      key={pasta.id}
+      icone={<span style={{ paddingLeft: profundidade * 12 }}>{pasta.icone}</span>}
+      onClick={() => aoEscolher(pasta.id)}
+    >
+      {pasta.nome}
+    </ItemMenu>,
+    ...pasta.pastas.flatMap((sub) => opcoesDePastaMenu(sub, profundidade + 1, aoEscolher)),
   ];
 }
 
@@ -1154,14 +1546,19 @@ function DialogoLink({
   // `null`/objeto = resultado de uma busca (mesmo sem sucesso, já tentou).
   const [favicon, definirFavicon] = useState<FaviconBuscado | undefined>(undefined);
   const urlOriginal = useRef(link?.url ?? "");
+  const [duplicado, definirDuplicado] = useState<{ id: string; titulo: string; pastaNome: string } | null>(null);
 
   async function buscarMetadados() {
     const url = campos.url.trim();
     if (!url || url === urlOriginal.current) return;
     definirBuscando(true);
-    const resultado = await acaoBuscarMetadadosUrl(url);
+    const [resultado, achadoDuplicado] = await Promise.all([
+      acaoBuscarMetadadosUrl(url),
+      acaoAcharDuplicado(url, link?.id),
+    ]);
     definirBuscando(false);
     definirFavicon(resultado.favicon);
+    definirDuplicado(achadoDuplicado);
     if (resultado.titulo) definirCampos((atual) => (atual.titulo.trim() ? atual : { ...atual, titulo: resultado.titulo! }));
   }
 
@@ -1185,6 +1582,11 @@ function DialogoLink({
             placeholder="https://…"
           />
           {buscando ? <p className="mt-1 text-[11.5px] text-tinta-3">Buscando título e ícone…</p> : null}
+          {duplicado ? (
+            <p className="mt-1 text-[11.5px] text-[#F5822C]">
+              Já está em <strong>{duplicado.pastaNome}</strong> — &ldquo;{duplicado.titulo}&rdquo;. Pode adicionar mesmo assim.
+            </p>
+          ) : null}
         </div>
         <div>
           <Rotulo>Título</Rotulo>

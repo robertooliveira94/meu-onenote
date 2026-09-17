@@ -50,9 +50,19 @@ function pastaRaizPadrao(): PastaLink {
   };
 }
 
+/** Links salvos antes de "ler depois"/"mais aberto" existirem ganham os padrões (já lido, nunca aberto) na primeira leitura. */
+function normalizarArvore(raiz: PastaLink): PastaLink {
+  for (const link of raiz.links) {
+    if (link.lido === undefined) link.lido = true;
+    if (link.aberturas === undefined) link.aberturas = 0;
+  }
+  for (const sub of raiz.pastas) normalizarArvore(sub);
+  return raiz;
+}
+
 async function lerArvore(): Promise<PastaLink> {
   try {
-    return JSON.parse(await fs.readFile(ARQUIVO_ARVORE, "utf8")) as PastaLink;
+    return normalizarArvore(JSON.parse(await fs.readFile(ARQUIVO_ARVORE, "utf8")) as PastaLink);
   } catch {
     return pastaRaizPadrao();
   }
@@ -237,11 +247,66 @@ export async function criarLink(idPasta: string, campos: CamposLink, favicon?: F
       favicon: nomeFavicon,
       nota: campos.nota.trim().slice(0, 2000),
       favorito: campos.favorito,
+      lido: false,
+      aberturas: 0,
       criadoEm: agora,
       atualizadoEm: agora,
     });
     return raiz;
   });
+}
+
+/** Abrir o link conta como "lido" — marca na hora, incrementa o contador de aberturas (usado por "mais aberto"). */
+export async function marcarComoAberto(id: string): Promise<PastaLink> {
+  return alterar((raiz) => {
+    const achado = encontrarLinkComPai(raiz, id);
+    if (!achado) throw new Error("Link não encontrado.");
+    achado.link.lido = true;
+    achado.link.aberturas += 1;
+    return raiz;
+  });
+}
+
+export async function marcarComoLido(id: string, lido: boolean): Promise<PastaLink> {
+  return alterar((raiz) => {
+    const achado = encontrarLinkComPai(raiz, id);
+    if (!achado) throw new Error("Link não encontrado.");
+    achado.link.lido = lido;
+    return raiz;
+  });
+}
+
+/** Reordena manualmente os links de uma pasta — a ordem em que ficam salvos no array é a ordem "Manual". */
+export async function reordenarLinks(idPasta: string, ordemIds: string[]): Promise<PastaLink> {
+  return alterar((raiz) => {
+    const pasta = exigirPasta(raiz, idPasta);
+    const porId = new Map(pasta.links.map((link) => [link.id, link]));
+    const reordenados = ordemIds.map((id) => porId.get(id)).filter((link): link is Link => !!link);
+    // Qualquer link que não veio na lista (edge case de concorrência) some do meio — junta no fim, sem perder.
+    for (const link of pasta.links) if (!ordemIds.includes(link.id)) reordenados.push(link);
+    pasta.links = reordenados;
+    return raiz;
+  });
+}
+
+/** Outro link com a mesma URL (em qualquer pasta) — para o aviso "já está em X" ao criar/editar. */
+export async function acharDuplicado(url: string, exceto?: string): Promise<{ id: string; titulo: string; pastaNome: string } | null> {
+  const raiz = await lerArvore();
+  const alvo = url.trim().toLowerCase();
+  if (!alvo) return null;
+  function buscar(pasta: PastaLink): { id: string; titulo: string; pastaNome: string } | null {
+    for (const link of pasta.links) {
+      if (link.id !== exceto && link.url.trim().toLowerCase() === alvo) {
+        return { id: link.id, titulo: link.titulo, pastaNome: pasta.nome };
+      }
+    }
+    for (const sub of pasta.pastas) {
+      const achado = buscar(sub);
+      if (achado) return achado;
+    }
+    return null;
+  }
+  return buscar(raiz);
 }
 
 export async function atualizarLink(id: string, campos: CamposLink, favicon?: FaviconBuscado): Promise<PastaLink> {
@@ -423,6 +488,8 @@ function mesclarImportados(pastaDestino: PastaLink, nos: NoImportado[]): void {
         favicon: null,
         nota: "",
         favorito: false,
+        lido: true,
+        aberturas: 0,
         criadoEm: agora,
         atualizadoEm: agora,
       });

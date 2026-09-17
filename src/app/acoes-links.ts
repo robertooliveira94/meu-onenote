@@ -92,6 +92,49 @@ export async function acaoExcluirLink(id: string): Promise<RespostaLinks> {
   return comTratamento(() => linksApp.excluirLink(id));
 }
 
+/** Abrir o link conta como lido — chamado ao clicar num link pra visitar o site. */
+export async function acaoMarcarComoAberto(id: string): Promise<RespostaLinks> {
+  return comTratamento(() => linksApp.marcarComoAberto(id));
+}
+
+export async function acaoMarcarComoLido(id: string, lido: boolean): Promise<RespostaLinks> {
+  return comTratamento(() => linksApp.marcarComoLido(id, lido));
+}
+
+export async function acaoReordenarLinks(idPasta: string, ordemIds: string[]): Promise<RespostaLinks> {
+  return comTratamento(() => linksApp.reordenarLinks(idPasta, ordemIds));
+}
+
+/** "Já está em X" ao criar ou editar um link — `exceto` evita o link acusar a si mesmo ao editar sem trocar a URL. */
+export async function acaoAcharDuplicado(url: string, exceto?: string) {
+  return linksApp.acharDuplicado(url, exceto);
+}
+
+/** Move, favorita, marca como lido/não lido ou exclui vários links de uma vez — mesmo padrão de seleção em lote do Kanban. */
+export async function acaoMoverVarios(ids: string[], idNovaPasta: string): Promise<RespostaLinks> {
+  await Promise.all(ids.map((id) => linksApp.moverLink(id, idNovaPasta)));
+  revalidatePath("/links", "layout");
+  return { ok: true, arvore: await linksApp.obterArvore() };
+}
+
+export async function acaoFavoritarVarios(ids: string[], favorito: boolean): Promise<RespostaLinks> {
+  await Promise.all(ids.map((id) => linksApp.favoritarLink(id, favorito)));
+  revalidatePath("/links", "layout");
+  return { ok: true, arvore: await linksApp.obterArvore() };
+}
+
+export async function acaoMarcarVariosComoLido(ids: string[], lido: boolean): Promise<RespostaLinks> {
+  await Promise.all(ids.map((id) => linksApp.marcarComoLido(id, lido)));
+  revalidatePath("/links", "layout");
+  return { ok: true, arvore: await linksApp.obterArvore() };
+}
+
+export async function acaoExcluirVarios(ids: string[]): Promise<RespostaLinks> {
+  await Promise.all(ids.map((id) => linksApp.excluirLink(id)));
+  revalidatePath("/links", "layout");
+  return { ok: true, arvore: await linksApp.obterArvore() };
+}
+
 export async function acaoLinksFavoritos() {
   return linksApp.linksFavoritos();
 }
