@@ -5,7 +5,15 @@ import argon2 from "argon2";
 import * as kdbxweb from "kdbxweb";
 
 import { RAIZ } from "./caminhos";
-import type { AnexoSenha, CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas } from "./tipos";
+import type {
+  AnexoSenha,
+  CampoExtraSenha,
+  CamposEntrada,
+  EntradaSenha,
+  GrupoSenhas,
+  ItemLixeiraSenha,
+  VersaoSenha,
+} from "./tipos";
 
 /**
  * O cofre de senhas: um arquivo `.kdbx` de verdade (o mesmo formato do
@@ -290,7 +298,10 @@ function textoDoCampo(valor: string | kdbxweb.ProtectedValue | undefined): strin
 const TAG_FAVORITA = "Favorito";
 
 /** Os campos que têm lugar próprio na tela; qualquer outro é "campo extra". */
-const CAMPOS_PADRAO = new Set(["Title", "UserName", "Password", "URL", "Notes"]);
+const CAMPOS_PADRAO = new Set(["Title", "UserName", "Password", "URL", "Notes", "otp"]);
+
+/** Um favicon já buscado (bytes + tipo MIME) — o mesmo formato que `buscarMetadadosUrl` (em `links-app.ts`) devolve. */
+export type FaviconEntrada = { base64: string; tipo: string } | null | undefined;
 
 /** Tamanho máximo de um anexo — o cofre inteiro é lido para a memória a cada abertura. */
 export const TAMANHO_MAXIMO_ANEXO = 5 * 1024 * 1024;
@@ -332,8 +343,10 @@ function serializarEntrada(entrada: kdbxweb.KdbxEntry): EntradaSenha {
     url: textoDoCampo(entrada.fields.get("URL")),
     notas: textoDoCampo(entrada.fields.get("Notes")),
     expiraEm: entrada.times.expires ? dataCurta(entrada.times.expiryTime) : null,
+    otp: textoDoCampo(entrada.fields.get("otp")) || null,
     camposExtras: camposExtrasDe(entrada),
     anexos: anexosDe(entrada),
+    temFavicon: !!entrada.customIcon,
     criadoEm: (entrada.times.creationTime ?? entrada.times.lastModTime ?? new Date()).toISOString(),
     atualizadoEm: (entrada.times.lastModTime ?? new Date()).toISOString(),
     // O kdbxweb preenche lastAccessTime na criação; só conta como "uso" o
@@ -411,6 +424,8 @@ function aplicarCampos(entrada: kdbxweb.KdbxEntry, campos: CamposEntrada): void 
   entrada.fields.set("Password", kdbxweb.ProtectedValue.fromString(campos.senha));
   entrada.fields.set("URL", campos.url);
   entrada.fields.set("Notes", campos.notas);
+  if (campos.otp) entrada.fields.set("otp", campos.otp);
+  else entrada.fields.delete("otp");
   // Campos extras: o que não veio, some; o que veio, entra (protegido ou não).
   for (const nome of [...entrada.fields.keys()]) {
     if (!CAMPOS_PADRAO.has(nome)) entrada.fields.delete(nome);
@@ -459,20 +474,85 @@ export function obterAnexo(id: string, nome: string): Uint8Array {
   return bytesDoBinario(valor);
 }
 
-export async function criarEntrada(idGrupo: string, campos: CamposEntrada): Promise<GrupoSenhas> {
+/** Aplica (ou tira) o ícone da entrada; `undefined` = não mexeu no favicon. */
+function aplicarFavicon(db: kdbxweb.Kdbx, entrada: kdbxweb.KdbxEntry, favicon: FaviconEntrada): void {
+  if (favicon === undefined) return;
+  if (entrada.customIcon) db.meta.customIcons.delete(entrada.customIcon.id);
+  if (favicon === null) {
+    entrada.customIcon = undefined;
+    return;
+  }
+  const uuid = kdbxweb.KdbxUuid.random();
+  const bytes = Buffer.from(favicon.base64, "base64");
+  db.meta.customIcons.set(uuid.id, {
+    data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    name: favicon.tipo,
+    lastModified: new Date(),
+  });
+  entrada.customIcon = uuid;
+}
+
+export async function criarEntrada(idGrupo: string, campos: CamposEntrada, favicon?: FaviconEntrada): Promise<GrupoSenhas> {
   const sessao = sessaoEmUso();
   const entrada = sessao.db.createEntry(encontrarGrupo(sessao.db, idGrupo));
   aplicarCampos(entrada, campos);
+  aplicarFavicon(sessao.db, entrada, favicon);
   marcarSujo(sessao);
   return obterArvore();
 }
 
 /** Guarda a versão anterior no histórico do próprio `.kdbx` antes de sobrescrever. */
-export async function atualizarEntrada(id: string, campos: CamposEntrada): Promise<GrupoSenhas> {
+export async function atualizarEntrada(id: string, campos: CamposEntrada, favicon?: FaviconEntrada): Promise<GrupoSenhas> {
   const sessao = sessaoEmUso();
   const entrada = encontrarEntrada(sessao.db, id);
   entrada.pushHistory();
   aplicarCampos(entrada, campos);
+  aplicarFavicon(sessao.db, entrada, favicon);
+  entrada.times.lastModTime = new Date();
+  sessao.db.cleanup({ historyRules: true, customIcons: true });
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/** Os bytes do ícone da entrada (para a rota que serve `<img src>`), ou `null` se não tem um. */
+export function obterFavicon(id: string): { bytes: Uint8Array; tipo: string } | null {
+  const db = usarSessao();
+  const entrada = encontrarEntrada(db, id);
+  if (!entrada.customIcon) return null;
+  const icone = db.meta.customIcons.get(entrada.customIcon.id);
+  if (!icone) return null;
+  return { bytes: new Uint8Array(icone.data), tipo: icone.name || "image/png" };
+}
+
+/** As versões anteriores da entrada, mais recente primeiro. */
+export function obterHistorico(id: string): VersaoSenha[] {
+  const db = usarSessao();
+  const entrada = encontrarEntrada(db, id);
+  return entrada.history
+    .map((versao, indice) => ({
+      indice,
+      quando: (versao.times.lastModTime ?? new Date(0)).toISOString(),
+      titulo: textoDoCampo(versao.fields.get("Title")),
+      usuario: textoDoCampo(versao.fields.get("UserName")),
+      senha: textoDoCampo(versao.fields.get("Password")),
+      url: textoDoCampo(versao.fields.get("URL")),
+      notas: textoDoCampo(versao.fields.get("Notes")),
+    }))
+    .reverse();
+}
+
+/**
+ * Volta a entrada para como ela estava numa versão do histórico — a versão
+ * atual (antes da troca) vira uma entrada de histórico também, então dá
+ * para desfazer a restauração restaurando de novo.
+ */
+export async function restaurarVersao(id: string, indice: number): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
+  const versao = entrada.history[indice];
+  if (!versao) throw new Error("Versão não encontrada.");
+  entrada.pushHistory();
+  entrada.copyFrom(versao);
   entrada.times.lastModTime = new Date();
   sessao.db.cleanup({ historyRules: true });
   marcarSujo(sessao);
@@ -513,6 +593,96 @@ export async function registrarAcesso(id: string): Promise<GrupoSenhas> {
 export async function excluirEntrada(id: string): Promise<GrupoSenhas> {
   const sessao = sessaoEmUso();
   sessao.db.remove(encontrarEntrada(sessao.db, id));
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/** Garante que a lixeira interna do `.kdbx` existe e devolve o grupo dela. */
+function grupoLixeira(db: kdbxweb.Kdbx): kdbxweb.KdbxGroup {
+  db.createRecycleBin();
+  const lixeira = db.getGroup(db.meta.recycleBinUuid!);
+  if (!lixeira) throw new Error("Não deu para preparar a lixeira do cofre.");
+  return lixeira;
+}
+
+function contarItensDentro(grupo: kdbxweb.KdbxGroup): number {
+  let total = grupo.entries.length;
+  for (const sub of grupo.groups) total += 1 + contarItensDentro(sub);
+  return total;
+}
+
+/** O que está na lixeira agora — só os itens excluídos diretamente (o que veio junto com um grupo fica dentro dele). */
+export function obterLixeira(): ItemLixeiraSenha[] {
+  const db = usarSessao();
+  const lixeira = grupoLixeira(db);
+  const itens: ItemLixeiraSenha[] = [
+    ...lixeira.groups.map((grupo) => ({
+      id: grupo.uuid.id,
+      tipo: "grupo" as const,
+      titulo: grupo.name || "Sem nome",
+      excluidoEm: grupo.times.locationChanged?.toISOString() ?? null,
+      itensDentro: contarItensDentro(grupo),
+    })),
+    ...lixeira.entries.map((entrada) => ({
+      id: entrada.uuid.id,
+      tipo: "entrada" as const,
+      titulo: textoDoCampo(entrada.fields.get("Title")) || "Sem título",
+      excluidoEm: entrada.times.locationChanged?.toISOString() ?? null,
+      itensDentro: 0,
+    })),
+  ];
+  return itens.sort((a, b) => (b.excluidoEm ?? "").localeCompare(a.excluidoEm ?? ""));
+}
+
+function encontrarNaLixeira(db: kdbxweb.Kdbx, id: string): kdbxweb.KdbxEntry | kdbxweb.KdbxGroup | null {
+  const lixeira = grupoLixeira(db);
+  return lixeira.entries.find((entrada) => entrada.uuid.id === id) ?? lixeira.groups.find((grupo) => grupo.uuid.id === id) ?? null;
+}
+
+/** Volta um item da lixeira para onde ele estava antes de ser excluído (ou para a raiz, se aquele grupo também sumiu). */
+export async function restaurarDaLixeira(id: string): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const achado = encontrarNaLixeira(sessao.db, id);
+  if (!achado) throw new Error("Item não encontrado na lixeira.");
+  const alvo = (achado.previousParentGroup && sessao.db.getGroup(achado.previousParentGroup)) || sessao.db.getDefaultGroup();
+  sessao.db.move(achado, alvo);
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/** Tombstone recursivo — para o item (e tudo dentro dele, se for um grupo) não voltar num merge futuro. */
+function tombstonarRecursivo(db: kdbxweb.Kdbx, item: kdbxweb.KdbxEntry | kdbxweb.KdbxGroup, agora: Date): void {
+  if (item instanceof kdbxweb.KdbxGroup) {
+    for (const sub of item.groups) tombstonarRecursivo(db, sub, agora);
+    for (const entrada of item.entries) tombstonarRecursivo(db, entrada, agora);
+  }
+  db.addDeletedObject(item.uuid, agora);
+}
+
+/** Apaga um item da lixeira para sempre — sem outra lixeira depois desta. */
+export async function excluirDaLixeiraDeVez(id: string): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const lixeira = grupoLixeira(sessao.db);
+  const achado = encontrarNaLixeira(sessao.db, id);
+  if (!achado) throw new Error("Item não encontrado na lixeira.");
+  tombstonarRecursivo(sessao.db, achado, new Date());
+  if (achado instanceof kdbxweb.KdbxGroup) lixeira.groups = lixeira.groups.filter((grupo) => grupo !== achado);
+  else lixeira.entries = lixeira.entries.filter((entrada) => entrada !== achado);
+  sessao.db.cleanup({ binaries: true, customIcons: true, historyRules: true });
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+/** Esvazia a lixeira inteira de uma vez — para sempre, sem confirmação extra além da já pedida na tela. */
+export async function esvaziarLixeira(): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const lixeira = grupoLixeira(sessao.db);
+  const agora = new Date();
+  for (const grupo of lixeira.groups) tombstonarRecursivo(sessao.db, grupo, agora);
+  for (const entrada of lixeira.entries) tombstonarRecursivo(sessao.db, entrada, agora);
+  lixeira.groups = [];
+  lixeira.entries = [];
+  sessao.db.cleanup({ binaries: true, customIcons: true, historyRules: true });
   marcarSujo(sessao);
   return obterArvore();
 }

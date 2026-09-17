@@ -1,7 +1,8 @@
 "use server";
 
 import * as senhas from "@/lib/senhas";
-import type { CamposEntrada, GrupoSenhas } from "@/lib/tipos";
+import type { CamposEntrada, GrupoSenhas, ItemLixeiraSenha, VersaoSenha } from "@/lib/tipos";
+import type { FaviconEntrada } from "@/lib/senhas";
 
 /**
  * Ações do cofre de senhas. Ao contrário do resto do app, praticamente nada
@@ -101,14 +102,54 @@ export async function acaoExcluirGrupo(id: string): Promise<RespostaSenhas> {
   return comTratamento(() => senhas.excluirGrupo(id));
 }
 
-export async function acaoCriarEntrada(idGrupo: string, campos: CamposEntrada): Promise<RespostaSenhas> {
+export async function acaoCriarEntrada(
+  idGrupo: string,
+  campos: CamposEntrada,
+  favicon?: FaviconEntrada,
+): Promise<RespostaSenhas> {
   if (!campos.titulo.trim()) return { ok: false, erro: "Dê um nome a esta senha." };
-  return comTratamento(() => senhas.criarEntrada(idGrupo, campos));
+  return comTratamento(() => senhas.criarEntrada(idGrupo, campos, favicon));
 }
 
-export async function acaoAtualizarEntrada(id: string, campos: CamposEntrada): Promise<RespostaSenhas> {
+export async function acaoAtualizarEntrada(
+  id: string,
+  campos: CamposEntrada,
+  favicon?: FaviconEntrada,
+): Promise<RespostaSenhas> {
   if (!campos.titulo.trim()) return { ok: false, erro: "Dê um nome a esta senha." };
-  return comTratamento(() => senhas.atualizarEntrada(id, campos));
+  return comTratamento(() => senhas.atualizarEntrada(id, campos, favicon));
+}
+
+export async function acaoObterHistorico(id: string): Promise<{ ok: true; versoes: VersaoSenha[] } | { ok: false; erro: string }> {
+  try {
+    return { ok: true, versoes: senhas.obterHistorico(id) };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para ler o histórico." };
+  }
+}
+
+export async function acaoRestaurarVersao(id: string, indice: number): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.restaurarVersao(id, indice));
+}
+
+export async function acaoObterLixeira(): Promise<{ ok: true; itens: ItemLixeiraSenha[] } | { ok: false; erro: string }> {
+  try {
+    return { ok: true, itens: senhas.obterLixeira() };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para ler a lixeira." };
+  }
+}
+
+export async function acaoRestaurarDaLixeira(id: string): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.restaurarDaLixeira(id));
+}
+
+export async function acaoExcluirDaLixeiraDeVez(id: string): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.excluirDaLixeiraDeVez(id));
+}
+
+export async function acaoEsvaziarLixeira(): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.esvaziarLixeira());
 }
 
 export async function acaoMoverEntrada(id: string, idNovoGrupo: string): Promise<RespostaSenhas> {

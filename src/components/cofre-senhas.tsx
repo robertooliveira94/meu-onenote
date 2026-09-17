@@ -12,7 +12,9 @@ import {
   EyeOff,
   FileDown,
   Folder,
+  FolderOpen,
   FolderPlus,
+  History,
   KeyRound,
   KeySquare,
   Layers,
@@ -22,6 +24,8 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  RotateCcw,
+  ScanLine,
   Search,
   ShieldCheck,
   Wand2,
@@ -32,6 +36,7 @@ import {
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { RespostaSenhas } from "@/app/acoes-senhas";
 import {
   acaoAdicionarAnexo,
   acaoAtualizarEntrada,
@@ -39,19 +44,26 @@ import {
   acaoBaixarCofre,
   acaoCriarEntrada,
   acaoCriarGrupo,
+  acaoEsvaziarLixeira,
   acaoExcluirCofre,
+  acaoExcluirDaLixeiraDeVez,
   acaoExcluirEntrada,
   acaoExcluirGrupo,
   acaoExportarCsv,
   acaoFavoritarEntrada,
   acaoMoverEntrada,
   acaoMoverGrupo,
+  acaoObterHistorico,
+  acaoObterLixeira,
   acaoRegistrarAcesso,
   acaoRemoverAnexo,
   acaoRenomearGrupo,
+  acaoRestaurarDaLixeira,
+  acaoRestaurarVersao,
   acaoStatusCofre,
   acaoTrancar,
 } from "@/app/acoes-senhas";
+import { acaoBuscarMetadadosUrl } from "@/app/acoes-links";
 import {
   iniciarArrastoDeEntradaSenha,
   iniciarArrastoDeGrupoSenha,
@@ -63,7 +75,9 @@ import {
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO } from "@/lib/cores";
 import { formatarDataCurta, formatarDataHora, formatarDia } from "@/lib/rotas";
-import type { CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas } from "@/lib/tipos";
+import type { CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas, ItemLixeiraSenha, VersaoSenha } from "@/lib/tipos";
+import type { FaviconEntrada } from "@/lib/senhas";
+import { gerarCodigoTotp, interpretarOtp, segundosRestantesTotp } from "@/lib/totp";
 
 import { BotaoComoFunciona } from "./explicador-criptografia";
 import { BarraForca, GeradorSenha, SeloForca } from "./gerador-senha";
@@ -227,6 +241,7 @@ export function CofreAberto({
   const [trocandoSenha, definirTrocandoSenha] = useState(false);
   const [excluindoCofre, definirExcluindoCofre] = useState(false);
   const [excluindoEntrada, definirExcluindoEntrada] = useState(false);
+  const [contagemLixeira, definirContagemLixeira] = useState(0);
   const campoBusca = useRef<HTMLInputElement>(null);
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
@@ -239,6 +254,18 @@ export function CofreAberto({
     }, INTERVALO_VERIFICAR_TRANCA);
     return () => clearInterval(intervalo);
   }, [aoTrancar]);
+
+  // A lixeira não faz parte da árvore normal — recontada à parte sempre que
+  // algo muda (excluir/restaurar/esvaziar), só pro número no rodapé da coluna.
+  useEffect(() => {
+    let cancelado = false;
+    acaoObterLixeira().then((resposta) => {
+      if (!cancelado && resposta.ok) definirContagemLixeira(resposta.itens.length);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [arvore]);
 
   const todas = useMemo(() => achatar(arvore), [arvore]);
   const grupoAtivo = ehVirtual(selecao) ? null : (encontrarGrupo(arvore, selecao) ?? null);
@@ -467,6 +494,7 @@ export function CofreAberto({
             favoritas: todas.filter((entrada) => entrada.favorita).length,
             recentes: Math.min(LIMITE_RECENTES, todas.filter((entrada) => entrada.acessadoEm).length),
           }}
+          contagemLixeira={contagemLixeira}
           onSelecionar={selecionarNo}
           onCriarSubgrupo={abrirNovoSubgrupo}
           onExcluir={abrirExcluirGrupo}
@@ -475,59 +503,66 @@ export function CofreAberto({
           onRenomear={renomearGrupo}
         />
 
-        <ColunaEntradas
-          titulo={tituloDaLista}
-          lista={lista}
-          busca={busca}
-          buscando={buscando}
-          campoBusca={campoBusca}
-          mostrarGrupo={mostrarGrupoNasLinhas}
-          entradaAtivaId={entradaAtivaId}
-          onBuscar={definirBusca}
-          onSelecionar={selecionarEntrada}
-          onNova={novaEntrada}
-          onRegistrarAcesso={registrarAcesso}
-          onMoverSelecao={moverSelecao}
-        />
+        {selecao === "lixeira" ? (
+          <PainelLixeira aoAtualizarArvore={definirArvore} />
+        ) : (
+          <>
+            <ColunaEntradas
+              titulo={tituloDaLista}
+              lista={lista}
+              busca={busca}
+              buscando={buscando}
+              campoBusca={campoBusca}
+              mostrarGrupo={mostrarGrupoNasLinhas}
+              entradaAtivaId={entradaAtivaId}
+              onBuscar={definirBusca}
+              onSelecionar={selecionarEntrada}
+              onNova={novaEntrada}
+              onRegistrarAcesso={registrarAcesso}
+              onMoverSelecao={moverSelecao}
+            />
 
-        <PainelEntrada
-          entrada={entradaAtiva}
-          todas={todas}
-          editando={editando}
-          onEditar={() => definirEditando(true)}
-          onCancelar={() => definirEditando(false)}
-          onSalvar={async (campos) => {
-            if (!entradaAtiva) return;
-            if (aplicarResposta(await acaoAtualizarEntrada(entradaAtiva.id, campos))) definirEditando(false);
-          }}
-          onExcluir={() => definirExcluindoEntrada(true)}
-          onFavoritar={favoritar}
-          onRegistrarAcesso={registrarAcesso}
-          onIrParaGrupo={(id) => {
-            selecionarNo(id);
-          }}
-          onAnexar={async (arquivo) => {
-            if (!entradaAtiva) return;
-            if (arquivo.size > 5 * 1024 * 1024) {
-              alert("Anexo grande demais (máximo 5 MB).");
-              return;
-            }
-            aplicarResposta(await acaoAdicionarAnexo(entradaAtiva.id, arquivo.name, await lerArquivoBase64(arquivo)));
-          }}
-          onRemoverAnexo={async (nome) => {
-            if (!entradaAtiva || !confirm(`Remover o anexo “${nome}”?`)) return;
-            aplicarResposta(await acaoRemoverAnexo(entradaAtiva.id, nome));
-          }}
-          onBaixarAnexo={async (nome) => {
-            if (!entradaAtiva) return;
-            const resposta = await acaoBaixarAnexo(entradaAtiva.id, nome);
-            if (!resposta.ok || !resposta.mensagem) {
-              alert(resposta.ok ? "Anexo vazio." : resposta.erro);
-              return;
-            }
-            baixarArquivo(base64ParaBytes(resposta.mensagem), nome, "application/octet-stream");
-          }}
-        />
+            <PainelEntrada
+              entrada={entradaAtiva}
+              todas={todas}
+              editando={editando}
+              onEditar={() => definirEditando(true)}
+              onCancelar={() => definirEditando(false)}
+              onSalvar={async (campos, favicon) => {
+                if (!entradaAtiva) return;
+                if (aplicarResposta(await acaoAtualizarEntrada(entradaAtiva.id, campos, favicon))) definirEditando(false);
+              }}
+              onArvoreAtualizada={aplicarResposta}
+              onExcluir={() => definirExcluindoEntrada(true)}
+              onFavoritar={favoritar}
+              onRegistrarAcesso={registrarAcesso}
+              onIrParaGrupo={(id) => {
+                selecionarNo(id);
+              }}
+              onAnexar={async (arquivo) => {
+                if (!entradaAtiva) return;
+                if (arquivo.size > 5 * 1024 * 1024) {
+                  alert("Anexo grande demais (máximo 5 MB).");
+                  return;
+                }
+                aplicarResposta(await acaoAdicionarAnexo(entradaAtiva.id, arquivo.name, await lerArquivoBase64(arquivo)));
+              }}
+              onRemoverAnexo={async (nome) => {
+                if (!entradaAtiva || !confirm(`Remover o anexo “${nome}”?`)) return;
+                aplicarResposta(await acaoRemoverAnexo(entradaAtiva.id, nome));
+              }}
+              onBaixarAnexo={async (nome) => {
+                if (!entradaAtiva) return;
+                const resposta = await acaoBaixarAnexo(entradaAtiva.id, nome);
+                if (!resposta.ok || !resposta.mensagem) {
+                  alert(resposta.ok ? "Anexo vazio." : resposta.erro);
+                  return;
+                }
+                baixarArquivo(base64ParaBytes(resposta.mensagem), nome, "application/octet-stream");
+              }}
+            />
+          </>
+        )}
       </div>
 
       {criando ? (
@@ -535,8 +570,8 @@ export function CofreAberto({
           grupo={grupoParaNova}
           todas={todas}
           aoFechar={() => definirCriando(false)}
-          aoSalvar={async (campos) => {
-            const resposta = await acaoCriarEntrada(grupoParaNova.id, campos);
+          aoSalvar={async (campos, favicon) => {
+            const resposta = await acaoCriarEntrada(grupoParaNova.id, campos, favicon);
             if (!resposta.ok || !aplicarResposta(resposta)) return;
             definirCriando(false);
             // Abre a recém-criada no painel: é a mais nova do grupo.
@@ -611,6 +646,7 @@ function ColunaGrupos({
   raiz,
   selecao,
   totais,
+  contagemLixeira,
   onSelecionar,
   onCriarSubgrupo,
   onExcluir,
@@ -621,6 +657,7 @@ function ColunaGrupos({
   raiz: GrupoSenhas;
   selecao: Selecao;
   totais: Record<"todas" | "favoritas" | "recentes", number>;
+  contagemLixeira: number;
   onSelecionar: (id: Selecao) => void;
   onCriarSubgrupo: (grupo: GrupoSenhas) => void;
   onExcluir: (grupo: GrupoSenhas) => void;
@@ -675,6 +712,21 @@ function ColunaGrupos({
             />
           ))
         )}
+      </div>
+      <div className="border-t border-linha px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => onSelecionar("lixeira")}
+          aria-pressed={selecao === "lixeira"}
+          className={clsx(
+            "linha-nav flex w-full items-center gap-2 rounded-md px-2 text-left text-[12.5px] transition-colors",
+            selecao === "lixeira" ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
+          )}
+        >
+          <Trash2 size={13} className="shrink-0 text-tinta-3" />
+          <span className="flex-1 truncate">Lixeira</span>
+          <span className="text-[10.5px] text-tinta-3 tabular-nums">{contagemLixeira || ""}</span>
+        </button>
       </div>
     </div>
   );
@@ -943,6 +995,144 @@ function ColunaEntradas({
   );
 }
 
+/**
+ * A lixeira do cofre: ocupa as colunas do meio e de detalhe juntas — não
+ * tem o que editar aqui, só restaurar ou apagar de vez. Carrega sozinha
+ * (a lixeira não é parte da árvore normal, então não vem em `arvore`).
+ */
+function PainelLixeira({ aoAtualizarArvore }: { aoAtualizarArvore: (arvore: GrupoSenhas) => void }) {
+  const [itens, definirItens] = useState<ItemLixeiraSenha[] | null>(null);
+  const [processando, definirProcessando] = useState<string | null>(null);
+  const [esvaziando, definirEsvaziando] = useState(false);
+  const [confirmandoEsvaziar, definirConfirmandoEsvaziar] = useState(false);
+
+  const carregar = useCallback(async () => {
+    const resposta = await acaoObterLixeira();
+    definirItens(resposta.ok ? resposta.itens : []);
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  async function restaurar(id: string) {
+    definirProcessando(id);
+    const resposta = await acaoRestaurarDaLixeira(id);
+    definirProcessando(null);
+    if (!resposta.ok) {
+      alert(resposta.erro);
+      return;
+    }
+    aoAtualizarArvore(resposta.arvore);
+    await carregar();
+  }
+
+  async function apagarDeVez(id: string, titulo: string) {
+    if (!confirm(`Apagar "${titulo}" para sempre? Não tem como desfazer.`)) return;
+    definirProcessando(id);
+    const resposta = await acaoExcluirDaLixeiraDeVez(id);
+    definirProcessando(null);
+    if (!resposta.ok) {
+      alert(resposta.erro);
+      return;
+    }
+    aoAtualizarArvore(resposta.arvore);
+    await carregar();
+  }
+
+  async function esvaziar() {
+    definirEsvaziando(true);
+    const resposta = await acaoEsvaziarLixeira();
+    definirEsvaziando(false);
+    definirConfirmandoEsvaziar(false);
+    if (!resposta.ok) {
+      alert(resposta.erro);
+      return;
+    }
+    aoAtualizarArvore(resposta.arvore);
+    await carregar();
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-papel">
+      <div className="mx-auto w-full max-w-2xl px-6 pt-5 pb-8">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[15px] font-bold tracking-[-0.02em]">Lixeira</h2>
+            <p className="mt-0.5 text-[12px] text-tinta-3">
+              Fica aqui até você esvaziar — depois de esvaziar não tem como desfazer.
+            </p>
+          </div>
+          {itens && itens.length > 0 ? (
+            <Botao variante="perigo" onClick={() => definirConfirmandoEsvaziar(true)}>
+              <Trash2 size={13} />
+              Esvaziar lixeira
+            </Botao>
+          ) : null}
+        </div>
+
+        <div className="mt-4">
+          {itens === null ? (
+            <p className="py-10 text-center text-[12.5px] text-tinta-3">Carregando…</p>
+          ) : itens.length === 0 ? (
+            <Vazio icone={<Trash2 size={20} />} titulo="A lixeira está vazia" descricao="Grupos e senhas excluídos aparecem aqui antes de sumir de vez." />
+          ) : (
+            <ul className="painel divide-y divide-linha">
+              {itens.map((item) => (
+                <li key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
+                    {item.tipo === "grupo" ? <FolderOpen size={14} /> : <KeyRound size={14} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-tinta">{item.titulo}</p>
+                    <p className="text-[11px] text-tinta-3">
+                      {item.tipo === "grupo" ? `Grupo${item.itensDentro ? ` · ${item.itensDentro} ${item.itensDentro === 1 ? "item" : "itens"}` : ""}` : "Senha"}
+                      {item.excluidoEm ? ` · excluído ${tempoRelativo(item.excluidoEm)}` : ""}
+                    </p>
+                  </div>
+                  <Botao
+                    onClick={() => restaurar(item.id)}
+                    disabled={processando !== null}
+                    className="h-7 px-2 text-[11.5px]"
+                  >
+                    {processando === item.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                    Restaurar
+                  </Botao>
+                  <BotaoIcone
+                    rotulo="Apagar para sempre"
+                    onClick={() => apagarDeVez(item.id, item.titulo)}
+                    disabled={processando !== null}
+                    className="size-7"
+                  >
+                    <Trash2 size={13} />
+                  </BotaoIcone>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {confirmandoEsvaziar ? (
+        <Dialogo
+          titulo="Esvaziar a lixeira?"
+          descricao={`Os ${itens?.length ?? 0} itens dentro dela somem para sempre — sem outra lixeira depois desta.`}
+          aberto
+          aoFechar={() => definirConfirmandoEsvaziar(false)}
+        >
+          <div className="flex justify-end gap-2">
+            <Botao onClick={() => definirConfirmandoEsvaziar(false)}>Cancelar</Botao>
+            <Botao variante="perigo-solido" disabled={esvaziando} onClick={esvaziar}>
+              {esvaziando ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              Esvaziar
+            </Botao>
+          </div>
+        </Dialogo>
+      ) : null}
+    </div>
+  );
+}
+
 /** A inicial colorida da entrada — no lugar do favicon enquanto não há um. */
 function Inicial({ titulo, tamanho = 28 }: { titulo: string; tamanho?: number }) {
   const cor = corDaInicial(titulo);
@@ -960,6 +1150,32 @@ function Inicial({ titulo, tamanho = 28 }: { titulo: string; tamanho?: number })
     >
       {(titulo.trim()[0] ?? "?").toUpperCase()}
     </span>
+  );
+}
+
+/**
+ * O ícone de uma entrada: o favicon do site quando ele existe (buscado ao
+ * salvar a URL, guardado dentro do cofre — ver `buscarFavicon` no
+ * formulário), senão a inicial colorida de sempre. A URL leva
+ * `atualizadoEm` como versão, pra não servir do cache um favicon antigo
+ * depois de trocar a URL da entrada.
+ */
+function Avatar({ entrada, tamanho = 28 }: { entrada: EntradaSenha; tamanho?: number }) {
+  const [falhou, definirFalhou] = useState(false);
+  if (!entrada.temFavicon || falhou) return <Inicial titulo={entrada.titulo} tamanho={tamanho} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, cifrado na sessão; não vale a pena o otimizador de imagens do Next pra isso.
+    <img
+      key={entrada.id}
+      src={`/senhas/favicon/${entrada.id}?v=${entrada.atualizadoEm}`}
+      alt=""
+      width={tamanho}
+      height={tamanho}
+      className="shrink-0 rounded-md object-contain"
+      style={{ width: tamanho, height: tamanho }}
+      // O cofre pode trancar entre a lista carregar e a imagem pedir — cai pra inicial.
+      onError={() => definirFalhou(true)}
+    />
   );
 }
 
@@ -1011,7 +1227,7 @@ const LinhaEntrada = memo(function LinhaEntrada({
         ativa ? "bg-realce-medio" : "hover:bg-realce-fraco",
       )}
     >
-      <Inicial titulo={entrada.titulo} />
+      <Avatar entrada={entrada} />
       <div className="min-w-0 flex-1 leading-tight">
         <p className="flex items-center gap-1 truncate text-[12.5px] font-medium text-tinta">
           <span className="truncate">{entrada.titulo}</span>
@@ -1074,13 +1290,14 @@ function PainelEntrada({
   onAnexar,
   onRemoverAnexo,
   onBaixarAnexo,
+  onArvoreAtualizada,
 }: {
   entrada: EntradaSenha | null;
   todas: EntradaSenha[];
   editando: boolean;
   onEditar: () => void;
   onCancelar: () => void;
-  onSalvar: (campos: CamposEntrada) => Promise<void>;
+  onSalvar: (campos: CamposEntrada, favicon?: FaviconEntrada) => Promise<void>;
   onExcluir: () => void;
   onFavoritar: (id: string, favorita: boolean) => void;
   onRegistrarAcesso: (id: string) => void;
@@ -1088,7 +1305,11 @@ function PainelEntrada({
   onAnexar: (arquivo: File) => Promise<void>;
   onRemoverAnexo: (nome: string) => Promise<void>;
   onBaixarAnexo: (nome: string) => Promise<void>;
+  /** Aplica uma `RespostaSenhas` (usado pelo histórico, que troca a árvore ao restaurar uma versão). */
+  onArvoreAtualizada: (resposta: RespostaSenhas) => boolean;
 }) {
+  const [vendoHistorico, definirVendoHistorico] = useState(false);
+
   if (!entrada) {
     return (
       <div className="flex min-w-0 flex-1 items-center justify-center bg-papel">
@@ -1128,7 +1349,7 @@ function PainelEntrada({
     <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-papel">
       <div className="mx-auto w-full max-w-xl px-6 pt-5 pb-8">
         <div className="flex items-start gap-3">
-          <Inicial titulo={entrada.titulo} tamanho={40} />
+          <Avatar entrada={entrada} tamanho={40} />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[17px] leading-tight font-bold tracking-[-0.02em]">{entrada.titulo}</h2>
             <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-tinta-3">
@@ -1179,6 +1400,16 @@ function PainelEntrada({
                     </ItemMenu>
                   ) : null}
                   <ItemMenu
+                    icone={<History size={14} />}
+                    onClick={() => {
+                      fechar();
+                      definirVendoHistorico(true);
+                    }}
+                  >
+                    Histórico
+                  </ItemMenu>
+                  <SeparadorMenu />
+                  <ItemMenu
                     icone={<Trash2 size={14} />}
                     perigo
                     onClick={() => {
@@ -1203,6 +1434,7 @@ function PainelEntrada({
             aoCopiar={() => onRegistrarAcesso(entrada.id)}
             extra={<SeloForca senha={entrada.senha} />}
           />
+          {entrada.otp ? <CampoTotp otp={entrada.otp} /> : null}
           <CampoDetalhe
             rotulo="Site"
             valor={entrada.url}
@@ -1245,7 +1477,91 @@ function PainelEntrada({
           {entrada.acessadoEm ? ` · Usada ${formatarDataCurta(entrada.acessadoEm)}` : ""}
         </p>
       </div>
+
+      {vendoHistorico ? (
+        <DialogoHistorico entrada={entrada} aoFechar={() => definirVendoHistorico(false)} onArvoreAtualizada={onArvoreAtualizada} />
+      ) : null}
     </div>
+  );
+}
+
+/** As versões antigas de uma entrada — busca ao abrir, cada uma com "Restaurar esta versão". */
+function DialogoHistorico({
+  entrada,
+  aoFechar,
+  onArvoreAtualizada,
+}: {
+  entrada: EntradaSenha;
+  aoFechar: () => void;
+  onArvoreAtualizada: (resposta: RespostaSenhas) => boolean;
+}) {
+  const [estado, definirEstado] = useState<"carregando" | { versoes: VersaoSenha[] } | { erro: string }>("carregando");
+  const [restaurando, definirRestaurando] = useState<number | null>(null);
+  const [restaurada, definirRestaurada] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    acaoObterHistorico(entrada.id).then((resposta) => {
+      if (cancelado) return;
+      definirEstado(resposta.ok ? { versoes: resposta.versoes } : { erro: resposta.erro });
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [entrada.id]);
+
+  async function restaurar(indice: number) {
+    definirRestaurando(indice);
+    const resposta = await acaoRestaurarVersao(entrada.id, indice);
+    definirRestaurando(null);
+    if (onArvoreAtualizada(resposta)) definirRestaurada(true);
+  }
+
+  return (
+    <Dialogo
+      titulo="Histórico"
+      descricao={`Versões anteriores de "${entrada.titulo}" — cada troca de senha ou edição vira uma aqui.`}
+      aberto
+      aoFechar={aoFechar}
+      largura="max-w-lg"
+    >
+      {restaurada ? (
+        <p className="rounded-lg border border-[color-mix(in_srgb,var(--realce)_35%,transparent)] bg-realce-fraco px-3 py-2 text-[12.5px] text-tinta">
+          Versão restaurada — a que estava valendo virou uma entrada de histórico também, então dá para voltar.
+        </p>
+      ) : null}
+      {estado === "carregando" ? (
+        <p className="py-6 text-center text-[12.5px] text-tinta-3">Carregando…</p>
+      ) : "erro" in estado ? (
+        <p className="py-6 text-center text-[12.5px] text-perigo">{estado.erro}</p>
+      ) : estado.versoes.length === 0 ? (
+        <p className="py-6 text-center text-[12.5px] text-tinta-3">
+          Nenhuma versão anterior ainda — ela aparece aqui na próxima vez que esta entrada for editada.
+        </p>
+      ) : (
+        <ul className="max-h-96 space-y-2 overflow-y-auto">
+          {estado.versoes.map((versao) => (
+            <li key={versao.indice} className="painel px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11.5px] text-tinta-3">{formatarDataHora(versao.quando)}</p>
+                <Botao onClick={() => restaurar(versao.indice)} disabled={restaurando !== null} className="h-7 px-2 text-[11.5px]">
+                  {restaurando === versao.indice ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                  Restaurar
+                </Botao>
+              </div>
+              <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[12px]">
+                <dt className="text-tinta-3">Título</dt>
+                <dd className="truncate text-tinta">{versao.titulo || "—"}</dd>
+                <dt className="text-tinta-3">Usuário</dt>
+                <dd className="truncate text-tinta">{versao.usuario || "—"}</dd>
+                <dt className="text-tinta-3">Site</dt>
+                <dd className="truncate text-tinta">{versao.url || "—"}</dd>
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Dialogo>
   );
 }
 
@@ -1404,6 +1720,81 @@ function SecaoAnexos({
 }
 
 /** A linha da senha (ou de um campo extra protegido): escondida por padrão, olho para revelar, copiar com limpeza. */
+/**
+ * O código de 6 dígitos do TOTP, com a barrinha de tempo até trocar e um
+ * botão de copiar. Recalcula sozinho a cada segundo — o segredo já chegou
+ * ao navegador dentro da entrada, então não precisa voltar ao servidor.
+ */
+function CampoTotp({ otp }: { otp: string }) {
+  const config = useMemo(() => interpretarOtp(otp), [otp]);
+  const [codigo, definirCodigo] = useState<string | null>(null);
+  const [restam, definirRestam] = useState(() => (config ? segundosRestantesTotp(config.periodo) : 0));
+  const [copiado, definirCopiado] = useState(false);
+
+  useEffect(() => {
+    if (!config) return;
+    let cancelado = false;
+    async function atualizar() {
+      if (!config) return;
+      definirRestam(segundosRestantesTotp(config.periodo));
+      const novoCodigo = await gerarCodigoTotp(config).catch(() => null);
+      if (!cancelado) definirCodigo(novoCodigo);
+    }
+    atualizar();
+    const intervalo = setInterval(atualizar, 1000);
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+    };
+  }, [config]);
+
+  async function copiar() {
+    if (!codigo) return;
+    await navigator.clipboard.writeText(codigo).catch(() => {});
+    definirCopiado(true);
+    setTimeout(() => definirCopiado(false), 1500);
+  }
+
+  if (!config) {
+    return (
+      <div className="px-4 py-2.5">
+        <p className="text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">Verificação em duas etapas</p>
+        <p className="mt-0.5 text-[12.5px] text-perigo">O código guardado não é reconhecido — edite a entrada para corrigir.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-3 px-4 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">Verificação em duas etapas</p>
+        <p className="mt-0.5 font-mono text-[17px] tracking-[0.15em] text-tinta tabular-nums">
+          {codigo ? `${codigo.slice(0, codigo.length / 2)} ${codigo.slice(codigo.length / 2)}` : "······"}
+        </p>
+      </div>
+      <div
+        className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-linha"
+        role="progressbar"
+        aria-label="Tempo até o código trocar"
+        aria-valuenow={restam}
+        aria-valuemax={config.periodo}
+      >
+        <div
+          className="h-full rounded-full bg-[var(--realce)] transition-[width] duration-1000 ease-linear"
+          style={{ width: `${(restam / config.periodo) * 100}%` }}
+        />
+      </div>
+      <BotaoIcone
+        rotulo={copiado ? "Copiado!" : "Copiar código"}
+        onClick={copiar}
+        className={clsx("size-7 shrink-0", copiado && "text-[var(--realce)]")}
+      >
+        {copiado ? <Check size={13} /> : <Copy size={13} />}
+      </BotaoIcone>
+    </div>
+  );
+}
+
 function CampoSenhaDetalhe({
   senha,
   rotulo = "Senha",
@@ -1488,7 +1879,7 @@ function FormularioEntrada({
   /** As demais entradas do cofre — para avisar "esta senha já está em X" enquanto se digita. */
   outras: EntradaSenha[];
   aoCancelar: () => void;
-  aoSalvar: (campos: CamposEntrada) => Promise<void>;
+  aoSalvar: (campos: CamposEntrada, favicon?: FaviconEntrada) => Promise<void>;
   rodapeEsquerdo?: React.ReactNode;
   rotuloSalvar?: string;
 }) {
@@ -1499,12 +1890,19 @@ function FormularioEntrada({
     url: inicial?.url ?? "",
     notas: inicial?.notas ?? "",
     expiraEm: inicial?.expiraEm ?? null,
+    otp: inicial?.otp ?? null,
     camposExtras: inicial?.camposExtras ?? [],
   });
   const [mostrarSenha, definirMostrarSenha] = useState(!inicial);
   const [gerando, definirGerando] = useState(false);
   const [comValidade, definirComValidade] = useState(!!inicial?.expiraEm);
+  const [comOtp, definirComOtp] = useState(!!inicial?.otp);
   const [salvando, definirSalvando] = useState(false);
+  const [buscandoFavicon, definirBuscandoFavicon] = useState(false);
+  // `undefined` = não mexeu no favicon (mantém o que já tinha, se houver);
+  // `null`/objeto = já tentou buscar (com ou sem sucesso) — ver DialogoLink em links.tsx, mesmo padrão.
+  const [favicon, definirFavicon] = useState<FaviconEntrada>(undefined);
+  const urlOriginal = useRef(inicial?.url ?? "");
   const repetidas = repetidaEm(campos.senha, outras, null);
 
   function alterarExtra(indice: number, mudanca: Partial<CampoExtraSenha>) {
@@ -1514,10 +1912,19 @@ function FormularioEntrada({
     }));
   }
 
+  async function buscarFavicon() {
+    const url = campos.url.trim();
+    if (!url || url === urlOriginal.current) return;
+    definirBuscandoFavicon(true);
+    const resultado = await acaoBuscarMetadadosUrl(url);
+    definirBuscandoFavicon(false);
+    definirFavicon(resultado.favicon);
+  }
+
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     definirSalvando(true);
-    await aoSalvar(campos);
+    await aoSalvar(campos, favicon);
     definirSalvando(false);
   }
 
@@ -1598,8 +2005,46 @@ function FormularioEntrada({
         <Campo
           value={campos.url}
           onChange={(evento) => definirCampos({ ...campos, url: evento.target.value })}
+          onBlur={buscarFavicon}
           placeholder="https://…"
         />
+        {buscandoFavicon ? <p className="mt-1 text-[11px] text-tinta-3">Buscando ícone do site…</p> : null}
+      </div>
+      <div>
+        <label className="mb-1 flex cursor-pointer items-center gap-2 text-[11px] font-medium tracking-wide text-tinta-2 uppercase">
+          <input
+            type="checkbox"
+            checked={comOtp}
+            onChange={(evento) => {
+              definirComOtp(evento.target.checked);
+              if (!evento.target.checked) definirCampos((atual) => ({ ...atual, otp: null }));
+            }}
+            className="accent-[var(--realce)]"
+          />
+          Verificação em duas etapas (TOTP)
+        </label>
+        {comOtp ? (
+          <>
+            <Campo
+              value={campos.otp ?? ""}
+              onChange={(evento) => definirCampos({ ...campos, otp: evento.target.value || null })}
+              placeholder="Segredo Base32 ou otpauth://…"
+              className="font-mono"
+            />
+            {campos.otp ? (
+              interpretarOtp(campos.otp) ? (
+                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-tinta-3">
+                  <ScanLine size={12} />
+                  Reconhecido — o código vai aparecer junto com a senha.
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] text-perigo">
+                  Não reconheci esse formato — cole o segredo (letras e números) ou a URI otpauth:// inteira.
+                </p>
+              )
+            ) : null}
+          </>
+        ) : null}
       </div>
       {campos.camposExtras.length > 0 ? (
         <div className="space-y-2">
@@ -1716,7 +2161,7 @@ function DialogoNovaEntrada({
   grupo: GrupoSenhas;
   todas: EntradaSenha[];
   aoFechar: () => void;
-  aoSalvar: (campos: CamposEntrada) => Promise<void>;
+  aoSalvar: (campos: CamposEntrada, favicon?: FaviconEntrada) => Promise<void>;
 }) {
   return (
     <Dialogo titulo="Nova senha" descricao={`Vai para o grupo “${grupo.nome || "Cofre"}”.`} aberto aoFechar={aoFechar} largura="max-w-lg">

@@ -336,6 +336,8 @@ export type EntradaSenha = {
   notas: string;
   /** "AAAA-MM-DD" quando a senha tem validade; a lista avisa quando vence ou já venceu. */
   expiraEm: string | null;
+  /** O que foi colado no campo TOTP: uma URI `otpauth://` ou o segredo Base32 puro — cru, sem interpretar. */
+  otp: string | null;
   camposExtras: CampoExtraSenha[];
   anexos: AnexoSenha[];
   criadoEm: string;
@@ -347,6 +349,29 @@ export type EntradaSenha = {
   /** Grupo onde mora (id e nome), para as listas que juntam entradas de vários grupos. */
   grupoId: string;
   grupoNome: string;
+  /** Tem um ícone próprio guardado dentro do cofre — buscar em `/senhas/favicon/<id>`. */
+  temFavicon: boolean;
+};
+
+/** Uma versão antiga de uma entrada, guardada no histórico do próprio `.kdbx`. */
+export type VersaoSenha = {
+  indice: number;
+  quando: string;
+  titulo: string;
+  usuario: string;
+  senha: string;
+  url: string;
+  notas: string;
+};
+
+/** Uma entrada ou grupo dentro da lixeira do cofre — a lixeira interna do `.kdbx`. */
+export type ItemLixeiraSenha = {
+  id: string;
+  tipo: "entrada" | "grupo";
+  titulo: string;
+  excluidoEm: string | null;
+  /** Só para grupos: quantos itens (entradas + subgrupos) foram junto. */
+  itensDentro: number;
 };
 
 /** O que o formulário de uma senha envia — o resto (favorita, anexos, tempos) tem ação própria. */
@@ -357,6 +382,7 @@ export type CamposEntrada = {
   url: string;
   notas: string;
   expiraEm: string | null;
+  otp: string | null;
   camposExtras: CampoExtraSenha[];
 };
 
