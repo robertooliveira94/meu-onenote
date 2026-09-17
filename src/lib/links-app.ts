@@ -50,11 +50,12 @@ function pastaRaizPadrao(): PastaLink {
   };
 }
 
-/** Links salvos antes de "ler depois"/"mais aberto" existirem ganham os padrões (já lido, nunca aberto) na primeira leitura. */
+/** Links salvos antes de "ler depois"/"mais aberto"/capa existirem ganham os padrões (já lido, nunca aberto, sem capa) na primeira leitura. */
 function normalizarArvore(raiz: PastaLink): PastaLink {
   for (const link of raiz.links) {
     if (link.lido === undefined) link.lido = true;
     if (link.aberturas === undefined) link.aberturas = 0;
+    if (link.capa === undefined) link.capa = null;
   }
   for (const sub of raiz.pastas) normalizarArvore(sub);
   return raiz;
@@ -210,6 +211,7 @@ type CamposLink = { titulo: string; url: string; nota: string; favorito: boolean
 type FaviconBuscado = { base64: string; tipo: string } | null | undefined;
 
 const PASTA_FAVICONS = path.join(RAIZ, PASTA_LINKS, "favicons");
+const PASTA_CAPAS = path.join(RAIZ, PASTA_LINKS, "capas");
 
 const EXTENSAO_POR_TIPO: Record<string, string> = {
   "image/png": "png",
@@ -232,12 +234,28 @@ async function salvarFavicon(idLink: string, favicon: FaviconBuscado): Promise<s
   return arquivo;
 }
 
-export async function criarLink(idPasta: string, campos: CamposLink, favicon?: FaviconBuscado): Promise<PastaLink> {
+/** Mesma ideia do favicon, pra capa (`og:image`) — guardada em `_links/capas/`. */
+async function salvarCapa(idLink: string, capa: FaviconBuscado): Promise<string | null> {
+  if (!capa) return null;
+  const extensao = EXTENSAO_POR_TIPO[capa.tipo];
+  if (!extensao) return null;
+  await fs.mkdir(PASTA_CAPAS, { recursive: true });
+  const arquivo = `${idLink}.${extensao}`;
+  await fs.writeFile(path.join(PASTA_CAPAS, arquivo), Buffer.from(capa.base64, "base64"));
+  return arquivo;
+}
+
+export async function criarLink(
+  idPasta: string,
+  campos: CamposLink,
+  favicon?: FaviconBuscado,
+  capa?: FaviconBuscado,
+): Promise<PastaLink> {
   const titulo = campos.titulo.trim().slice(0, 200) || campos.url.trim();
   const url = campos.url.trim();
   if (!url) throw new Error("Informe uma URL.");
   const id = gerarId();
-  const nomeFavicon = await salvarFavicon(id, favicon);
+  const [nomeFavicon, nomeCapa] = await Promise.all([salvarFavicon(id, favicon), salvarCapa(id, capa)]);
   return alterar((raiz) => {
     const agora = new Date().toISOString();
     exigirPasta(raiz, idPasta).links.push({
@@ -245,6 +263,7 @@ export async function criarLink(idPasta: string, campos: CamposLink, favicon?: F
       titulo,
       url,
       favicon: nomeFavicon,
+      capa: nomeCapa,
       nota: campos.nota.trim().slice(0, 2000),
       favorito: campos.favorito,
       lido: false,
@@ -309,8 +328,16 @@ export async function acharDuplicado(url: string, exceto?: string): Promise<{ id
   return buscar(raiz);
 }
 
-export async function atualizarLink(id: string, campos: CamposLink, favicon?: FaviconBuscado): Promise<PastaLink> {
-  const nomeFavicon = favicon !== undefined ? await salvarFavicon(id, favicon) : undefined;
+export async function atualizarLink(
+  id: string,
+  campos: CamposLink,
+  favicon?: FaviconBuscado,
+  capa?: FaviconBuscado,
+): Promise<PastaLink> {
+  const [nomeFavicon, nomeCapa] = await Promise.all([
+    favicon !== undefined ? salvarFavicon(id, favicon) : Promise.resolve(undefined),
+    capa !== undefined ? salvarCapa(id, capa) : Promise.resolve(undefined),
+  ]);
   return alterar((raiz) => {
     const achado = encontrarLinkComPai(raiz, id);
     if (!achado) throw new Error("Link não encontrado.");
@@ -321,6 +348,7 @@ export async function atualizarLink(id: string, campos: CamposLink, favicon?: Fa
     achado.link.nota = campos.nota.trim().slice(0, 2000);
     achado.link.favorito = campos.favorito;
     if (nomeFavicon !== undefined) achado.link.favicon = nomeFavicon;
+    if (nomeCapa !== undefined) achado.link.capa = nomeCapa;
     achado.link.atualizadoEm = new Date().toISOString();
     return raiz;
   });
@@ -396,48 +424,62 @@ function decodificarEntidadesHtml(texto: string): string {
  */
 export async function buscarMetadadosUrl(
   url: string,
-): Promise<{ titulo: string | null; favicon: FaviconBuscado }> {
+): Promise<{ titulo: string | null; descricao: string | null; favicon: FaviconBuscado; capa: FaviconBuscado }> {
   let base: URL;
   try {
     base = new URL(url);
   } catch {
-    return { titulo: null, favicon: null };
+    return { titulo: null, descricao: null, favicon: null, capa: null };
   }
 
   let titulo: string | null = null;
+  let descricao: string | null = null;
   let hrefFavicon: string | null = null;
+  let hrefCapa: string | null = null;
   try {
     const resposta = await fetch(base, { signal: AbortSignal.timeout(5000), redirect: "follow" });
     if (resposta.ok) {
       const html = await resposta.text();
-      const tituloAchado = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
+      const tituloOg = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["'][^>]*>/i)?.[1];
+      const tituloAchado = tituloOg ?? html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
       if (tituloAchado) titulo = decodificarEntidadesHtml(tituloAchado.trim()).slice(0, 200) || null;
+      const descricaoAchada =
+        html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["'][^>]*>/i)?.[1] ??
+        html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["'][^>]*>/i)?.[1];
+      if (descricaoAchada) descricao = decodificarEntidadesHtml(descricaoAchada.trim()).slice(0, 500) || null;
       const linkAchado = html.match(/<link[^>]+rel=["'](?:shortcut icon|icon|apple-touch-icon)["'][^>]*>/i)?.[0];
       const hrefAchado = linkAchado?.match(/href=["']([^"']+)["']/i)?.[1];
       if (hrefAchado) hrefFavicon = hrefAchado;
+      const capaAchada = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']*)["'][^>]*>/i)?.[1];
+      if (capaAchada) hrefCapa = decodificarEntidadesHtml(capaAchada.trim());
     }
   } catch {
     // Site fora do ar, timeout, CORS do lado deles não importa aqui (é o
     // servidor buscando, não o navegador) — sem título, cai pro manual.
   }
 
-  let favicon: FaviconBuscado = null;
-  try {
-    const urlFavicon = new URL(hrefFavicon ?? "/favicon.ico", base);
-    const resposta = await fetch(urlFavicon, { signal: AbortSignal.timeout(4000) });
-    if (resposta.ok) {
+  async function baixarImagem(href: string | null, padrao: string | null, tamanhoMaximo: number): Promise<FaviconBuscado> {
+    if (!href && !padrao) return null;
+    try {
+      const urlImagem = new URL(href ?? padrao!, base);
+      const resposta = await fetch(urlImagem, { signal: AbortSignal.timeout(4000) });
+      if (!resposta.ok) return null;
       const bytes = Buffer.from(await resposta.arrayBuffer());
-      const TAMANHO_MAXIMO = 256 * 1024;
-      if (bytes.length > 0 && bytes.length <= TAMANHO_MAXIMO) {
-        const tipo = resposta.headers.get("content-type")?.split(";")[0].trim() || "image/x-icon";
-        if (EXTENSAO_POR_TIPO[tipo]) favicon = { base64: bytes.toString("base64"), tipo };
-      }
+      if (bytes.length === 0 || bytes.length > tamanhoMaximo) return null;
+      const tipo = resposta.headers.get("content-type")?.split(";")[0].trim() || "image/x-icon";
+      return EXTENSAO_POR_TIPO[tipo] ? { base64: bytes.toString("base64"), tipo } : null;
+    } catch {
+      return null;
     }
-  } catch {
-    // Sem favicon: ícone genérico na interface, sem drama.
   }
 
-  return { titulo, favicon };
+  const [favicon, capa] = await Promise.all([
+    baixarImagem(hrefFavicon, "/favicon.ico", 256 * 1024),
+    // Sem padrão pra capa: só usa se o site tiver `og:image` de verdade — inventar um "favicon.ico" como capa ficaria estranho.
+    hrefCapa ? baixarImagem(hrefCapa, null, 512 * 1024) : Promise.resolve(null),
+  ]);
+
+  return { titulo, descricao, favicon, capa };
 }
 
 type LinkComPasta = Link & { pastaId: string };
@@ -471,6 +513,82 @@ export async function buscarLinks(termo: string): Promise<LinkComPasta[]> {
     .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm));
 }
 
+/** Roda `tarefas` com no máximo `limite` ao mesmo tempo — pra não abrir dezenas de conexões de uma vez ao verificar um monte de link. */
+async function comConcorrenciaLimitada<T>(itens: T[], limite: number, tarefa: (item: T) => Promise<void>): Promise<void> {
+  const fila = [...itens];
+  async function trabalhador() {
+    let proximo: T | undefined;
+    while ((proximo = fila.shift()) !== undefined) await tarefa(proximo);
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
+}
+
+/**
+ * "Verificar links quebrados": um `HEAD` (com `GET` de plano B, pra sites
+ * que não respondem `HEAD`) em cada URL, cinco de cada vez. Não altera nada
+ * salvo — o resultado é só pra mostrar na hora, cada verificação é nova.
+ */
+export async function verificarLinks(ids: string[]): Promise<Record<string, boolean>> {
+  const raiz = await lerArvore();
+  const todos = achatar(raiz);
+  const resultado: Record<string, boolean> = {};
+  const alvos = todos.filter((link) => ids.includes(link.id));
+  await comConcorrenciaLimitada(alvos, 5, async (link) => {
+    resultado[link.id] = await estaNoAr(link.url);
+  });
+  return resultado;
+}
+
+async function estaNoAr(url: string): Promise<boolean> {
+  for (const metodo of ["HEAD", "GET"] as const) {
+    try {
+      const resposta = await fetch(url, { method: metodo, signal: AbortSignal.timeout(6000), redirect: "follow" });
+      if (resposta.ok) return true;
+      // 405/501 = o servidor não gosta de HEAD (comum), não que o link esteja quebrado — tenta GET antes de desistir.
+      if (metodo === "HEAD" && resposta.status !== 405 && resposta.status !== 501) return false;
+    } catch {
+      if (metodo === "GET") return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Exporta a árvore inteira no formato Netscape Bookmark (o que todo
+ * navegador entende pra importar) — fecha o ciclo do "Importar favoritos".
+ */
+export async function exportarFavoritosHtml(): Promise<string> {
+  const raiz = await lerArvore();
+  function escapar(texto: string): string {
+    return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function percorrer(pasta: PastaLink, profundidade: number): string {
+    const recuo = "    ".repeat(profundidade);
+    const linhas: string[] = [];
+    for (const link of pasta.links) {
+      const data = Math.floor(new Date(link.criadoEm).getTime() / 1000);
+      linhas.push(`${recuo}<DT><A HREF="${escapar(link.url)}" ADD_DATE="${data}">${escapar(link.titulo)}</A>`);
+    }
+    for (const sub of pasta.pastas) {
+      const data = Math.floor(Date.now() / 1000);
+      linhas.push(`${recuo}<DT><H3 ADD_DATE="${data}">${escapar(sub.nome)}</H3>`);
+      linhas.push(`${recuo}<DL><p>`);
+      linhas.push(percorrer(sub, profundidade + 1));
+      linhas.push(`${recuo}</DL><p>`);
+    }
+    return linhas.join("\n");
+  }
+  return [
+    "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
+    '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+    "<TITLE>Bookmarks</TITLE>",
+    "<H1>Bookmarks</H1>",
+    "<DL><p>",
+    percorrer(raiz, 1),
+    "</DL><p>",
+  ].join("\n");
+}
+
 /**
  * Mescla os nós importados dentro de `pastaDestino`: uma pasta com o mesmo
  * nome de uma já existente (só entre irmãs diretas) recebe o conteúdo
@@ -486,6 +604,7 @@ function mesclarImportados(pastaDestino: PastaLink, nos: NoImportado[]): void {
         titulo: no.titulo,
         url: no.url,
         favicon: null,
+        capa: null,
         nota: "",
         favorito: false,
         lido: true,

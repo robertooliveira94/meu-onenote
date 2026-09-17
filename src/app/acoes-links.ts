@@ -61,23 +61,35 @@ export async function acaoCriarLink(
   idPasta: string,
   campos: CamposLink,
   favicon?: FaviconBuscado,
+  capa?: FaviconBuscado,
 ): Promise<RespostaLinks> {
   if (!campos.url.trim()) return { ok: false, erro: "Informe uma URL." };
-  return comTratamento(() => linksApp.criarLink(idPasta, campos, favicon));
+  return comTratamento(() => linksApp.criarLink(idPasta, campos, favicon, capa));
 }
 
 export async function acaoAtualizarLink(
   id: string,
   campos: CamposLink,
   favicon?: FaviconBuscado,
+  capa?: FaviconBuscado,
 ): Promise<RespostaLinks> {
   if (!campos.url.trim()) return { ok: false, erro: "Informe uma URL." };
-  return comTratamento(() => linksApp.atualizarLink(id, campos, favicon));
+  return comTratamento(() => linksApp.atualizarLink(id, campos, favicon, capa));
 }
 
-/** Busca título e favicon do próprio site — usado ao colar uma URL no diálogo de link. */
+/** Busca título, descrição, favicon e capa do próprio site — usado ao colar uma URL no diálogo de link. */
 export async function acaoBuscarMetadadosUrl(url: string) {
   return linksApp.buscarMetadadosUrl(url);
+}
+
+/** HEAD (ou GET, de plano B) em cada link — pra "Verificar links quebrados". Não persiste nada, só devolve o resultado da hora. */
+export async function acaoVerificarLinks(ids: string[]): Promise<Record<string, boolean>> {
+  return linksApp.verificarLinks(ids);
+}
+
+/** O arquivo `.html` no formato Netscape Bookmark, pra baixar — fecha o ciclo do "Importar favoritos". */
+export async function acaoExportarFavoritosHtml(): Promise<string> {
+  return linksApp.exportarFavoritosHtml();
 }
 
 export async function acaoMoverLink(id: string, idNovaPasta: string): Promise<RespostaLinks> {

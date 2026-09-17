@@ -2,10 +2,12 @@
 
 import clsx from "clsx";
 import {
+  AlertTriangle,
   ArrowDownUp,
   Bookmark,
   ChevronRight,
   Circle,
+  Download,
   ExternalLink,
   Folder,
   FolderPlus,
@@ -13,11 +15,13 @@ import {
   LayoutGrid,
   Link2,
   List,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
   Rows3,
   Search,
+  ShieldQuestion,
   Star,
   Trash2,
   X,
@@ -35,6 +39,7 @@ import {
   acaoExcluirLink,
   acaoExcluirPastaLink,
   acaoExcluirVarios,
+  acaoExportarFavoritosHtml,
   acaoFavoritarLink,
   acaoFavoritarVarios,
   acaoImportarFavoritosHtml,
@@ -45,6 +50,7 @@ import {
   acaoMoverVarios,
   acaoReordenarLinks,
   acaoRenomearPastaLink,
+  acaoVerificarLinks,
   type RespostaLinks,
 } from "@/app/acoes-links";
 import {
@@ -180,7 +186,27 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
   }, []);
   const abrirLink = useCallback((link: LinkSalvo) => definirLinkEmEdicao(link), []);
   const novoLink = useCallback(() => definirLinkEmEdicao("novo"), []);
+  /** Baixa o export de favoritos como um arquivo `.html` — fecha o ciclo do "Importar favoritos". */
+  const exportarFavoritos = useCallback(async () => {
+    const html = await acaoExportarFavoritosHtml();
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "favoritos.html";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
   useAtalho("n", { grupo: "Links", descricao: `Novo link em ${pastaAtiva.nome}`, acao: novoLink });
+  const campoBusca = useRef<HTMLInputElement>(null);
+  useAtalho("ctrl+f", { grupo: "Links", descricao: "Buscar", acao: () => campoBusca.current?.focus() });
+  const caminhoAtual = useMemo(() => caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva], [arvore, pastaAtiva]);
+  useAtalho("backspace", {
+    grupo: "Links",
+    descricao: "Subir uma pasta",
+    ativo: modo === "pasta" && caminhoAtual.length > 1,
+    acao: () => selecionarPasta(caminhoAtual[caminhoAtual.length - 2].id),
+  });
   const favoritarLink = useCallback(
     async (link: LinkSalvo) => void aplicarResposta(await acaoFavoritarLink(link.id, !link.favorito)),
     [aplicarResposta],
@@ -266,6 +292,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         <div className="relative max-w-xs flex-1">
           <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-tinta-3" />
           <input
+            ref={campoBusca}
             value={busca}
             onChange={(evento) => definirBusca(evento.target.value)}
             placeholder="Buscar por título ou URL…"
@@ -286,6 +313,14 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         >
           <Import size={13} />
           Importar favoritos
+        </button>
+        <button
+          type="button"
+          onClick={exportarFavoritos}
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
+        >
+          <Download size={13} />
+          Exportar favoritos
         </button>
         <Link
           href="/links/lixeira"
@@ -320,7 +355,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           <ColunaLinks
             pasta={pastaAtiva}
             raiz={arvore}
-            caminho={caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva]}
+            caminho={caminhoAtual}
             criandoDeUrl={criandoDeUrl}
             onAbrir={abrirLink}
             onNovo={novoLink}
@@ -349,10 +384,10 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         <DialogoLink
           link={linkEmEdicao === "novo" ? null : linkEmEdicao}
           aoFechar={() => definirLinkEmEdicao(null)}
-          aoSalvar={async (id, campos, favicon) => {
+          aoSalvar={async (id, campos, favicon, capa) => {
             const resposta = id
-              ? await acaoAtualizarLink(id, campos, favicon)
-              : await acaoCriarLink(pastaAtiva.id, campos, favicon);
+              ? await acaoAtualizarLink(id, campos, favicon, capa)
+              : await acaoCriarLink(pastaAtiva.id, campos, favicon, capa);
             if (aplicarResposta(resposta)) definirLinkEmEdicao(null);
           }}
         />
@@ -757,6 +792,17 @@ function ColunaLinks({
   const [sobreUrl, definirSobreUrl] = useState(false);
   const [selecionados, definirSelecionados] = useState<Set<string>>(new Set());
   const ultimoSelecionado = useRef<string | null>(null);
+  const [verificando, definirVerificando] = useState(false);
+  const [quebrados, definirQuebrados] = useState<Set<string> | null>(null);
+  /** O link sob o mouse na Lista — só ali dá pra saber qual link os atalhos `o`/`e`/`f` afetam. */
+  const [linkSobMouse, definirLinkSobMouse] = useState<string | null>(null);
+
+  async function verificarLinksQuebrados() {
+    definirVerificando(true);
+    const resultado = await acaoVerificarLinks(pasta.links.map((link) => link.id));
+    definirVerificando(false);
+    definirQuebrados(new Set(Object.entries(resultado).filter(([, ok]) => !ok).map(([id]) => id)));
+  }
 
   // Lista · Mosaico · Compacta — lembrado por pasta, mesmo padrão do toggle de visão do Kanban.
   type Visao = "lista" | "mosaico" | "compacta";
@@ -800,9 +846,11 @@ function ColunaLinks({
   }
 
   // Selecionar limpa sozinho ao trocar de pasta — senão a barra de lote
-  // ficaria de pé com ids de uma pasta que não é mais esta.
+  // ficaria de pé com ids de uma pasta que não é mais esta. A última
+  // verificação de links quebrados também não faz sentido para outra pasta.
   useEffect(() => {
     definirSelecionados(new Set());
+    definirQuebrados(null);
   }, [pasta.id]);
 
   const linksVisiveis = useMemo(() => ordenarLinks(pasta.links, ordenacao), [pasta.links, ordenacao]);
@@ -838,6 +886,30 @@ function ColunaLinks({
     const nova = calcularNovaOrdem(linksVisiveis.map((link) => link.id), origemId, alvoId, antes);
     if (nova) onReordenar(pasta.id, nova);
   }
+
+  const linkSobMouseObjeto = linkSobMouse ? (linksVisiveis.find((link) => link.id === linkSobMouse) ?? null) : null;
+  useAtalho("o", {
+    grupo: "Links",
+    descricao: "Abrir o link sob o mouse",
+    ativo: !!linkSobMouseObjeto,
+    acao: () => {
+      if (!linkSobMouseObjeto) return;
+      window.open(linkSobMouseObjeto.url, "_blank", "noopener,noreferrer");
+      onVisitar(linkSobMouseObjeto);
+    },
+  });
+  useAtalho("e", {
+    grupo: "Links",
+    descricao: "Editar o link sob o mouse",
+    ativo: !!linkSobMouseObjeto,
+    acao: () => linkSobMouseObjeto && onAbrir(linkSobMouseObjeto),
+  });
+  useAtalho("f", {
+    grupo: "Links",
+    descricao: "Favoritar o link sob o mouse",
+    ativo: !!linkSobMouseObjeto,
+    acao: () => linkSobMouseObjeto && onFavoritar(linkSobMouseObjeto),
+  });
 
   return (
     <div
@@ -930,6 +1002,15 @@ function ColunaLinks({
               <ExternalLink size={14} />
             </BotaoIcone>
           ) : null}
+          {pasta.links.length > 0 ? (
+            <BotaoIcone
+              rotulo={verificando ? "Verificando…" : quebrados ? `${quebrados.size} talvez fora do ar` : "Verificar links quebrados"}
+              onClick={verificarLinksQuebrados}
+              className={clsx(quebrados && quebrados.size > 0 && "text-perigo")}
+            >
+              {verificando ? <Loader2 size={14} className="animate-spin" /> : <ShieldQuestion size={14} />}
+            </BotaoIcone>
+          ) : null}
           <Botao variante="primario" onClick={onNovo}>
             <Plus size={13} />
             Novo link
@@ -1006,12 +1087,15 @@ function ColunaLinks({
               key={link.id}
               link={link}
               selecionado={selecionados.has(link.id)}
+              quebrado={quebrados?.has(link.id)}
               onAbrir={onAbrir}
               onExcluir={onExcluir}
               onFavoritar={onFavoritar}
               onVisitar={onVisitar}
               onSelecionar={selecionar}
               onArrastarSobre={ordenacao === "manual" ? reordenarComArrasto : undefined}
+              onMouseEnter={() => definirLinkSobMouse(link.id)}
+              onMouseLeave={() => definirLinkSobMouse((atual) => (atual === link.id ? null : atual))}
             />
           ))
         )}
@@ -1089,15 +1173,20 @@ function comModificador(evento: React.MouseEvent): boolean {
 const LinhaLink = memo(function LinhaLink({
   link,
   selecionado,
+  quebrado,
   onAbrir,
   onExcluir,
   onFavoritar,
   onVisitar,
   onSelecionar,
   onArrastarSobre,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   link: LinkSalvo;
   selecionado?: boolean;
+  /** `true` depois de "Verificar links quebrados" não achar o site no ar — nunca persistido, só da última verificação. */
+  quebrado?: boolean;
   onAbrir: (link: LinkSalvo) => void;
   onExcluir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
@@ -1105,6 +1194,9 @@ const LinhaLink = memo(function LinhaLink({
   onSelecionar?: (id: string, evento: React.MouseEvent) => void;
   /** Presente só na ordenação Manual — soltar outro link aqui reordena os dois. */
   onArrastarSobre?: (origemId: string, alvoId: string, antes: boolean) => void;
+  /** Rastreiam qual link está sob o mouse — usado pelos atalhos `o`/`e`/`f`. */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }) {
   const [sobre, definirSobre] = useState<"antes" | "depois" | null>(null);
   return (
@@ -1125,6 +1217,8 @@ const LinhaLink = memo(function LinhaLink({
         definirSobre(null);
         if (origemId && origemId !== link.id) onArrastarSobre(origemId, link.id, sobre === "antes");
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={clsx(
         "cartao group relative flex items-center gap-3",
         selecionado && "ring-2 ring-[var(--realce)]",
@@ -1151,6 +1245,7 @@ const LinhaLink = memo(function LinhaLink({
           <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-tinta">
             {!link.lido ? <PontoNaoLido /> : null}
             <span className="truncate">{link.titulo}</span>
+            {quebrado ? <AlertTriangle size={12} className="shrink-0 text-perigo" aria-label="Talvez esteja fora do ar" /> : null}
           </p>
           <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
         </div>
@@ -1286,6 +1381,14 @@ const TileLink = memo(function TileLink({
         }}
         className="flex flex-col items-center gap-2"
       >
+        {link.capa ? (
+          // eslint-disable-next-line @next/next/no-img-element -- capa local, não vale a pena o otimizador de imagens do Next pra isso.
+          <img
+            src={`/links/capa/${link.capa}`}
+            alt=""
+            className="-mx-3 -mt-4 mb-0.5 h-16 w-[calc(100%+1.5rem)] rounded-t-[11px] object-cover"
+          />
+        ) : null}
         {link.favicon ? (
           // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena o otimizador de imagens do Next pra isso.
           <img
@@ -1532,7 +1635,7 @@ function DialogoLink({
 }: {
   link: LinkSalvo | null;
   aoFechar: () => void;
-  aoSalvar: (id: string | null, campos: CamposLink, favicon?: FaviconBuscado) => Promise<void>;
+  aoSalvar: (id: string | null, campos: CamposLink, favicon?: FaviconBuscado, capa?: FaviconBuscado) => Promise<void>;
 }) {
   const [campos, definirCampos] = useState<CamposLink>({
     titulo: link?.titulo ?? "",
@@ -1542,9 +1645,10 @@ function DialogoLink({
   });
   const [salvando, definirSalvando] = useState(false);
   const [buscando, definirBuscando] = useState(false);
-  // `undefined` = não mexeu no favicon (mantém o que já tinha, se houver);
+  // `undefined` = não mexeu no favicon/capa (mantém o que já tinha, se houver);
   // `null`/objeto = resultado de uma busca (mesmo sem sucesso, já tentou).
   const [favicon, definirFavicon] = useState<FaviconBuscado | undefined>(undefined);
+  const [capa, definirCapa] = useState<FaviconBuscado | undefined>(undefined);
   const urlOriginal = useRef(link?.url ?? "");
   const [duplicado, definirDuplicado] = useState<{ id: string; titulo: string; pastaNome: string } | null>(null);
 
@@ -1558,14 +1662,19 @@ function DialogoLink({
     ]);
     definirBuscando(false);
     definirFavicon(resultado.favicon);
+    definirCapa(resultado.capa);
     definirDuplicado(achadoDuplicado);
-    if (resultado.titulo) definirCampos((atual) => (atual.titulo.trim() ? atual : { ...atual, titulo: resultado.titulo! }));
+    definirCampos((atual) => ({
+      ...atual,
+      titulo: atual.titulo.trim() || resultado.titulo || atual.titulo,
+      nota: atual.nota.trim() || resultado.descricao || atual.nota,
+    }));
   }
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     definirSalvando(true);
-    await aoSalvar(link?.id ?? null, campos, favicon);
+    await aoSalvar(link?.id ?? null, campos, favicon, capa);
     definirSalvando(false);
   }
 

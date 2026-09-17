@@ -417,6 +417,8 @@ export type Link = {
   url: string;
   /** Caminho do favicon salvo em `_links/favicons/`, ou `null` (ícone genérico). */
   favicon: string | null;
+  /** Capa buscada de `og:image`, em `_links/capas/` — aparece no mosaico quando existe. */
+  capa: string | null;
   nota: string;
   favorito: boolean;
   /** "Ler depois": nasce `false` (não lido) e vira `true` ao abrir o link — links de antes desta função vêm sempre `true`. */
