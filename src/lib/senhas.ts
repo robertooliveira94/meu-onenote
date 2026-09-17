@@ -9,6 +9,7 @@ import type {
   AnexoSenha,
   CampoExtraSenha,
   CamposEntrada,
+  ConfigSenhas,
   EntradaSenha,
   GrupoSenhas,
   ItemLixeiraSenha,
@@ -28,10 +29,38 @@ import type {
  */
 const PASTA_SENHAS = "_senhas";
 const CAMINHO_COFRE = path.join(RAIZ, PASTA_SENHAS, "cofre.kdbx");
+const CAMINHO_CONFIG = path.join(RAIZ, PASTA_SENHAS, "config.json");
 const NOME_COFRE = "Senhas";
 
-/** Tempo de inatividade até o cofre trancar sozinho. */
-const ESPERA_TRAVAMENTO_MS = 15 * 60 * 1000;
+/** Preferências de quando ninguém nunca mexeu em `config.json` ainda. */
+const CONFIG_PADRAO: ConfigSenhas = { minutosTrava: 15, trancarAoFechar: false };
+
+/** Lê `_senhas/config.json` — nunca é segredo, então fica fora do `.kdbx`, em texto puro. */
+export async function obterConfig(): Promise<ConfigSenhas> {
+  try {
+    const bruto = JSON.parse(await fs.readFile(CAMINHO_CONFIG, "utf8"));
+    return {
+      minutosTrava: bruto.minutosTrava === null ? null : Number(bruto.minutosTrava) || CONFIG_PADRAO.minutosTrava,
+      trancarAoFechar: !!bruto.trancarAoFechar,
+    };
+  } catch {
+    return CONFIG_PADRAO;
+  }
+}
+
+/** Grava a config e, se o cofre já estiver destrancado, aplica a trava nova na hora — sem esperar destrancar de novo. */
+export async function definirConfig(mudanca: Partial<ConfigSenhas>): Promise<ConfigSenhas> {
+  const atual = await obterConfig();
+  const nova: ConfigSenhas = { ...atual, ...mudanca };
+  await fs.mkdir(path.dirname(CAMINHO_CONFIG), { recursive: true });
+  await fs.writeFile(CAMINHO_CONFIG, JSON.stringify(nova, null, 2));
+  const sessao = guardaGlobal.__cofreSessao;
+  if (sessao) {
+    sessao.esperaTravamentoMs = nova.minutosTrava === null ? null : nova.minutosTrava * 60_000;
+    tocarSessao(sessao);
+  }
+  return nova;
+}
 
 /**
  * Custo do Argon2id — de propósito caro de calcular (ver o botão "Como
@@ -84,6 +113,8 @@ const ESPERA_SALVAR_MS = 900;
 type Sessao = {
   db: kdbxweb.Kdbx;
   expiraEm: number;
+  /** `null` = trava por inatividade desligada ("nunca") — fica na sessão porque mudar a config não deve exigir destrancar de novo. */
+  esperaTravamentoMs: number | null;
   sujo: boolean;
   timerSalvar: ReturnType<typeof setTimeout> | null;
   salvando: Promise<void> | null;
@@ -103,11 +134,14 @@ function sessaoAtiva(): Sessao | null {
   return sessao;
 }
 
-/** Começa uma sessão nova (criar / importar / destrancar). */
-function abrirSessao(db: kdbxweb.Kdbx): void {
+/** Começa uma sessão nova (criar / importar / destrancar) — a trava usa a preferência salva em `config.json`. */
+async function abrirSessao(db: kdbxweb.Kdbx): Promise<void> {
+  const config = await obterConfig();
+  const esperaTravamentoMs = config.minutosTrava === null ? null : config.minutosTrava * 60_000;
   guardaGlobal.__cofreSessao = {
     db,
-    expiraEm: Date.now() + ESPERA_TRAVAMENTO_MS,
+    expiraEm: esperaTravamentoMs === null ? Infinity : Date.now() + esperaTravamentoMs,
+    esperaTravamentoMs,
     sujo: false,
     timerSalvar: null,
     salvando: null,
@@ -116,7 +150,7 @@ function abrirSessao(db: kdbxweb.Kdbx): void {
 
 /** Adia o relógio da trava por inatividade — chamado a cada uso. */
 function tocarSessao(sessao: Sessao): void {
-  sessao.expiraEm = Date.now() + ESPERA_TRAVAMENTO_MS;
+  sessao.expiraEm = sessao.esperaTravamentoMs === null ? Infinity : Date.now() + sessao.esperaTravamentoMs;
 }
 
 /** Marca a sessão como tendo mudança não gravada e (re)agenda a gravação. */
@@ -204,7 +238,7 @@ export async function criarCofre(senhaMestra: string): Promise<void> {
   }
   db.createGroup(db.getDefaultGroup(), "Geral");
   await salvarNoDisco(db);
-  abrirSessao(db);
+  await abrirSessao(db);
 }
 
 /**
@@ -223,7 +257,7 @@ export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise
   }
   await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
   await fs.writeFile(CAMINHO_COFRE, bytes);
-  abrirSessao(db);
+  await abrirSessao(db);
   return true;
 }
 
@@ -234,7 +268,7 @@ export async function destrancar(senhaMestra: string): Promise<boolean> {
   try {
     const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     const db = await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciais);
-    abrirSessao(db);
+    await abrirSessao(db);
     return true;
   } catch {
     return false;

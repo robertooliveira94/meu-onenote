@@ -1,7 +1,7 @@
 "use server";
 
 import * as senhas from "@/lib/senhas";
-import type { CamposEntrada, GrupoSenhas, ItemLixeiraSenha, VersaoSenha } from "@/lib/tipos";
+import type { CamposEntrada, ConfigSenhas, GrupoSenhas, ItemLixeiraSenha, VersaoSenha } from "@/lib/tipos";
 import type { FaviconEntrada } from "@/lib/senhas";
 
 /**
@@ -50,6 +50,14 @@ export async function acaoDestrancar(senhaMestra: string): Promise<RespostaSenha
 
 export async function acaoTrancar(): Promise<void> {
   await senhas.trancar();
+}
+
+export async function acaoObterConfig(): Promise<ConfigSenhas> {
+  return senhas.obterConfig();
+}
+
+export async function acaoDefinirConfig(mudanca: Partial<ConfigSenhas>): Promise<ConfigSenhas> {
+  return senhas.definirConfig(mudanca);
 }
 
 export async function acaoExcluirCofre(): Promise<Resposta> {

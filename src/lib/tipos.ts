@@ -374,6 +374,18 @@ export type ItemLixeiraSenha = {
   itensDentro: number;
 };
 
+/**
+ * Preferências do cofre — fora do `.kdbx` de propósito (em `_senhas/config.json`,
+ * texto puro): não são segredo, e a tela de senha mestra nem chega a
+ * destrancar nada para saber quanto tempo esperar antes de trancar sozinho.
+ */
+export type ConfigSenhas = {
+  /** Minutos de inatividade até trancar sozinho; `null` = nunca. */
+  minutosTrava: number | null;
+  /** Tranca ao fechar a aba (ou navegar para fora do app), além do timeout. */
+  trancarAoFechar: boolean;
+};
+
 /** O que o formulário de uma senha envia — o resto (favorita, anexos, tempos) tem ação própria. */
 export type CamposEntrada = {
   titulo: string;

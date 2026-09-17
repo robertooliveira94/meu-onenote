@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  Activity,
   AlertTriangle,
   Check,
   Clock,
@@ -27,6 +28,7 @@ import {
   RotateCcw,
   ScanLine,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Wand2,
   Star,
@@ -44,6 +46,7 @@ import {
   acaoBaixarCofre,
   acaoCriarEntrada,
   acaoCriarGrupo,
+  acaoDefinirConfig,
   acaoEsvaziarLixeira,
   acaoExcluirCofre,
   acaoExcluirDaLixeiraDeVez,
@@ -53,6 +56,7 @@ import {
   acaoFavoritarEntrada,
   acaoMoverEntrada,
   acaoMoverGrupo,
+  acaoObterConfig,
   acaoObterHistorico,
   acaoObterLixeira,
   acaoRegistrarAcesso,
@@ -75,7 +79,17 @@ import {
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO } from "@/lib/cores";
 import { formatarDataCurta, formatarDataHora, formatarDia } from "@/lib/rotas";
-import type { CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas, ItemLixeiraSenha, VersaoSenha } from "@/lib/tipos";
+import type {
+  CampoExtraSenha,
+  CamposEntrada,
+  ConfigSenhas,
+  EntradaSenha,
+  GrupoSenhas,
+  ItemLixeiraSenha,
+  VersaoSenha,
+} from "@/lib/tipos";
+import { medirForca } from "@/lib/forca-senha";
+import { contarVazamentos } from "@/lib/hibp";
 import type { FaviconEntrada } from "@/lib/senhas";
 import { gerarCodigoTotp, interpretarOtp, segundosRestantesTotp } from "@/lib/totp";
 
@@ -242,6 +256,8 @@ export function CofreAberto({
   const [excluindoCofre, definirExcluindoCofre] = useState(false);
   const [excluindoEntrada, definirExcluindoEntrada] = useState(false);
   const [contagemLixeira, definirContagemLixeira] = useState(0);
+  const [vendoSaude, definirVendoSaude] = useState(false);
+  const [configurandoTrava, definirConfigurandoTrava] = useState(false);
   const campoBusca = useRef<HTMLInputElement>(null);
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
@@ -266,6 +282,21 @@ export function CofreAberto({
       cancelado = true;
     };
   }, [arvore]);
+
+  // "Trancar ao fechar a aba" (preferência em Trava e privacidade):
+  // `sendBeacon` tenta entregar mesmo com a página descarregando, o que um
+  // `fetch`/server action normal não garante nesse momento.
+  useEffect(() => {
+    let cancelado = false;
+    const aoDescarregar = () => navigator.sendBeacon("/senhas/trancar-beacon");
+    acaoObterConfig().then((config) => {
+      if (!cancelado && config.trancarAoFechar) window.addEventListener("pagehide", aoDescarregar);
+    });
+    return () => {
+      cancelado = true;
+      window.removeEventListener("pagehide", aoDescarregar);
+    };
+  }, []);
 
   const todas = useMemo(() => achatar(arvore), [arvore]);
   const grupoAtivo = ehVirtual(selecao) ? null : (encontrarGrupo(arvore, selecao) ?? null);
@@ -456,6 +487,25 @@ export function CofreAberto({
                 </ItemMenu>
                 <SeparadorMenu />
                 <ItemMenu
+                  icone={<Activity size={14} />}
+                  onClick={() => {
+                    fechar();
+                    definirVendoSaude(true);
+                  }}
+                >
+                  Relatório de saúde
+                </ItemMenu>
+                <ItemMenu
+                  icone={<ShieldAlert size={14} />}
+                  onClick={() => {
+                    fechar();
+                    definirConfigurandoTrava(true);
+                  }}
+                >
+                  Trava e privacidade
+                </ItemMenu>
+                <SeparadorMenu />
+                <ItemMenu
                   icone={<KeySquare size={14} />}
                   onClick={() => {
                     fechar();
@@ -623,6 +673,19 @@ export function CofreAberto({
       ) : null}
 
       {trocandoSenha ? <DialogoTrocarSenha aoFechar={() => definirTrocandoSenha(false)} /> : null}
+
+      {vendoSaude ? (
+        <DialogoSaude
+          todas={todas}
+          aoFechar={() => definirVendoSaude(false)}
+          onIrPara={(id) => {
+            selecionarEntrada(id);
+            definirVendoSaude(false);
+          }}
+        />
+      ) : null}
+
+      {configurandoTrava ? <DialogoConfigCofre aoFechar={() => definirConfigurandoTrava(false)} /> : null}
 
       {excluindoCofre ? (
         <DialogoExcluirCofre
@@ -1561,6 +1624,254 @@ function DialogoHistorico({
           ))}
         </ul>
       )}
+    </Dialogo>
+  );
+}
+
+/** Quantos dias desde uma data ISO. */
+function diasDesde(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+const LIMITE_DIAS_ANTIGA = 365;
+
+type CategoriaSaude = {
+  chave: string;
+  titulo: string;
+  descricao: string;
+  entradas: EntradaSenha[];
+};
+
+/**
+ * Relatório de saúde: tudo calculado na hora a partir de `todas` — sem
+ * ida ao servidor, sem guardar nada. Fracas/repetidas/antigas/sem
+ * site/vencidas primeiro; vazamentos (HIBP) é a única parte que sai da
+ * máquina, e só quando a pessoa pede.
+ */
+function DialogoSaude({
+  todas,
+  aoFechar,
+  onIrPara,
+}: {
+  todas: EntradaSenha[];
+  aoFechar: () => void;
+  onIrPara: (id: string) => void;
+}) {
+  const [hibp, definirHibp] = useState<
+    "ocioso" | "confirmando" | { verificando: number; total: number } | { resultados: Map<string, number> }
+  >("ocioso");
+
+  const categorias = useMemo((): CategoriaSaude[] => {
+    const comSenha = todas.filter((entrada) => entrada.senha);
+    const porSenha = new Map<string, EntradaSenha[]>();
+    for (const entrada of comSenha) porSenha.set(entrada.senha, [...(porSenha.get(entrada.senha) ?? []), entrada]);
+
+    return [
+      {
+        chave: "fracas",
+        titulo: "Senhas fracas",
+        descricao: "Fáceis de chutar — curtas, comuns ou sem mistura de caracteres.",
+        entradas: comSenha.filter((entrada) => medirForca(entrada.senha).nivel <= 1),
+      },
+      {
+        chave: "repetidas",
+        titulo: "Senhas repetidas",
+        descricao: "A mesma senha em mais de uma entrada — se uma vazar, as outras vão junto.",
+        entradas: [...porSenha.values()].filter((grupo) => grupo.length > 1).flat(),
+      },
+      {
+        chave: "antigas",
+        titulo: "Senhas antigas",
+        descricao: `Sem trocar há mais de ${LIMITE_DIAS_ANTIGA} dias.`,
+        entradas: comSenha.filter((entrada) => diasDesde(entrada.atualizadoEm) > LIMITE_DIAS_ANTIGA),
+      },
+      {
+        chave: "sem-site",
+        titulo: "Sem site cadastrado",
+        descricao: "Sem URL, o preenchimento automático (e o favicon) não têm como funcionar.",
+        entradas: todas.filter((entrada) => !entrada.url),
+      },
+      {
+        chave: "vencidas",
+        titulo: "Vencidas",
+        descricao: "Passaram da data de validade que você definiu.",
+        entradas: todas.filter((entrada) => estadoDaValidade(entrada.expiraEm) === "vencida"),
+      },
+    ];
+  }, [todas]);
+
+  async function verificarVazamentos() {
+    const unicas = [...new Map(todas.filter((entrada) => entrada.senha).map((entrada) => [entrada.senha, entrada])).values()];
+    const porSenha = new Map<string, number>();
+    for (let i = 0; i < unicas.length; i++) {
+      definirHibp({ verificando: i + 1, total: unicas.length });
+      try {
+        porSenha.set(unicas[i].senha, await contarVazamentos(unicas[i].senha));
+      } catch {
+        // Uma falha de rede não derruba o resto — essa senha some do resultado, o resto segue.
+      }
+    }
+    const resultados = new Map<string, number>();
+    for (const entrada of todas) {
+      const contagem = porSenha.get(entrada.senha);
+      if (contagem) resultados.set(entrada.id, contagem);
+    }
+    definirHibp({ resultados });
+  }
+
+  return (
+    <Dialogo
+      titulo="Relatório de saúde"
+      descricao="Calculado agora, na sua máquina — nada disso fica guardado."
+      aberto
+      aoFechar={aoFechar}
+      largura="max-w-lg"
+    >
+      <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+        {categorias.map((categoria) => (
+          <div key={categoria.chave}>
+            <div className="flex items-center gap-2">
+              <p className="text-[12.5px] font-semibold text-tinta">{categoria.titulo}</p>
+              <span className="rounded-full bg-realce-medio px-1.5 py-0.5 text-[10.5px] font-medium text-tinta tabular-nums">
+                {categoria.entradas.length}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11.5px] text-tinta-3">{categoria.descricao}</p>
+            {categoria.entradas.length > 0 ? (
+              <ul className="mt-1.5 space-y-0.5">
+                {categoria.entradas.map((entrada) => (
+                  <li key={entrada.id}>
+                    <button
+                      type="button"
+                      onClick={() => onIrPara(entrada.id)}
+                      className="w-full truncate rounded-md px-2 py-1 text-left text-[12px] text-tinta-2 hover:bg-realce-fraco hover:text-tinta"
+                    >
+                      {entrada.titulo}
+                      {entrada.grupoNome ? <span className="text-tinta-3"> · {entrada.grupoNome}</span> : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ))}
+
+        <div className="border-t border-linha pt-3">
+          <p className="text-[12.5px] font-semibold text-tinta">Vazamentos conhecidos</p>
+          {hibp === "ocioso" ? (
+            <>
+              <p className="mt-0.5 text-[11.5px] text-tinta-3">
+                Confere cada senha contra vazamentos públicos, por k-anonimato: só os 5 primeiros caracteres do hash
+                saem da máquina — a senha em si, nunca. Ainda assim é uma consulta na internet; só roda se você pedir.
+              </p>
+              <Botao onClick={() => definirHibp("confirmando")} className="mt-2">
+                <ShieldAlert size={13} />
+                Verificar vazamentos
+              </Botao>
+            </>
+          ) : hibp === "confirmando" ? (
+            <div className="mt-2 flex items-center gap-2">
+              <Botao variante="primario" onClick={verificarVazamentos}>
+                Confirmar e verificar
+              </Botao>
+              <Botao onClick={() => definirHibp("ocioso")}>Cancelar</Botao>
+            </div>
+          ) : "verificando" in hibp ? (
+            <p className="mt-1.5 flex items-center gap-2 text-[12px] text-tinta-3">
+              <Loader2 size={13} className="animate-spin" />
+              Verificando {hibp.verificando} de {hibp.total}…
+            </p>
+          ) : hibp.resultados.size === 0 ? (
+            <p className="mt-1.5 text-[12px] text-tinta-3">Nenhuma das suas senhas apareceu em vazamentos conhecidos.</p>
+          ) : (
+            <ul className="mt-1.5 space-y-0.5">
+              {todas
+                .filter((entrada) => hibp.resultados.has(entrada.id))
+                .map((entrada) => (
+                  <li key={entrada.id}>
+                    <button
+                      type="button"
+                      onClick={() => onIrPara(entrada.id)}
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[12px] text-tinta hover:bg-realce-fraco"
+                    >
+                      <AlertTriangle size={12} className="shrink-0 text-perigo" />
+                      <span className="truncate">{entrada.titulo}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-tinta-3">
+                        {hibp.resultados.get(entrada.id)!.toLocaleString("pt-BR")}×
+                      </span>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Dialogo>
+  );
+}
+
+/** Preferências do cofre: trava por inatividade e trancar ao fechar a aba. */
+function DialogoConfigCofre({ aoFechar }: { aoFechar: () => void }) {
+  const [config, definirConfig] = useState<ConfigSenhas | null>(null);
+  const [salvando, definirSalvando] = useState(false);
+
+  useEffect(() => {
+    acaoObterConfig().then(definirConfig);
+  }, []);
+
+  async function aplicar(mudanca: Partial<ConfigSenhas>) {
+    if (!config) return;
+    definirConfig({ ...config, ...mudanca });
+    definirSalvando(true);
+    await acaoDefinirConfig(mudanca);
+    definirSalvando(false);
+  }
+
+  return (
+    <Dialogo titulo="Trava e privacidade" aberto aoFechar={aoFechar} largura="max-w-md">
+      {!config ? (
+        <p className="py-6 text-center text-[12.5px] text-tinta-3">Carregando…</p>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <Rotulo>Trancar sozinho depois de</Rotulo>
+            <div className="flex gap-1.5">
+              {[5, 15, 30, null].map((minutos) => (
+                <button
+                  key={String(minutos)}
+                  type="button"
+                  onClick={() => aplicar({ minutosTrava: minutos })}
+                  aria-pressed={config.minutosTrava === minutos}
+                  className={clsx(
+                    "h-8.5 flex-1 rounded-lg border text-[12.5px] font-medium transition-colors",
+                    config.minutosTrava === minutos
+                      ? "border-[var(--realce)] bg-realce-medio text-tinta"
+                      : "border-linha text-tinta-2 hover:bg-realce-fraco",
+                  )}
+                >
+                  {minutos === null ? "Nunca" : `${minutos} min`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px] text-tinta-2">
+            <input
+              type="checkbox"
+              checked={config.trancarAoFechar}
+              onChange={(evento) => aplicar({ trancarAoFechar: evento.target.checked })}
+              className="mt-0.5 accent-[var(--realce)]"
+            />
+            <span>
+              Trancar ao fechar a aba
+              <span className="block text-[11px] text-tinta-3">Além do tempo de inatividade acima.</span>
+            </span>
+          </label>
+          {salvando ? <p className="text-[11px] text-tinta-3">Salvando…</p> : null}
+        </div>
+      )}
+      <div className="mt-4 flex justify-end">
+        <Botao onClick={aoFechar}>Fechar</Botao>
+      </div>
     </Dialogo>
   );
 }
