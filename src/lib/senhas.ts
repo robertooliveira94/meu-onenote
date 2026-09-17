@@ -5,7 +5,7 @@ import argon2 from "argon2";
 import * as kdbxweb from "kdbxweb";
 
 import { RAIZ } from "./caminhos";
-import type { EntradaSenha, GrupoSenhas } from "./tipos";
+import type { AnexoSenha, CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas } from "./tipos";
 
 /**
  * O cofre de senhas: um arquivo `.kdbx` de verdade (o mesmo formato do
@@ -289,6 +289,39 @@ function textoDoCampo(valor: string | kdbxweb.ProtectedValue | undefined): strin
 /** A tag que marca uma entrada como favorita — legível também no KeePassXC. */
 const TAG_FAVORITA = "Favorito";
 
+/** Os campos que têm lugar próprio na tela; qualquer outro é "campo extra". */
+const CAMPOS_PADRAO = new Set(["Title", "UserName", "Password", "URL", "Notes"]);
+
+/** Tamanho máximo de um anexo — o cofre inteiro é lido para a memória a cada abertura. */
+export const TAMANHO_MAXIMO_ANEXO = 5 * 1024 * 1024;
+
+function dataCurta(data: Date | undefined): string | null {
+  if (!data) return null;
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+}
+
+function camposExtrasDe(entrada: kdbxweb.KdbxEntry): CampoExtraSenha[] {
+  const extras: CampoExtraSenha[] = [];
+  for (const [nome, valor] of entrada.fields) {
+    if (CAMPOS_PADRAO.has(nome)) continue;
+    extras.push({ nome, valor: textoDoCampo(valor), protegido: valor instanceof kdbxweb.ProtectedValue });
+  }
+  return extras;
+}
+
+function bytesDoBinario(valor: kdbxweb.KdbxBinary | kdbxweb.KdbxBinaryWithHash): Uint8Array {
+  const dado = "hash" in valor ? valor.value : valor;
+  return dado instanceof kdbxweb.ProtectedValue ? dado.getBinary() : new Uint8Array(dado);
+}
+
+function anexosDe(entrada: kdbxweb.KdbxEntry): AnexoSenha[] {
+  const anexos: AnexoSenha[] = [];
+  for (const [nome, valor] of entrada.binaries) {
+    anexos.push({ nome, tamanho: bytesDoBinario(valor).byteLength });
+  }
+  return anexos;
+}
+
 function serializarEntrada(entrada: kdbxweb.KdbxEntry): EntradaSenha {
   const grupo = entrada.parentGroup;
   return {
@@ -298,6 +331,9 @@ function serializarEntrada(entrada: kdbxweb.KdbxEntry): EntradaSenha {
     senha: textoDoCampo(entrada.fields.get("Password")),
     url: textoDoCampo(entrada.fields.get("URL")),
     notas: textoDoCampo(entrada.fields.get("Notes")),
+    expiraEm: entrada.times.expires ? dataCurta(entrada.times.expiryTime) : null,
+    camposExtras: camposExtrasDe(entrada),
+    anexos: anexosDe(entrada),
     criadoEm: (entrada.times.creationTime ?? entrada.times.lastModTime ?? new Date()).toISOString(),
     atualizadoEm: (entrada.times.lastModTime ?? new Date()).toISOString(),
     // O kdbxweb preenche lastAccessTime na criação; só conta como "uso" o
@@ -369,14 +405,58 @@ export async function excluirGrupo(id: string): Promise<GrupoSenhas> {
   return obterArvore();
 }
 
-type CamposEntrada = { titulo: string; usuario: string; senha: string; url: string; notas: string };
-
 function aplicarCampos(entrada: kdbxweb.KdbxEntry, campos: CamposEntrada): void {
   entrada.fields.set("Title", campos.titulo);
   entrada.fields.set("UserName", campos.usuario);
   entrada.fields.set("Password", kdbxweb.ProtectedValue.fromString(campos.senha));
   entrada.fields.set("URL", campos.url);
   entrada.fields.set("Notes", campos.notas);
+  // Campos extras: o que não veio, some; o que veio, entra (protegido ou não).
+  for (const nome of [...entrada.fields.keys()]) {
+    if (!CAMPOS_PADRAO.has(nome)) entrada.fields.delete(nome);
+  }
+  for (const extra of campos.camposExtras) {
+    const nome = extra.nome.trim();
+    if (!nome || CAMPOS_PADRAO.has(nome)) continue;
+    entrada.fields.set(nome, extra.protegido ? kdbxweb.ProtectedValue.fromString(extra.valor) : extra.valor);
+  }
+  if (campos.expiraEm) {
+    entrada.times.expires = true;
+    // Vale até o fim do dia, no fuso da máquina.
+    entrada.times.expiryTime = new Date(`${campos.expiraEm}T23:59:59`);
+  } else {
+    entrada.times.expires = false;
+    entrada.times.expiryTime = undefined;
+  }
+}
+
+/** Guarda um arquivo dentro da entrada — mesmo nome substitui. */
+export async function adicionarAnexo(id: string, nome: string, bytes: Uint8Array): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
+  const binario = await sessao.db.createBinary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  entrada.binaries.set(nome, binario);
+  entrada.times.lastModTime = new Date();
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+export async function removerAnexo(id: string, nome: string): Promise<GrupoSenhas> {
+  const sessao = sessaoEmUso();
+  const entrada = encontrarEntrada(sessao.db, id);
+  entrada.binaries.delete(nome);
+  entrada.times.lastModTime = new Date();
+  // Solta o binário do arquivo se mais ninguém (nem o histórico) usa ele.
+  sessao.db.cleanup({ binaries: true });
+  marcarSujo(sessao);
+  return obterArvore();
+}
+
+export function obterAnexo(id: string, nome: string): Uint8Array {
+  const db = usarSessao();
+  const valor = encontrarEntrada(db, id).binaries.get(nome);
+  if (!valor) throw new Error("Anexo não encontrado.");
+  return bytesDoBinario(valor);
 }
 
 export async function criarEntrada(idGrupo: string, campos: CamposEntrada): Promise<GrupoSenhas> {

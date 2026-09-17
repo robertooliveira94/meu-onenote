@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  AlertTriangle,
   Check,
   Clock,
   Copy,
@@ -18,9 +19,12 @@ import {
   Loader2,
   Lock,
   MoreHorizontal,
+  Paperclip,
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
+  Wand2,
   Star,
   Trash2,
   User,
@@ -29,7 +33,9 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  acaoAdicionarAnexo,
   acaoAtualizarEntrada,
+  acaoBaixarAnexo,
   acaoBaixarCofre,
   acaoCriarEntrada,
   acaoCriarGrupo,
@@ -41,6 +47,7 @@ import {
   acaoMoverEntrada,
   acaoMoverGrupo,
   acaoRegistrarAcesso,
+  acaoRemoverAnexo,
   acaoRenomearGrupo,
   acaoStatusCofre,
   acaoTrancar,
@@ -55,10 +62,11 @@ import {
 } from "@/lib/arrastar";
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO } from "@/lib/cores";
-import { formatarDataCurta, formatarDataHora } from "@/lib/rotas";
-import type { EntradaSenha, GrupoSenhas } from "@/lib/tipos";
+import { formatarDataCurta, formatarDataHora, formatarDia } from "@/lib/rotas";
+import type { CampoExtraSenha, CamposEntrada, EntradaSenha, GrupoSenhas } from "@/lib/tipos";
 
 import { BotaoComoFunciona } from "./explicador-criptografia";
+import { BarraForca, GeradorSenha, SeloForca } from "./gerador-senha";
 import {
   DialogoExcluirCofre,
   DialogoExcluirEntrada,
@@ -158,7 +166,45 @@ function tempoRelativo(iso: string): string {
   return `há ${anos} ${anos === 1 ? "ano" : "anos"}`;
 }
 
-export type CamposEntrada = { titulo: string; usuario: string; senha: string; url: string; notas: string };
+/** Com quantos dias de antecedência a validade começa a ser avisada. */
+const DIAS_AVISO_VALIDADE = 14;
+
+type EstadoValidade = "vencida" | "vencendo" | null;
+
+/** "AAAA-MM-DD" → vencida (já passou), vencendo (nos próximos 14 dias) ou nada. */
+function estadoDaValidade(expiraEm: string | null): EstadoValidade {
+  if (!expiraEm) return null;
+  const [ano, mes, dia] = expiraEm.split("-").map(Number);
+  const hoje = new Date();
+  const dias = Math.round(
+    (new Date(ano, mes - 1, dia).getTime() - new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime()) /
+      86_400_000,
+  );
+  if (dias < 0) return "vencida";
+  if (dias <= DIAS_AVISO_VALIDADE) return "vencendo";
+  return null;
+}
+
+/** As outras entradas que usam a mesma senha — "esta senha já está em X". */
+function repetidaEm(senha: string, todas: EntradaSenha[], excetoId: string | null): EntradaSenha[] {
+  if (!senha) return [];
+  return todas.filter((entrada) => entrada.id !== excetoId && entrada.senha === senha);
+}
+
+function formatarTamanho(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function lerArquivoBase64(arquivo: File): Promise<string> {
+  return new Promise((resolver, rejeitar) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolver((leitor.result as string).split(",")[1] ?? "");
+    leitor.onerror = () => rejeitar(leitor.error);
+    leitor.readAsDataURL(arquivo);
+  });
+}
 
 export function CofreAberto({
   arvoreInicial,
@@ -446,6 +492,7 @@ export function CofreAberto({
 
         <PainelEntrada
           entrada={entradaAtiva}
+          todas={todas}
           editando={editando}
           onEditar={() => definirEditando(true)}
           onCancelar={() => definirEditando(false)}
@@ -459,12 +506,34 @@ export function CofreAberto({
           onIrParaGrupo={(id) => {
             selecionarNo(id);
           }}
+          onAnexar={async (arquivo) => {
+            if (!entradaAtiva) return;
+            if (arquivo.size > 5 * 1024 * 1024) {
+              alert("Anexo grande demais (máximo 5 MB).");
+              return;
+            }
+            aplicarResposta(await acaoAdicionarAnexo(entradaAtiva.id, arquivo.name, await lerArquivoBase64(arquivo)));
+          }}
+          onRemoverAnexo={async (nome) => {
+            if (!entradaAtiva || !confirm(`Remover o anexo “${nome}”?`)) return;
+            aplicarResposta(await acaoRemoverAnexo(entradaAtiva.id, nome));
+          }}
+          onBaixarAnexo={async (nome) => {
+            if (!entradaAtiva) return;
+            const resposta = await acaoBaixarAnexo(entradaAtiva.id, nome);
+            if (!resposta.ok || !resposta.mensagem) {
+              alert(resposta.ok ? "Anexo vazio." : resposta.erro);
+              return;
+            }
+            baixarArquivo(base64ParaBytes(resposta.mensagem), nome, "application/octet-stream");
+          }}
         />
       </div>
 
       {criando ? (
         <DialogoNovaEntrada
           grupo={grupoParaNova}
+          todas={todas}
           aoFechar={() => definirCriando(false)}
           aoSalvar={async (campos) => {
             const resposta = await acaoCriarEntrada(grupoParaNova.id, campos);
@@ -909,6 +978,7 @@ const LinhaEntrada = memo(function LinhaEntrada({
 }) {
   const [copiado, definirCopiado] = useState<"usuario" | "senha" | null>(null);
   const linha = useRef<HTMLDivElement>(null);
+  const validade = estadoDaValidade(entrada.expiraEm);
 
   useEffect(() => {
     if (ativa) linha.current?.scrollIntoView({ block: "nearest" });
@@ -946,6 +1016,13 @@ const LinhaEntrada = memo(function LinhaEntrada({
         <p className="flex items-center gap-1 truncate text-[12.5px] font-medium text-tinta">
           <span className="truncate">{entrada.titulo}</span>
           {entrada.favorita ? <Star size={10} className="shrink-0 fill-current text-[var(--realce)]" /> : null}
+          {validade ? (
+            <AlertTriangle
+              size={10}
+              className={clsx("shrink-0", validade === "vencida" ? "text-perigo" : "text-[#F5822C]")}
+              aria-label={validade === "vencida" ? "Senha vencida" : "Senha vencendo"}
+            />
+          ) : null}
         </p>
         <p className="truncate text-[11px] text-tinta-3">
           {entrada.usuario || "sem usuário"}
@@ -985,6 +1062,7 @@ const LinhaEntrada = memo(function LinhaEntrada({
 
 function PainelEntrada({
   entrada,
+  todas,
   editando,
   onEditar,
   onCancelar,
@@ -993,8 +1071,12 @@ function PainelEntrada({
   onFavoritar,
   onRegistrarAcesso,
   onIrParaGrupo,
+  onAnexar,
+  onRemoverAnexo,
+  onBaixarAnexo,
 }: {
   entrada: EntradaSenha | null;
+  todas: EntradaSenha[];
   editando: boolean;
   onEditar: () => void;
   onCancelar: () => void;
@@ -1003,6 +1085,9 @@ function PainelEntrada({
   onFavoritar: (id: string, favorita: boolean) => void;
   onRegistrarAcesso: (id: string) => void;
   onIrParaGrupo: (id: string) => void;
+  onAnexar: (arquivo: File) => Promise<void>;
+  onRemoverAnexo: (nome: string) => Promise<void>;
+  onBaixarAnexo: (nome: string) => Promise<void>;
 }) {
   if (!entrada) {
     return (
@@ -1024,6 +1109,7 @@ function PainelEntrada({
           <FormularioEntrada
             key={entrada.id}
             inicial={entrada}
+            outras={todas.filter((item) => item.id !== entrada.id)}
             aoCancelar={onCancelar}
             aoSalvar={onSalvar}
             rodapeEsquerdo={
@@ -1108,9 +1194,15 @@ function PainelEntrada({
           </div>
         </div>
 
-        <div className="painel mt-5 divide-y divide-linha">
+        <AvisosDaEntrada entrada={entrada} todas={todas} />
+
+        <div className="painel mt-4 divide-y divide-linha">
           <CampoDetalhe rotulo="Usuário" valor={entrada.usuario} copiavel />
-          <CampoSenhaDetalhe senha={entrada.senha} aoCopiar={() => onRegistrarAcesso(entrada.id)} />
+          <CampoSenhaDetalhe
+            senha={entrada.senha}
+            aoCopiar={() => onRegistrarAcesso(entrada.id)}
+            extra={<SeloForca senha={entrada.senha} />}
+          />
           <CampoDetalhe
             rotulo="Site"
             valor={entrada.url}
@@ -1130,8 +1222,23 @@ function PainelEntrada({
               ) : null
             }
           />
+          {entrada.camposExtras.map((campo) =>
+            campo.protegido ? (
+              <CampoSenhaDetalhe key={campo.nome} rotulo={campo.nome} senha={campo.valor} />
+            ) : (
+              <CampoDetalhe key={campo.nome} rotulo={campo.nome} valor={campo.valor} copiavel multilinha />
+            ),
+          )}
           <CampoDetalhe rotulo="Notas" valor={entrada.notas} multilinha />
+          {entrada.expiraEm ? (
+            <CampoDetalhe
+              rotulo="Validade"
+              valor={`${formatarDia(entrada.expiraEm)}${estadoDaValidade(entrada.expiraEm) === "vencida" ? " — vencida" : ""}`}
+            />
+          ) : null}
         </div>
+
+        <SecaoAnexos entrada={entrada} onAnexar={onAnexar} onRemover={onRemoverAnexo} onBaixar={onBaixarAnexo} />
 
         <p className="mt-4 text-[11px] text-tinta-3">
           Criada em {formatarDataHora(entrada.criadoEm)} · Alterada em {formatarDataHora(entrada.atualizadoEm)}
@@ -1192,8 +1299,122 @@ function CampoDetalhe({
   );
 }
 
-/** A linha da senha: escondida por padrão, olho para revelar, copiar com limpeza. */
-function CampoSenhaDetalhe({ senha, aoCopiar }: { senha: string; aoCopiar: () => void }) {
+/** Alertas acima dos campos: senha repetida noutra entrada, validade vencida ou vencendo. */
+function AvisosDaEntrada({ entrada, todas }: { entrada: EntradaSenha; todas: EntradaSenha[] }) {
+  const repetidas = repetidaEm(entrada.senha, todas, entrada.id);
+  const validade = estadoDaValidade(entrada.expiraEm);
+  if (repetidas.length === 0 && !validade) return null;
+  return (
+    <div className="mt-4 space-y-1.5">
+      {repetidas.length > 0 ? (
+        <p className="flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,#F5822C_35%,transparent)] bg-[color-mix(in_srgb,#F5822C_10%,transparent)] px-3 py-2 text-[12px] text-tinta">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[#F5822C]" />
+          <span>
+            Esta senha também está em{" "}
+            <strong>{repetidas.map((item) => item.titulo).join(", ")}</strong>. Se uma vazar, as outras vão junto.
+          </span>
+        </p>
+      ) : null}
+      {validade ? (
+        <p
+          className={clsx(
+            "flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] text-tinta",
+            validade === "vencida"
+              ? "border-[color-mix(in_srgb,var(--perigo)_35%,transparent)] bg-[color-mix(in_srgb,var(--perigo)_10%,transparent)]"
+              : "border-[color-mix(in_srgb,#F5822C_35%,transparent)] bg-[color-mix(in_srgb,#F5822C_10%,transparent)]",
+          )}
+        >
+          <AlertTriangle size={13} className={clsx("mt-0.5 shrink-0", validade === "vencida" ? "text-perigo" : "text-[#F5822C]")} />
+          <span>
+            {validade === "vencida" ? "A validade desta senha passou" : "Esta senha vence"} em{" "}
+            <strong>{formatarDia(entrada.expiraEm!)}</strong> — hora de trocar.
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Os arquivos guardados dentro da entrada, com anexar, baixar e remover. */
+function SecaoAnexos({
+  entrada,
+  onAnexar,
+  onRemover,
+  onBaixar,
+}: {
+  entrada: EntradaSenha;
+  onAnexar: (arquivo: File) => Promise<void>;
+  onRemover: (nome: string) => Promise<void>;
+  onBaixar: (nome: string) => Promise<void>;
+}) {
+  const [enviando, definirEnviando] = useState(false);
+  const seletor = useRef<HTMLInputElement>(null);
+
+  async function escolher(evento: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = evento.target.files?.[0];
+    evento.target.value = "";
+    if (!arquivo) return;
+    definirEnviando(true);
+    await onAnexar(arquivo);
+    definirEnviando(false);
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+          Anexos{entrada.anexos.length ? ` · ${entrada.anexos.length}` : ""}
+        </p>
+        <input ref={seletor} type="file" className="hidden" onChange={escolher} />
+        <Botao onClick={() => seletor.current?.click()} disabled={enviando} className="h-7 px-2 text-[11.5px]">
+          {enviando ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+          Anexar arquivo
+        </Botao>
+      </div>
+      {entrada.anexos.length > 0 ? (
+        <ul className="painel mt-2 divide-y divide-linha">
+          {entrada.anexos.map((anexo) => (
+            <li key={anexo.nome} className="group flex items-center gap-2 px-3 py-2 text-[12.5px]">
+              <Paperclip size={12} className="shrink-0 text-tinta-3" />
+              <button
+                type="button"
+                onClick={() => onBaixar(anexo.nome)}
+                className="min-w-0 flex-1 truncate text-left text-tinta hover:underline"
+                title="Baixar"
+              >
+                {anexo.nome}
+              </button>
+              <span className="shrink-0 text-[11px] text-tinta-3 tabular-nums">{formatarTamanho(anexo.tamanho)}</span>
+              <BotaoIcone rotulo="Baixar anexo" onClick={() => onBaixar(anexo.nome)} className="size-6 opacity-0 group-hover:opacity-100">
+                <Download size={12} />
+              </BotaoIcone>
+              <BotaoIcone rotulo="Remover anexo" onClick={() => onRemover(anexo.nome)} className="size-6 opacity-0 group-hover:opacity-100">
+                <Trash2 size={12} />
+              </BotaoIcone>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1.5 text-[11.5px] text-tinta-3">
+          Chaves de recuperação, códigos de backup, um PDF — ficam cifrados dentro do cofre (até 5 MB cada).
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A linha da senha (ou de um campo extra protegido): escondida por padrão, olho para revelar, copiar com limpeza. */
+function CampoSenhaDetalhe({
+  senha,
+  rotulo = "Senha",
+  aoCopiar,
+  extra,
+}: {
+  senha: string;
+  rotulo?: string;
+  aoCopiar?: () => void;
+  extra?: React.ReactNode;
+}) {
   const [visivel, definirVisivel] = useState(false);
   const [copiado, definirCopiado] = useState(false);
   const limpar = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1203,7 +1424,7 @@ function CampoSenhaDetalhe({ senha, aoCopiar }: { senha: string; aoCopiar: () =>
 
   async function copiar() {
     await copiarComLimpeza(senha);
-    aoCopiar();
+    aoCopiar?.();
     definirCopiado(true);
     if (limpar.current) clearTimeout(limpar.current);
     limpar.current = setTimeout(() => definirCopiado(false), ESPERA_LIMPAR_AREA_DE_TRANSFERENCIA);
@@ -1212,7 +1433,10 @@ function CampoSenhaDetalhe({ senha, aoCopiar }: { senha: string; aoCopiar: () =>
   return (
     <div className="group flex items-start gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">Senha</p>
+        <p className="flex items-center gap-2 text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">
+          {rotulo}
+          {extra}
+        </p>
         {senha ? (
           <p className={clsx("mt-0.5 truncate text-[13px] text-tinta", visivel ? "font-mono" : "tracking-[0.2em]")}>
             {visivel ? senha : "••••••••••••"}
@@ -1236,7 +1460,7 @@ function CampoSenhaDetalhe({ senha, aoCopiar }: { senha: string; aoCopiar: () =>
             {visivel ? <EyeOff size={13} /> : <Eye size={13} />}
           </BotaoIcone>
           <BotaoIcone
-            rotulo={copiado ? "Copiada!" : "Copiar senha"}
+            rotulo={copiado ? "Copiado!" : `Copiar ${rotulo.toLowerCase()}`}
             onClick={copiar}
             className={clsx("size-7", copiado && "text-[var(--realce)]")}
           >
@@ -1254,12 +1478,15 @@ function CampoSenhaDetalhe({ senha, aoCopiar }: { senha: string; aoCopiar: () =>
 
 function FormularioEntrada({
   inicial,
+  outras,
   aoCancelar,
   aoSalvar,
   rodapeEsquerdo,
   rotuloSalvar = "Salvar",
 }: {
   inicial: CamposEntrada | null;
+  /** As demais entradas do cofre — para avisar "esta senha já está em X" enquanto se digita. */
+  outras: EntradaSenha[];
   aoCancelar: () => void;
   aoSalvar: (campos: CamposEntrada) => Promise<void>;
   rodapeEsquerdo?: React.ReactNode;
@@ -1271,9 +1498,21 @@ function FormularioEntrada({
     senha: inicial?.senha ?? "",
     url: inicial?.url ?? "",
     notas: inicial?.notas ?? "",
+    expiraEm: inicial?.expiraEm ?? null,
+    camposExtras: inicial?.camposExtras ?? [],
   });
   const [mostrarSenha, definirMostrarSenha] = useState(!inicial);
+  const [gerando, definirGerando] = useState(false);
+  const [comValidade, definirComValidade] = useState(!!inicial?.expiraEm);
   const [salvando, definirSalvando] = useState(false);
+  const repetidas = repetidaEm(campos.senha, outras, null);
+
+  function alterarExtra(indice: number, mudanca: Partial<CampoExtraSenha>) {
+    definirCampos((atual) => ({
+      ...atual,
+      camposExtras: atual.camposExtras.map((campo, i) => (i === indice ? { ...campo, ...mudanca } : campo)),
+    }));
+  }
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -1288,7 +1527,8 @@ function FormularioEntrada({
       onKeyDown={(evento) => {
         if (evento.key === "Escape") {
           evento.preventDefault();
-          aoCancelar();
+          if (gerando) definirGerando(false);
+          else aoCancelar();
         }
       }}
       className="space-y-3"
@@ -1308,22 +1548,50 @@ function FormularioEntrada({
       </div>
       <div>
         <Rotulo>Senha</Rotulo>
-        <div className="relative">
-          <Campo
-            type={mostrarSenha ? "text" : "password"}
-            value={campos.senha}
-            onChange={(evento) => definirCampos({ ...campos, senha: evento.target.value })}
-            className={clsx("pr-9", mostrarSenha && "font-mono")}
-          />
-          <button
+        <div className="flex gap-1.5">
+          <div className="relative flex-1">
+            <Campo
+              type={mostrarSenha ? "text" : "password"}
+              value={campos.senha}
+              onChange={(evento) => definirCampos({ ...campos, senha: evento.target.value })}
+              className={clsx("pr-9", mostrarSenha && "font-mono")}
+            />
+            <button
+              type="button"
+              onClick={() => definirMostrarSenha((valor) => !valor)}
+              title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+              className="absolute top-1/2 right-2 -translate-y-1/2 text-tinta-3 hover:text-tinta"
+            >
+              {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <Botao
             type="button"
-            onClick={() => definirMostrarSenha((valor) => !valor)}
-            title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-            className="absolute top-1/2 right-2 -translate-y-1/2 text-tinta-3 hover:text-tinta"
+            onClick={() => definirGerando((valor) => !valor)}
+            aria-pressed={gerando}
+            className={clsx("h-9.5", gerando && "bg-realce-medio")}
           >
-            {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
+            <Wand2 size={13} />
+            Gerar
+          </Botao>
         </div>
+        <BarraForca senha={campos.senha} className="mt-1.5" />
+        {repetidas.length > 0 ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-[#F5822C]">
+            <AlertTriangle size={12} />
+            Já usada em {repetidas.map((item) => item.titulo).join(", ")}.
+          </p>
+        ) : null}
+        {gerando ? (
+          <GeradorSenha
+            aoFechar={() => definirGerando(false)}
+            aoUsar={(senha) => {
+              definirCampos((atual) => ({ ...atual, senha }));
+              definirMostrarSenha(true);
+              definirGerando(false);
+            }}
+          />
+        ) : null}
       </div>
       <div>
         <Rotulo>Site</Rotulo>
@@ -1333,6 +1601,50 @@ function FormularioEntrada({
           placeholder="https://…"
         />
       </div>
+      {campos.camposExtras.length > 0 ? (
+        <div className="space-y-2">
+          <Rotulo>Campos extras</Rotulo>
+          {campos.camposExtras.map((campo, indice) => (
+            <div key={indice} className="flex items-center gap-1.5">
+              <Campo
+                value={campo.nome}
+                onChange={(evento) => alterarExtra(indice, { nome: evento.target.value })}
+                placeholder="Nome (PIN, pergunta…)"
+                aria-label="Nome do campo"
+                className="h-8.5 w-2/5 text-[12.5px]"
+              />
+              <Campo
+                type={campo.protegido ? "password" : "text"}
+                value={campo.valor}
+                onChange={(evento) => alterarExtra(indice, { valor: evento.target.value })}
+                placeholder="Valor"
+                aria-label={`Valor de ${campo.nome || "campo"}`}
+                className="h-8.5 flex-1 text-[12.5px]"
+              />
+              <BotaoIcone
+                rotulo={campo.protegido ? "Protegido — clique para deixar visível" : "Visível — clique para proteger"}
+                onClick={() => alterarExtra(indice, { protegido: !campo.protegido })}
+                aria-pressed={campo.protegido}
+                className={clsx("size-8", campo.protegido && "text-[var(--realce)]")}
+              >
+                <ShieldCheck size={14} />
+              </BotaoIcone>
+              <BotaoIcone
+                rotulo="Tirar campo"
+                onClick={() =>
+                  definirCampos((atual) => ({
+                    ...atual,
+                    camposExtras: atual.camposExtras.filter((_, i) => i !== indice),
+                  }))
+                }
+                className="size-8"
+              >
+                <X size={14} />
+              </BotaoIcone>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div>
         <Rotulo>Notas</Rotulo>
         <textarea
@@ -1341,6 +1653,42 @@ function FormularioEntrada({
           rows={3}
           className="w-full resize-none rounded-lg border border-linha bg-superficie-alta px-3 py-2 text-[13px] text-tinta transition-shadow placeholder:text-tinta-3 focus:border-[var(--realce)] focus:shadow-[0_0_0_3px_var(--realce-medio)] focus:outline-none"
         />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-tinta-2">
+        <button
+          type="button"
+          onClick={() =>
+            definirCampos((atual) => ({
+              ...atual,
+              camposExtras: [...atual.camposExtras, { nome: "", valor: "", protegido: false }],
+            }))
+          }
+          className="inline-flex items-center gap-1 hover:text-tinta"
+        >
+          <Plus size={12} />
+          Campo extra
+        </button>
+        <label className="inline-flex cursor-pointer items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={comValidade}
+            onChange={(evento) => {
+              definirComValidade(evento.target.checked);
+              if (!evento.target.checked) definirCampos((atual) => ({ ...atual, expiraEm: null }));
+            }}
+            className="accent-[var(--realce)]"
+          />
+          Tem validade
+        </label>
+        {comValidade ? (
+          <input
+            type="date"
+            value={campos.expiraEm ?? ""}
+            onChange={(evento) => definirCampos({ ...campos, expiraEm: evento.target.value || null })}
+            aria-label="Válida até"
+            className="h-8 rounded-lg border border-linha bg-superficie-alta px-2 text-[12.5px] text-tinta focus:border-[var(--realce)] focus:outline-none"
+          />
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 pt-1">
@@ -1361,16 +1709,18 @@ function FormularioEntrada({
 
 function DialogoNovaEntrada({
   grupo,
+  todas,
   aoFechar,
   aoSalvar,
 }: {
   grupo: GrupoSenhas;
+  todas: EntradaSenha[];
   aoFechar: () => void;
   aoSalvar: (campos: CamposEntrada) => Promise<void>;
 }) {
   return (
     <Dialogo titulo="Nova senha" descricao={`Vai para o grupo “${grupo.nome || "Cofre"}”.`} aberto aoFechar={aoFechar} largura="max-w-lg">
-      <FormularioEntrada inicial={null} aoCancelar={aoFechar} aoSalvar={aoSalvar} rotuloSalvar="Guardar" />
+      <FormularioEntrada inicial={null} outras={todas} aoCancelar={aoFechar} aoSalvar={aoSalvar} rotuloSalvar="Guardar" />
     </Dialogo>
   );
 }

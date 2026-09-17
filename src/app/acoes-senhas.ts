@@ -1,7 +1,7 @@
 "use server";
 
 import * as senhas from "@/lib/senhas";
-import type { GrupoSenhas } from "@/lib/tipos";
+import type { CamposEntrada, GrupoSenhas } from "@/lib/tipos";
 
 /**
  * Ações do cofre de senhas. Ao contrário do resto do app, praticamente nada
@@ -101,8 +101,6 @@ export async function acaoExcluirGrupo(id: string): Promise<RespostaSenhas> {
   return comTratamento(() => senhas.excluirGrupo(id));
 }
 
-type CamposEntrada = { titulo: string; usuario: string; senha: string; url: string; notas: string };
-
 export async function acaoCriarEntrada(idGrupo: string, campos: CamposEntrada): Promise<RespostaSenhas> {
   if (!campos.titulo.trim()) return { ok: false, erro: "Dê um nome a esta senha." };
   return comTratamento(() => senhas.criarEntrada(idGrupo, campos));
@@ -115,6 +113,28 @@ export async function acaoAtualizarEntrada(id: string, campos: CamposEntrada): P
 
 export async function acaoMoverEntrada(id: string, idNovoGrupo: string): Promise<RespostaSenhas> {
   return comTratamento(() => senhas.moverEntrada(id, idNovoGrupo));
+}
+
+export async function acaoAdicionarAnexo(id: string, nome: string, bytesBase64: string): Promise<RespostaSenhas> {
+  const nomeLimpo = nome.trim().slice(0, 200);
+  if (!nomeLimpo) return { ok: false, erro: "O arquivo precisa de um nome." };
+  const bytes = Buffer.from(bytesBase64, "base64");
+  if (bytes.length === 0) return { ok: false, erro: "Arquivo vazio." };
+  if (bytes.length > senhas.TAMANHO_MAXIMO_ANEXO) return { ok: false, erro: "Anexo grande demais (máximo 5 MB)." };
+  return comTratamento(() => senhas.adicionarAnexo(id, nomeLimpo, bytes));
+}
+
+export async function acaoRemoverAnexo(id: string, nome: string): Promise<RespostaSenhas> {
+  return comTratamento(() => senhas.removerAnexo(id, nome));
+}
+
+/** Os bytes de um anexo, em base64, para baixar. */
+export async function acaoBaixarAnexo(id: string, nome: string): Promise<Resposta> {
+  try {
+    return { ok: true, mensagem: Buffer.from(senhas.obterAnexo(id, nome)).toString("base64") };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para ler o anexo." };
+  }
 }
 
 export async function acaoFavoritarEntrada(id: string, favorita: boolean): Promise<RespostaSenhas> {

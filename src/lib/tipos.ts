@@ -313,6 +313,20 @@ export type TarefaArquivada = TarefaKanban & { arquivadoEm: string };
  * `.kdbx` — só existe enquanto o cofre está destrancado, nunca é persistido
  * fora dele.
  */
+/** Um campo além dos cinco padrão do KeePass — "PIN", "pergunta secreta", "chave de recuperação"… */
+export type CampoExtraSenha = {
+  nome: string;
+  valor: string;
+  /** Protegido = cifrado em memória e escondido na tela, como a senha. */
+  protegido: boolean;
+};
+
+/** Um arquivo guardado dentro da entrada (binário do `.kdbx`). */
+export type AnexoSenha = {
+  nome: string;
+  tamanho: number;
+};
+
 export type EntradaSenha = {
   id: string;
   titulo: string;
@@ -320,6 +334,10 @@ export type EntradaSenha = {
   senha: string;
   url: string;
   notas: string;
+  /** "AAAA-MM-DD" quando a senha tem validade; a lista avisa quando vence ou já venceu. */
+  expiraEm: string | null;
+  camposExtras: CampoExtraSenha[];
+  anexos: AnexoSenha[];
   criadoEm: string;
   atualizadoEm: string;
   /** Último uso de verdade (copiar a senha, abrir o site) — é o que ordena "Recentes". */
@@ -329,6 +347,17 @@ export type EntradaSenha = {
   /** Grupo onde mora (id e nome), para as listas que juntam entradas de vários grupos. */
   grupoId: string;
   grupoNome: string;
+};
+
+/** O que o formulário de uma senha envia — o resto (favorita, anexos, tempos) tem ação própria. */
+export type CamposEntrada = {
+  titulo: string;
+  usuario: string;
+  senha: string;
+  url: string;
+  notas: string;
+  expiraEm: string | null;
+  camposExtras: CampoExtraSenha[];
 };
 
 /**
