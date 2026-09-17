@@ -77,7 +77,7 @@ export function AtalhoDeLinks() {
     ? `javascript:void(window.open('${origem}/salvar-link?url='+encodeURIComponent(location.href)+'&titulo='+encodeURIComponent(document.title),'_blank','width=420,height=520'))`
     : "";
   const abrirLinks = origem
-    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=340,height=520'))`
+    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=340,height=560'))`
     : "";
 
   return (

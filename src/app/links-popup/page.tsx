@@ -1,4 +1,4 @@
-import { linksFavoritos, linksRecentes } from "@/lib/links-app";
+import { linksFavoritos, linksRecentes, obterArvore } from "@/lib/links-app";
 
 import { PopupLinks } from "@/components/popup-links";
 
@@ -15,6 +15,6 @@ export const dynamic = "force-dynamic";
  * um nome de segmento diferente, como `nota-flutuante` fez com `nota`.
  */
 export default async function PaginaLinksPopup() {
-  const [favoritos, recentes] = await Promise.all([linksFavoritos(), linksRecentes(12)]);
-  return <PopupLinks favoritos={favoritos} recentes={recentes} />;
+  const [favoritos, recentes, arvore] = await Promise.all([linksFavoritos(), linksRecentes(12), obterArvore()]);
+  return <PopupLinks favoritos={favoritos} recentes={recentes} arvore={arvore} />;
 }
