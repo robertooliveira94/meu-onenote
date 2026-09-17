@@ -1,10 +1,11 @@
 # Extensão do navegador
 
-Extensão do Chrome (Manifest V3) que fala com o app rodando localmente. Por
-enquanto, só a parte de **senhas** (frente 4): captura senhas enviadas em
+Extensão do Chrome (Manifest V3) que fala com o app rodando localmente.
+Duas partes: **senhas** (frente 4) — captura senhas enviadas em
 formulários e oferece salvar no cofre, e sugere preencher quando já existe
-uma entrada para o site aberto. A parte de **Links** (popup/painel lateral
-com os favoritos) entra na frente 5.
+uma entrada para o site aberto — e **links** (frente 5) — mostra
+favoritos e recentes no popup da barra e num painel lateral, pra abrir sem
+sair da aba.
 
 ## Como instalar (modo desenvolvedor, sem publicar)
 
@@ -46,6 +47,12 @@ Windows, não algo desta extensão. Duas saídas:
   autopreenchimento) e `salvar` (cria ou atualiza uma entrada). Todas
   exigem o cofre destrancado — se estiver trancado, a extensão oferece
   abrir o app.
+- A aba **Links** do popup e o **painel lateral** (`sidepanel.html`, clique
+  direito no ícone → "Abrir painel lateral") mostram a mesma janelinha:
+  `/links-popup` do próprio app, carregada num `<iframe>`. Não existe rota
+  de extensão própria pra Links — o app já serve essa página pronta (é a
+  mesma que o bookmarklet "Abrir meus links" abre), então a extensão só
+  precisa embuti-la.
 - Sem servidor nenhum além do seu: nada disso fala com a internet, exceto
   o "Verificar vazamentos" do relatório de saúde (dentro do app), que é
   outra funcionalidade, separada e sob pedido.

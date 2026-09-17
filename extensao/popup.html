@@ -6,17 +6,36 @@
     <style>
       body {
         margin: 0;
-        width: 260px;
+        width: 300px;
         font: 13px/1.4 -apple-system, system-ui, sans-serif;
         background: #151d2b;
         color: #e9eef6;
       }
-      .cabecalho {
+      .abas {
         display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 14px 16px 10px;
-        font-weight: 700;
+        gap: 4px;
+        padding: 12px 16px 0;
+      }
+      .aba {
+        flex: 1;
+        font: inherit;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        padding: 7px 0;
+        cursor: pointer;
+        background: transparent;
+        color: #9fadc0;
+      }
+      .aba.ativa {
+        background: #1b2434;
+        color: #e9eef6;
+      }
+      .painel {
+        display: none;
+      }
+      .painel.ativo {
+        display: block;
       }
       .status {
         display: flex;
@@ -42,7 +61,7 @@
       .bolinha.offline {
         background: #ff6369;
       }
-      button {
+      button.acao {
         display: block;
         width: calc(100% - 32px);
         margin: 0 16px 14px;
@@ -63,16 +82,41 @@
       .rodape a {
         color: #7a8ba1;
       }
+      #quadroLinks {
+        display: block;
+        width: 100%;
+        height: 380px;
+        border: 0;
+      }
+      #linksCarregando {
+        padding: 24px 16px;
+        text-align: center;
+        color: #7a8ba1;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
-    <div class="cabecalho">🔑 Senhas</div>
-    <div class="status" id="status">
-      <span class="bolinha" id="bolinha"></span>
-      <span id="texto">Verificando…</span>
+    <div class="abas">
+      <button type="button" class="aba ativa" id="abaSenhas">🔑 Senhas</button>
+      <button type="button" class="aba" id="abaLinks">🔖 Links</button>
     </div>
-    <button id="abrir">Abrir o cofre</button>
-    <p class="rodape">Preenche e captura senhas em qualquer site — <a href="opcoes.html" target="_blank">preferências</a>.</p>
+
+    <div class="painel ativo" id="painelSenhas">
+      <div class="status" id="status">
+        <span class="bolinha" id="bolinha"></span>
+        <span id="texto">Verificando…</span>
+      </div>
+      <button type="button" class="acao" id="abrir">Abrir o cofre</button>
+      <p class="rodape">Preenche e captura senhas em qualquer site — <a href="opcoes.html" target="_blank">preferências</a>.</p>
+    </div>
+
+    <div class="painel" id="painelLinks">
+      <p id="linksCarregando">Carregando…</p>
+      <iframe id="quadroLinks" title="Seus links" hidden></iframe>
+      <p class="rodape">Painel maior e mais confortável: clique com o botão direito no ícone da extensão → <strong>Abrir painel lateral</strong>.</p>
+    </div>
+
     <script src="popup.js"></script>
   </body>
 </html>

@@ -640,6 +640,13 @@ painel de detalhe fixo à direita, onde "Editar" troca pra edição no
 próprio painel em vez de abrir um modal (o modal, ali, fica só pra "Nova
 senha" e pro que é destrutivo).
 
+O mosaico de Links (tile ~120px) estica a capa (`og:image`, quando existe)
+sangrando até a borda do cartão — `-mx-3 -mt-4` cancelando o padding do
+próprio `.cartao` — com o favicon por cima, menor, no canto; sem capa, o
+tile cai no favicon grande sozinho. É o único lugar do sistema onde uma
+imagem sangra a borda de um `.cartao` de propósito: em todo outro cartão a
+regra continua sendo conteúdo respeitando o padding.
+
 ## Do's and Don'ts
 
 ### Do:

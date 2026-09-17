@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Links — Meu bloco de anotações</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #151d2b;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+      #offline {
+        display: none;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 24px 20px;
+        font: 13px/1.5 -apple-system, system-ui, sans-serif;
+        color: #9fadc0;
+        text-align: center;
+      }
+      #offline a {
+        color: #0ea47c;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="quadro" title="Seus links"></iframe>
+    <div id="offline">
+      O app não está aberto (ou o endereço nas <a href="opcoes.html" target="_blank">preferências</a> da
+      extensão está errado). Abra o app e recarregue este painel.
+    </div>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

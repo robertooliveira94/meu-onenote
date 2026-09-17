@@ -433,21 +433,48 @@ limpas e abríveis em qualquer editor.
     lenta esperando o disco.
 - **Links** (`/links`): um gerenciador de favoritos — pastas e subpastas
   (aninhamento livre, mesma forma de árvore do cofre de senhas, mas sem
-  cifra: é um JSON simples), cada uma com cor e ícone próprios. Um link
-  guarda título (buscado sozinho no próprio site ao colar a URL, sempre
-  editável), URL, favicon (baixado do site de origem e salvo aqui dentro
-  — nunca um serviço de terceiros), nota opcional e uma estrela de
-  favorito. Um clique abre o link em nova aba na hora; editar/mover/
-  excluir é ação separada. Tela inicial mostra todos os links (achatando
-  a árvore inteira) com uma seção de favoritos acima de recentes; busca
-  simples por título/URL. Excluir sempre vai para uma lixeira própria
-  (recuperável); pasta com conteúdo dentro exige digitar o nome pra
-  confirmar, igual excluir um caderno. Dá para importar de uma vez um
-  arquivo de favoritos exportado do navegador (`.html`, formato padrão
-  Netscape), recriando a árvore de pastas. Um atalho de navegador à parte
-  (`/links/atalho`, independente do Web Clipper das Anotações) abre uma
-  janela pop-up pequena por cima da página atual — escolhe a pasta,
-  salva, fecha sozinha — sem trocar de aba nem virar nota.
+  cifra: um único JSON, `_links/arvore.json`), cada uma com cor e ícone
+  próprios. Um link guarda título, URL, favicon e capa (`og:image`,
+  buscados sozinhos no próprio site ao colar a URL, sempre editáveis —
+  nunca um serviço de terceiros), nota opcional (pré-preenchida da
+  `og:description` quando existe), estrela de favorito e "ler depois".
+  - **Navegação**: trilha de pastas clicável no cabeçalho da coluna,
+    subpastas da pasta aberta como tiles antes dos links (desce sem
+    precisar da árvore ao lado), contagem de links sempre visível na
+    árvore. Colar (`Ctrl+V`) ou arrastar uma URL solta sobre a coluna cria
+    o link ali na hora, sem diálogo — busca título e favicon sozinho.
+    "Abrir todos" no cabeçalho (confirma acima de 8 links).
+  - **Três visões** por pasta (Lista, Mosaico, Compacta — lembrada por
+    pasta), e quatro ordenações (manual por arrastar, nome, data de
+    criação, mais aberto). "Ler depois" marca link novo como não lido
+    (bolinha na lista, filtro na tela inicial) até ele ser aberto pela
+    primeira vez. Aviso de link repetido ao criar/editar, com o caminho
+    da pasta onde já está. Seleção em lote (Ctrl/Shift+clique) move,
+    favorita, marca lido ou exclui vários de uma vez.
+  - **Manutenção**: "Verificar links quebrados" faz um HEAD (concorrência
+    limitada) em cada link da pasta e sinaliza os que não responderam;
+    exportar favoritos em `.html` (mesmo formato Netscape do importar,
+    fecha o ciclo). Atalhos de teclado: `Ctrl+F` busca, `Backspace` sobe
+    uma pasta, `n` cria link, e passando o mouse sobre uma linha da Lista:
+    `o` abre, `e` edita, `f` favorita.
+  - Um clique abre o link em nova aba e marca como lido; editar/mover/
+    excluir é ação separada. Tela inicial mostra favoritos e recentes
+    (achatando a árvore inteira) com um mosaico de não lidos; busca
+    simples por título/URL. Excluir sempre vai para uma lixeira própria
+    (recuperável); pasta com conteúdo dentro exige digitar o nome pra
+    confirmar, igual excluir um caderno. Dá para importar de uma vez um
+    arquivo de favoritos exportado do navegador (`.html`, formato padrão
+    Netscape), recriando a árvore de pastas.
+  - **Atalhos de navegador** (`/links/atalho`, independentes do Web
+    Clipper das Anotações): dois botões pra barra de favoritos — "Salvar
+    como link" abre uma janela pop-up pequena por cima da página atual
+    (escolhe a pasta, salva, fecha sozinha, sem trocar de aba nem virar
+    nota) e "Abrir meus links" abre a mesma janelinha compacta de
+    `/links-popup` (favoritos + recentes; clicar num link abre e fecha a
+    janela sozinha). A extensão de navegador (ver Senhas, mesma pasta
+    `extensao/`) ganhou uma aba "Links" no popup da barra e um painel
+    lateral (`chrome.sidePanel`) com o mesmo `/links-popup` embutido —
+    útil pra manter os favoritos à mão numa coluna fixa ao lado da aba.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de
