@@ -8,10 +8,13 @@ import {
   Folder,
   FolderPlus,
   Import,
+  LayoutGrid,
   Link2,
+  List,
   MoreHorizontal,
   Pencil,
   Plus,
+  Rows3,
   Search,
   Star,
   Trash2,
@@ -661,6 +664,27 @@ function ColunaLinks({
 }) {
   const [sobreUrl, definirSobreUrl] = useState(false);
 
+  // Lista · Mosaico · Compacta — lembrado por pasta, mesmo padrão do toggle de visão do Kanban.
+  type Visao = "lista" | "mosaico" | "compacta";
+  const chaveVisao = `links-visao:${pasta.id}`;
+  const [visao, definirVisaoEstado] = useState<Visao>("lista");
+  useEffect(() => {
+    try {
+      const salva = localStorage.getItem(chaveVisao);
+      definirVisaoEstado(salva === "mosaico" || salva === "compacta" ? salva : "lista");
+    } catch {
+      definirVisaoEstado("lista");
+    }
+  }, [chaveVisao]);
+  function definirVisao(proxima: Visao) {
+    definirVisaoEstado(proxima);
+    try {
+      localStorage.setItem(chaveVisao, proxima);
+    } catch {
+      // Sem armazenamento: vale só para esta sessão.
+    }
+  }
+
   return (
     <div
       className="flex min-w-0 flex-1 flex-col overflow-hidden bg-papel"
@@ -705,6 +729,25 @@ function ColunaLinks({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex items-center gap-0.5 rounded-lg border border-linha p-0.5" role="group" aria-label="Visão">
+            {(
+              [
+                ["lista", "Lista", <List key="l" size={13} />],
+                ["mosaico", "Mosaico", <LayoutGrid key="m" size={13} />],
+                ["compacta", "Compacta", <Rows3 key="c" size={13} />],
+              ] as const
+            ).map(([id, rotulo, icone]) => (
+              <BotaoIcone
+                key={id}
+                rotulo={rotulo}
+                onClick={() => definirVisao(id)}
+                aria-pressed={visao === id}
+                className={clsx(visao === id && "bg-realce-medio text-tinta")}
+              >
+                {icone}
+              </BotaoIcone>
+            ))}
+          </div>
           {pasta.links.length > 0 ? (
             <BotaoIcone rotulo={`Abrir todos · ${pasta.links.length}`} onClick={() => onAbrirTodos(pasta.links)}>
               <ExternalLink size={14} />
@@ -717,7 +760,7 @@ function ColunaLinks({
         </div>
       </div>
 
-      <div className="lista-cartoes flex-1 overflow-y-auto px-4 pb-4">
+      <div className={clsx("flex-1 overflow-y-auto px-4 pb-4", visao === "lista" && "lista-cartoes")}>
         {sobreUrl ? (
           <div className="mb-3 rounded-lg border-2 border-dashed border-[var(--realce)] bg-realce-fraco px-3 py-2 text-center text-[12px] text-tinta">
             Soltar para salvar aqui
@@ -749,6 +792,18 @@ function ColunaLinks({
               titulo="Nenhum link nesta pasta"
               descricao='Clique em "Novo link", cole (Ctrl+V) ou arraste uma URL aqui.'
             />
+          </div>
+        ) : visao === "mosaico" ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
+            {pasta.links.map((link) => (
+              <TileLink key={link.id} link={link} onAbrir={onAbrir} onExcluir={onExcluir} onFavoritar={onFavoritar} />
+            ))}
+          </div>
+        ) : visao === "compacta" ? (
+          <div>
+            {pasta.links.map((link) => (
+              <LinhaLinkCompacta key={link.id} link={link} onAbrir={onAbrir} onExcluir={onExcluir} onFavoritar={onFavoritar} />
+            ))}
           </div>
         ) : (
           pasta.links.map((link) => (
@@ -808,6 +863,114 @@ const LinhaLink = memo(function LinhaLink({
   );
 });
 
+/** Linha de uma tela de página inicial de navegador: só o essencial numa faixa de 28px — pra quem tem dezenas de links numa pasta. */
+const LinhaLinkCompacta = memo(function LinhaLinkCompacta({
+  link,
+  onAbrir,
+  onExcluir,
+  onFavoritar,
+}: {
+  link: LinkSalvo;
+  onAbrir: (link: LinkSalvo) => void;
+  onExcluir: (link: LinkSalvo) => void;
+  onFavoritar: (link: LinkSalvo) => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
+      className="linha-nav group flex items-center gap-2 rounded-md px-1.5 hover:bg-realce-fraco"
+    >
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-2">
+        {link.favicon ? (
+          // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena o otimizador de imagens do Next pra isso.
+          <img src={`/links/favicon/${link.favicon}`} alt="" className="size-4 shrink-0 rounded object-contain" />
+        ) : (
+          <Bookmark size={12} className="shrink-0 text-tinta-3" />
+        )}
+        <p className="min-w-0 flex-1 truncate text-[12.5px] text-tinta">{link.titulo}</p>
+        <p className="shrink-0 truncate text-[11px] text-tinta-3">{dominioDaUrl(link.url)}</p>
+      </a>
+      <BotaoIcone
+        rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
+        onClick={() => onFavoritar(link)}
+        className={clsx("size-6 shrink-0", !link.favorito && "opacity-0 group-hover:opacity-100")}
+      >
+        <Star size={12} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
+      </BotaoIcone>
+      <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100">
+        <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="size-6">
+          <Pencil size={12} />
+        </BotaoIcone>
+        <BotaoIcone rotulo="Excluir" onClick={() => onExcluir(link)} className="size-6">
+          <Trash2 size={12} />
+        </BotaoIcone>
+      </div>
+    </div>
+  );
+});
+
+/** Um quadrado de ~120px com o favicon grande no centro — o formato de página inicial de navegador, pra achar o link certo em meio segundo. */
+const TileLink = memo(function TileLink({
+  link,
+  onAbrir,
+  onExcluir,
+  onFavoritar,
+}: {
+  link: LinkSalvo;
+  onAbrir: (link: LinkSalvo) => void;
+  /** Ausente na tela inicial e na busca (que atravessam pastas — excluir dali ficaria ambíguo sobre em qual pasta). */
+  onExcluir?: (link: LinkSalvo) => void;
+  onFavoritar: (link: LinkSalvo) => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(evento) => iniciarArrastoDeLink(evento, link.id)}
+      className="cartao group relative flex flex-col items-center gap-2 px-3 py-4 text-center"
+    >
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2">
+        {link.favicon ? (
+          // eslint-disable-next-line @next/next/no-img-element -- favicon local pequeno, não vale a pena o otimizador de imagens do Next pra isso.
+          <img
+            src={`/links/favicon/${link.favicon}`}
+            alt=""
+            className="size-8 rounded-lg border border-linha bg-superficie-alta object-contain p-1"
+          />
+        ) : (
+          <div className="flex size-8 items-center justify-center rounded-lg bg-realce-medio text-[var(--realce)]">
+            <Bookmark size={15} />
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="line-clamp-2 text-[12px] leading-tight font-medium text-tinta">{link.titulo}</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
+        </div>
+      </a>
+      <BotaoIcone
+        rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
+        onClick={() => onFavoritar(link)}
+        className={clsx(
+          "absolute top-1.5 right-1.5 size-6 shrink-0",
+          !link.favorito && "opacity-0 group-hover:opacity-100",
+        )}
+      >
+        <Star size={12} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
+      </BotaoIcone>
+      <div className="absolute top-1.5 left-1.5 flex shrink-0 items-center opacity-0 group-hover:opacity-100">
+        <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="size-6">
+          <Pencil size={11} />
+        </BotaoIcone>
+        {onExcluir ? (
+          <BotaoIcone rotulo="Excluir" onClick={() => onExcluir(link)} className="size-6">
+            <Trash2 size={11} />
+          </BotaoIcone>
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
 /**
  * Tela inicial da app: todos os links, mais recentes primeiro, com uma
  * seção de favoritos acima — mesmo formato da página inicial de Anotações
@@ -844,53 +1007,21 @@ function InicioLinks({
             <Star size={12} />
             Favoritos
           </h2>
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
             {favoritos.map((link) => (
-              <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
             ))}
           </div>
         </section>
       ) : null}
       <section>
         <h2 className="mb-2 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Recentes</h2>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
           {recentes.map((link) => (
-            <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+            <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
           ))}
         </div>
       </section>
-    </div>
-  );
-}
-
-function CartaoLink({
-  link,
-  onAbrir,
-  onFavoritar,
-}: {
-  link: LinkComPasta;
-  onAbrir: (link: LinkSalvo) => void;
-  onFavoritar: (link: LinkSalvo) => void;
-}) {
-  return (
-    <div className="cartao group flex items-center gap-3 px-3.5 py-2.5">
-      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 flex-1 items-center gap-3">
-        <IconeDoLink link={link} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium text-tinta">{link.titulo}</p>
-          <p className="truncate text-[11.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
-        </div>
-      </a>
-      <BotaoIcone
-        rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
-        onClick={() => onFavoritar(link)}
-        className={clsx("shrink-0", !link.favorito && "opacity-0 group-hover:opacity-100")}
-      >
-        <Star size={14} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
-      </BotaoIcone>
-      <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="shrink-0 opacity-0 group-hover:opacity-100">
-        <Pencil size={14} />
-      </BotaoIcone>
     </div>
   );
 }
@@ -913,9 +1044,9 @@ function ResultadosBusca({
           ? `Nada encontrado para "${termo}".`
           : `${resultados.length} ${resultados.length === 1 ? "resultado" : "resultados"} para "${termo}"`}
       </p>
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
         {resultados.map((link) => (
-          <CartaoLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
+          <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} />
         ))}
       </div>
     </div>
