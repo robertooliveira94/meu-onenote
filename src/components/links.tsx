@@ -1,10 +1,24 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, FolderPlus, Import, Link2, MoreHorizontal, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import {
+  Bookmark,
+  ChevronRight,
+  ExternalLink,
+  Folder,
+  FolderPlus,
+  Import,
+  Link2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   acaoAtualizarLink,
@@ -41,6 +55,16 @@ function encontrarPasta(raiz: PastaLink, id: string): PastaLink | null {
   for (const sub of raiz.pastas) {
     const achada = encontrarPasta(sub, id);
     if (achada) return achada;
+  }
+  return null;
+}
+
+/** Da raiz até `id`, inclusive — a trilha de navegação (`Geral › Trabalho › Projetos`). */
+function caminhoAte(raiz: PastaLink, id: string): PastaLink[] | null {
+  if (raiz.id === id) return [raiz];
+  for (const sub of raiz.pastas) {
+    const resto = caminhoAte(sub, id);
+    if (resto) return [raiz, ...resto];
   }
   return null;
 }
@@ -144,6 +168,45 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     [aplicarResposta],
   );
 
+  const [criandoDeUrl, definirCriandoDeUrl] = useState(false);
+  /** Cria o link direto (colar/arrastar uma URL) — sem passar pelo diálogo: busca título e favicon sozinho. */
+  const criarLinkRapido = useCallback(
+    async (url: string, idPasta: string) => {
+      definirCriandoDeUrl(true);
+      const { titulo, favicon } = await acaoBuscarMetadadosUrl(url);
+      const resposta = await acaoCriarLink(idPasta, { titulo: titulo ?? url, url, nota: "", favorito: false }, favicon);
+      definirCriandoDeUrl(false);
+      aplicarResposta(resposta);
+    },
+    [aplicarResposta],
+  );
+
+  // Colar uma URL em qualquer lugar da tela (fora de um campo de texto) cria
+  // o link na pasta aberta na hora — sem diálogo. `n` continua abrindo o
+  // diálogo completo para quem quer escrever título/nota antes de salvar.
+  useEffect(() => {
+    function aoColar(evento: ClipboardEvent) {
+      const alvo = evento.target as HTMLElement | null;
+      if (alvo?.closest("input, textarea, [contenteditable=true]")) return;
+      const texto = evento.clipboardData?.getData("text/plain")?.trim();
+      if (!texto) return;
+      try {
+        new URL(texto);
+      } catch {
+        return;
+      }
+      evento.preventDefault();
+      criarLinkRapido(texto, pastaAtiva.id);
+    }
+    document.addEventListener("paste", aoColar);
+    return () => document.removeEventListener("paste", aoColar);
+  }, [criarLinkRapido, pastaAtiva.id]);
+
+  const abrirTodos = useCallback((links: LinkSalvo[]) => {
+    if (links.length > 8 && !confirm(`Abrir ${links.length} links em novas abas?`)) return;
+    for (const link of links) window.open(link.url, "_blank", "noopener,noreferrer");
+  }, []);
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-linha bg-superficie px-5 py-2.5">
@@ -199,10 +262,15 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         ) : modo === "pasta" ? (
           <ColunaLinks
             pasta={pastaAtiva}
+            caminho={caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva]}
+            criandoDeUrl={criandoDeUrl}
             onAbrir={abrirLink}
             onNovo={novoLink}
             onExcluir={definirExcluindoLink}
             onFavoritar={favoritarLink}
+            onSelecionarPasta={selecionarPasta}
+            onCriarLinkRapido={criarLinkRapido}
+            onAbrirTodos={abrirTodos}
           />
         ) : (
           <InicioLinks favoritos={favoritos} recentes={recentes} onAbrir={abrirLink} onFavoritar={favoritarLink} />
@@ -466,7 +534,7 @@ function NoPastaLinkImpl({
             />
           )}
         </div>
-        <span className="shrink-0 text-[10px] text-tinta-3 tabular-nums opacity-0 group-hover:opacity-100">
+        <span className="shrink-0 text-[10px] text-tinta-3 tabular-nums">
           {pasta.links.length || ""}
         </span>
         <Menu
@@ -562,46 +630,124 @@ function dominioDaUrl(url: string): string {
   }
 }
 
+/** `true` se o que está sendo arrastado é uma URL de fora do app (barra de endereço, link de outra página) — não uma pasta/link internos, que já têm seu próprio tipo de arrasto. */
+function trazUrlExterna(evento: React.DragEvent): boolean {
+  return !trazLink(evento) && !trazPastaLink(evento) && evento.dataTransfer.types.includes("text/uri-list");
+}
+
 function ColunaLinks({
   pasta,
+  caminho,
+  criandoDeUrl,
   onAbrir,
   onNovo,
   onExcluir,
   onFavoritar,
+  onSelecionarPasta,
+  onCriarLinkRapido,
+  onAbrirTodos,
 }: {
   pasta: PastaLink;
+  /** Da raiz até esta pasta, inclusive — a trilha de navegação. */
+  caminho: PastaLink[];
+  criandoDeUrl: boolean;
   onAbrir: (link: LinkSalvo) => void;
   onNovo: () => void;
   onExcluir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
+  onSelecionarPasta: (id: string) => void;
+  onCriarLinkRapido: (url: string, idPasta: string) => void;
+  onAbrirTodos: (links: LinkSalvo[]) => void;
 }) {
+  const [sobreUrl, definirSobreUrl] = useState(false);
+
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-papel">
+    <div
+      className="flex min-w-0 flex-1 flex-col overflow-hidden bg-papel"
+      onDragOver={(evento) => {
+        if (!trazUrlExterna(evento)) return;
+        evento.preventDefault();
+        evento.dataTransfer.dropEffect = "copy";
+        definirSobreUrl(true);
+      }}
+      onDragLeave={() => definirSobreUrl(false)}
+      onDrop={(evento) => {
+        if (!trazUrlExterna(evento)) return;
+        evento.preventDefault();
+        definirSobreUrl(false);
+        const url = evento.dataTransfer.getData("text/uri-list") || evento.dataTransfer.getData("text/plain");
+        if (url) onCriarLinkRapido(url.trim(), pasta.id);
+      }}
+    >
       <div className="flex items-center justify-between gap-2 px-5 pt-3.5 pb-2.5">
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-bold tracking-[-0.02em]">
-            <span aria-hidden className="mr-1">
-              {pasta.icone}
-            </span>
-            {pasta.nome}
-          </p>
-          <p className="text-[11px] text-tinta-3">
+          <nav aria-label="Trilha de pastas" className="flex min-w-0 items-center gap-1 truncate text-[11.5px] text-tinta-3">
+            {caminho.map((item, indice) => (
+              <span key={item.id} className="flex min-w-0 items-center gap-1">
+                {indice > 0 ? <ChevronRight size={11} className="shrink-0" /> : null}
+                <button
+                  type="button"
+                  onClick={() => onSelecionarPasta(item.id)}
+                  className={clsx(
+                    "truncate hover:text-tinta hover:underline",
+                    indice === caminho.length - 1 && "font-semibold text-tinta no-underline",
+                  )}
+                  disabled={indice === caminho.length - 1}
+                >
+                  {item.nome}
+                </button>
+              </span>
+            ))}
+          </nav>
+          <p className="mt-0.5 text-[11px] text-tinta-3">
             {pasta.links.length === 0 ? "nenhum link" : `${pasta.links.length} ${pasta.links.length === 1 ? "link" : "links"}`}
+            {criandoDeUrl ? " · salvando…" : ""}
           </p>
         </div>
-        <Botao variante="primario" onClick={onNovo}>
-          <Plus size={13} />
-          Novo link
-        </Botao>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {pasta.links.length > 0 ? (
+            <BotaoIcone rotulo={`Abrir todos · ${pasta.links.length}`} onClick={() => onAbrirTodos(pasta.links)}>
+              <ExternalLink size={14} />
+            </BotaoIcone>
+          ) : null}
+          <Botao variante="primario" onClick={onNovo}>
+            <Plus size={13} />
+            Novo link
+          </Botao>
+        </div>
       </div>
 
       <div className="lista-cartoes flex-1 overflow-y-auto px-4 pb-4">
+        {sobreUrl ? (
+          <div className="mb-3 rounded-lg border-2 border-dashed border-[var(--realce)] bg-realce-fraco px-3 py-2 text-center text-[12px] text-tinta">
+            Soltar para salvar aqui
+          </div>
+        ) : null}
+        {pasta.pastas.length > 0 ? (
+          <div className="mb-3">
+            <p className="mb-1.5 text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase">Subpastas</p>
+            <div className="flex flex-wrap gap-1.5">
+              {pasta.pastas.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => onSelecionarPasta(sub.id)}
+                  className="flex items-center gap-1.5 rounded-lg border border-linha bg-superficie-alta px-2.5 py-1.5 text-[12px] text-tinta-2 transition-colors hover:border-linha-forte hover:text-tinta"
+                >
+                  <Folder size={13} className="shrink-0" style={{ color: sub.cor }} />
+                  {sub.nome}
+                  <span className="text-tinta-3 tabular-nums">{sub.links.length}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {pasta.links.length === 0 ? (
           <div className="pt-8">
             <Vazio
               icone={<Bookmark size={20} />}
               titulo="Nenhum link nesta pasta"
-              descricao='Clique em "Novo link" para guardar o primeiro aqui.'
+              descricao='Clique em "Novo link", cole (Ctrl+V) ou arraste uma URL aqui.'
             />
           </div>
         ) : (
