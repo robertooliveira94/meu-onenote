@@ -263,14 +263,15 @@ textarea:focus {
 }
 
 /*
-  A largura de leitura. Linha muito longa cansa: o olho perde o começo da
-  seguinte. Setenta e poucos caracteres é a medida clássica, e como a fonte
-  da prosa tem ~0.5em de largura média, 36em dela dão isso. Acompanha o zoom
-  do texto (`--escala-texto`), então aumentar a letra alarga a coluna junto
-  em vez de espremer as linhas. Só o modo leitura usa: na edição lado a lado
-  cada painel já é estreito por conta própria.
+  A largura de leitura — desligada por padrão (o texto renderizado usa a
+  tela toda, como a edição). Quem liga "Estreitar para leitura"
+  (`largura-leitura.ts`) ganha uma coluna de ~72 caracteres: linha muito
+  longa cansa, o olho perde o começo da seguinte, e como a fonte da prosa
+  tem ~0.5em de largura média, 36em dela dão essa medida clássica.
+  Acompanha o zoom do texto (`--escala-texto`), então aumentar a letra
+  alarga a coluna junto em vez de espremer as linhas.
 */
-.coluna-leitura {
+:root[data-largura-leitura="estreita"] .coluna-leitura {
   max-width: calc(36 * 15.5px * var(--escala-texto));
   margin-inline: auto;
 }

@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  AlignCenter,
   AppWindow,
   ArrowLeftRight,
   Check,
@@ -18,6 +19,7 @@ import {
   Pencil,
   Printer,
   Star,
+  StretchHorizontal,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -43,6 +45,7 @@ import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/edito
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { useAbas } from "@/lib/abas";
 import { useModoFoco } from "@/lib/foco";
+import { useLarguraLeitura } from "@/lib/largura-leitura";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import {
@@ -208,6 +211,7 @@ export function PaginaNota({
   const zoom = useZoomTexto();
   const fundoEditor = useFundoEditor();
   const modoFoco = useModoFoco();
+  const larguraLeitura = useLarguraLeitura();
   const abas = useAbas();
   // A aba desta nota mostra o título de verdade (a faixa só conhecia o nome do arquivo).
   useEffect(() => {
@@ -336,6 +340,12 @@ export function PaginaNota({
     descricao: modoFoco.foco ? "Sair do modo foco" : "Modo foco (só o texto)",
     mesmoEmCampo: true,
     acao: modoFoco.alternar,
+  });
+  useAtalho("ctrl+shift+w", {
+    grupo: "Anotações",
+    descricao: larguraLeitura.estreita ? "Usar a tela toda na leitura" : "Estreitar para leitura",
+    mesmoEmCampo: true,
+    acao: larguraLeitura.alternar,
   });
   // Esc só sai da edição quando não há um diálogo por cima — o registro já
   // engole teclas soltas com diálogo aberto, mas o Esc do editor precisa
@@ -741,6 +751,20 @@ export function PaginaNota({
             >
               {modoFoco.foco ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
             </BotaoIcone>
+
+            {editando ? null : (
+              <BotaoIcone
+                rotulo={
+                  larguraLeitura.estreita
+                    ? "Usar a tela toda na leitura (Ctrl+Shift+W)"
+                    : "Estreitar para leitura (Ctrl+Shift+W)"
+                }
+                onClick={larguraLeitura.alternar}
+                className={larguraLeitura.estreita ? "text-tinta" : undefined}
+              >
+                {larguraLeitura.estreita ? <StretchHorizontal size={15} /> : <AlignCenter size={15} />}
+              </BotaoIcone>
+            )}
 
             {flutuante ? null : (
               <BotaoIcone
