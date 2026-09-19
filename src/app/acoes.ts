@@ -109,14 +109,10 @@ function carimboDeAgora(): string {
  */
 export async function acaoCriarPagina(pasta: string, modeloId?: string): Promise<void> {
   const pastaValidada = caminhoValido.parse(pasta);
+  const titulo = `${nomeDe(pastaValidada)} ${carimboDeAgora()}`;
   const conteudoDoModelo = modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
-  const conteudoInicial = conteudoDoModelo ? aplicarPlaceholdersDeModelo(conteudoDoModelo) : conteudoDoModelo;
-  const caminho = await criarNota(
-    pastaValidada,
-    `${nomeDe(pastaValidada)} ${carimboDeAgora()}`,
-    "md",
-    conteudoInicial,
-  );
+  const conteudoInicial = conteudoDoModelo ? aplicarPlaceholdersDeModelo(conteudoDoModelo, titulo) : conteudoDoModelo;
+  const caminho = await criarNota(pastaValidada, titulo, "md", conteudoInicial);
   atualizarTudo();
   // Nota nova já abre em edição — não faria sentido abrir uma folha vazia em leitura.
   redirect(`${urlDaNota(caminho)}?editando=1`);

@@ -93,14 +93,23 @@ function horaDeAgora(): string {
 }
 
 /**
- * `/datadehoje` e `/horaagora` escritos dentro do texto salvo de um modelo
- * viram a data/hora reais — uma vez só, no momento em que uma página nasce
- * daquele modelo. Depois disso é texto comum: não recalcula de novo cada
- * vez que a página é aberta (a data não muda sozinha semanas depois).
+ * `/datadehoje`, `/horaagora` e `/titulo` escritos dentro do texto salvo de
+ * um modelo viram data, hora e título reais — uma vez só, no momento em que
+ * uma página nasce daquele modelo. Depois disso é texto comum: não
+ * recalcula de novo cada vez que a página é aberta (a data não muda
+ * sozinha semanas depois, e o título não segue um `/titulo` que renomeie a
+ * página no futuro).
  */
-export function aplicarPlaceholdersDeModelo(texto: string): string {
-  return texto.replaceAll("/datadehoje", dataDeHoje()).replaceAll("/horaagora", horaDeAgora());
+export function aplicarPlaceholdersDeModelo(texto: string, titulo: string): string {
+  return texto.replaceAll("/datadehoje", dataDeHoje()).replaceAll("/horaagora", horaDeAgora()).replaceAll("/titulo", titulo);
 }
+
+/** Os comandos de placeholder reconhecidos dentro de um modelo, com uma explicação curta — mostrado na tela de cadastro. */
+export const PLACEHOLDERS_DE_MODELO = [
+  { comando: "/datadehoje", descricao: "vira a data em que a página nasce" },
+  { comando: "/horaagora", descricao: "vira a hora em que a página nasce" },
+  { comando: "/titulo", descricao: "vira o título da página" },
+] as const;
 
 /** Insere texto no cursor, com o cursor no fim do inserido (ou onde `cursorEm` mandar). */
 function inserir(selecao: Selecao, trecho: string, cursorEm = trecho.length): Selecao {

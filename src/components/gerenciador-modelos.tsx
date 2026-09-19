@@ -5,10 +5,29 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { acaoCriarModelo, acaoEditarModelo, acaoExcluirModelo } from "@/app/acoes";
+import { PLACEHOLDERS_DE_MODELO } from "@/lib/sugestoes-editor";
 import type { Modelo } from "@/lib/tipos";
 
 import { DialogoConfirmar } from "./dialogos";
 import { Aviso, Botao, BotaoIcone, Campo, Rotulo } from "./ui";
+
+/** Os comandos que viram data/hora/título de verdade na hora em que a página nasce do modelo. */
+function AjudaDePlaceholders() {
+  return (
+    <p className="mt-1.5 text-[11.5px] leading-relaxed text-tinta-3">
+      Comandos que viram valor real na hora de criar a página:{" "}
+      {PLACEHOLDERS_DE_MODELO.map(({ comando, descricao }, indice) => (
+        <span key={comando}>
+          <code className="rounded bg-superficie-alta px-1 py-0.5 font-mono text-[11px] text-tinta-2">
+            {comando}
+          </code>{" "}
+          {descricao}
+          {indice < PLACEHOLDERS_DE_MODELO.length - 1 ? "; " : "."}
+        </span>
+      ))}
+    </p>
+  );
+}
 
 /** Cadastro de modelos: criar, editar e excluir pontos de partida para páginas novas. */
 export function GerenciadorModelos({ modelos }: { modelos: Modelo[] }) {
@@ -79,6 +98,7 @@ export function GerenciadorModelos({ modelos }: { modelos: Modelo[] }) {
               rows={8}
               className="editor-texto w-full resize-y rounded-lg border border-linha bg-superficie-alta px-3 py-2.5 text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:shadow-[0_0_0_3px_var(--realce-medio)] focus:outline-none"
             />
+            <AjudaDePlaceholders />
           </label>
 
           <div className="mt-3 flex justify-end">
@@ -176,6 +196,7 @@ function FormularioEdicao({ modelo, aoFechar }: { modelo: Modelo; aoFechar: () =
         rows={8}
         className="editor-texto mt-2 w-full resize-y rounded-lg border border-linha bg-superficie-alta px-3 py-2.5 text-tinta focus:border-[var(--realce)] focus:shadow-[0_0_0_3px_var(--realce-medio)] focus:outline-none"
       />
+      <AjudaDePlaceholders />
       <div className="mt-2 flex justify-end gap-2">
         <Botao variante="sutil" onClick={aoFechar}>
           Cancelar

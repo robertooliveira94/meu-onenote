@@ -43,6 +43,19 @@ export type CoordenadasDoCursor = {
   alturaDaLinha: number;
 };
 
+/** O offset de caractere onde a linha `numero` (1-indexada) começa no texto. */
+export function offsetDaLinha(texto: string, numero: number): number {
+  if (numero <= 1) return 0;
+  let linha = 1;
+  for (let i = 0; i < texto.length; i++) {
+    if (texto[i] === "\n") {
+      linha++;
+      if (linha === numero) return i + 1;
+    }
+  }
+  return texto.length;
+}
+
 export function coordenadasDoCursor(campo: HTMLTextAreaElement): CoordenadasDoCursor {
   const estilo = getComputedStyle(campo);
   const espelho = document.createElement("div");

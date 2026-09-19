@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import Link from "next/link";
 import { AlertTriangle, Info, Lightbulb, OctagonAlert, StickyNote, Star } from "lucide-react";
 import { Children, isValidElement, memo, useMemo, useRef } from "react";
@@ -50,15 +51,53 @@ function textoDoNo(no: React.ReactNode): string {
  */
 function tituloOuMarcaVazia(nivel: 1 | 2 | 3 | 4 | 5 | 6) {
   const Marcacao = `h${nivel}` as const;
-  return function Titulo({ children }: { children?: React.ReactNode }) {
+  return function Titulo({
+    node,
+    children,
+  }: {
+    node?: { position?: { start: { line: number } } };
+    children?: React.ReactNode;
+  }) {
+    const linha = node?.position?.start.line;
     const semTexto = Children.toArray(children).every(
       (filho) => typeof filho === "string" && filho.trim() === "",
     );
-    if (!semTexto) return <Marcacao id={identificadorDeTitulo(textoDoNo(children))}>{children}</Marcacao>;
+    if (!semTexto) {
+      return (
+        <Marcacao id={identificadorDeTitulo(textoDoNo(children))} data-linha={linha}>
+          {children}
+        </Marcacao>
+      );
+    }
     return (
-      <Marcacao className="titulo-vazio" title={`Título de nível ${nivel}, ainda sem texto`}>
+      <Marcacao className="titulo-vazio" title={`Título de nível ${nivel}, ainda sem texto`} data-linha={linha}>
         {"#".repeat(nivel)}
       </Marcacao>
+    );
+  };
+}
+
+/**
+ * Marca um elemento com a linha do markdown cru de onde ele veio
+ * (`node.position.start.line`) — é o que permite clicar num parágrafo da
+ * prévia e pular pra linha certa no editor (`aoClicarNaLinha`). Usa linha,
+ * não offset de caractere: `[[Wikilink]]` vira um link bem mais comprido
+ * antes de chegar aqui (`converterWikilinks`), então um offset contado no
+ * texto convertido não bate com o texto cru — mas a contagem de linhas
+ * não muda, já que essa conversão nunca insere ou tira quebra de linha.
+ */
+function comLinha<Tag extends keyof React.JSX.IntrinsicElements>(marcacao: Tag) {
+  const Componente = marcacao as string;
+  return function ComLinha({
+    node,
+    children,
+    ...resto
+  }: React.ComponentPropsWithoutRef<Tag> & { node?: { position?: { start: { line: number } } } }) {
+    const Elemento = Componente as React.ElementType;
+    return (
+      <Elemento {...resto} data-linha={node?.position?.start.line}>
+        {children}
+      </Elemento>
     );
   };
 }
@@ -98,6 +137,7 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   pastaBase,
   aoAlternarTarefa,
   mapaDeLinks,
+  aoClicarNaLinha,
 }: {
   conteudo: string;
   /** Pasta da nota, para resolver o caminho relativo de imagens coladas. */
@@ -106,6 +146,8 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   aoAlternarTarefa?: (indiceDaTarefa: number) => void;
   /** Título normalizado → caminho resolvido (ou null) de cada `[[link]]` do texto. */
   mapaDeLinks?: Record<string, string | null>;
+  /** Presente só na edição lado a lado — clicar num bloco da prévia move o cursor do editor até a linha de onde ele veio (estilo Overleaf). */
+  aoClicarNaLinha?: (linha: number) => void;
 }) {
   // Conta "a N-ésima tarefa do documento" enquanto o markdown é montado.
   // Em desenvolvimento, o React invoca cada componente de checkbox duas
@@ -165,12 +207,13 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
       },
       // Uma citação marcada pelo plugin de callouts vira um bloco com ícone e
       // título; as outras continuam citações comuns.
-      blockquote({ node: _no, children, ...resto }) {
+      blockquote({ node, children, ...resto }) {
+        const linha = node?.position?.start.line;
         const tipo = (resto as Record<string, unknown>)["data-tipo"] as TipoDeCallout | undefined;
         const titulo = (resto as Record<string, unknown>)["data-titulo"] as string | undefined;
-        if (!tipo) return <blockquote>{children}</blockquote>;
+        if (!tipo) return <blockquote data-linha={linha}>{children}</blockquote>;
         return (
-          <aside className={`callout callout-${tipo}`} role="note">
+          <aside className={`callout callout-${tipo}`} role="note" data-linha={linha}>
             <p className="callout-titulo">
               {ICONE_DO_CALLOUT[tipo]}
               {titulo}
@@ -219,6 +262,11 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
           />
         );
       },
+      p: comLinha("p"),
+      li: comLinha("li"),
+      td: comLinha("td"),
+      th: comLinha("th"),
+      pre: comLinha("pre"),
     }),
     [pastaBase, aoAlternarTarefa, mapaDeLinks],
   );
@@ -228,7 +276,22 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   }
 
   return (
-    <div className="prosa">
+    <div
+      className={clsx("prosa", aoClicarNaLinha && "cursor-text")}
+      // Delegação num clique só, em vez de `onClick` em cada tipo de bloco:
+      // o alvo real do clique quase nunca é o bloco em si (é um `<strong>`,
+      // um `<code>` por dentro dele) — `closest` acha o bloco marcado mais
+      // próximo subindo a árvore.
+      onClick={
+        aoClicarNaLinha
+          ? (evento) => {
+              const alvo = (evento.target as HTMLElement).closest<HTMLElement>("[data-linha]");
+              const linha = alvo?.dataset.linha;
+              if (linha) aoClicarNaLinha(Number(linha));
+            }
+          : undefined
+      }
+    >
       <Markdown
         remarkPlugins={PLUGINS_REMARK}
         rehypePlugins={PLUGINS_REHYPE}

@@ -17,11 +17,13 @@ import {
   Table,
 } from "lucide-react";
 
+import { useState } from "react";
+
 import {
   SEPARADOR_TEXTO,
-  TABELA_EXEMPLO,
   type Selecao,
   envolver,
+  gerarTabela,
   inserirBloco,
   prefixarLinhas,
   sublinharLinha,
@@ -29,12 +31,16 @@ import {
 } from "@/lib/formatacao";
 import type { Formato } from "@/lib/tipos";
 
+import { Botao, Menu } from "./ui";
+
 type Ferramenta = {
   rotulo: string;
   atalho?: string;
   icone: React.ReactNode;
   aplicar: (selecao: Selecao) => Selecao;
   separarAntes?: boolean;
+  /** "tabela" abre um popover pedindo linhas/colunas em vez de aplicar direto no clique. */
+  id?: "tabela";
 };
 
 const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
@@ -64,7 +70,8 @@ const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
   {
     rotulo: "Tabela",
     icone: <Table size={14} />,
-    aplicar: (s) => inserirBloco(s, TABELA_EXEMPLO),
+    aplicar: (s) => inserirBloco(s, gerarTabela(3, 2)),
+    id: "tabela",
   },
 ];
 
@@ -131,6 +138,16 @@ export function BarraFormatacao({
     aoAplicar(resultado);
   }
 
+  function inserirTabela(colunas: number, linhas: number) {
+    const area = campo.current;
+    if (!area) return;
+    const resultado = inserirBloco(
+      { texto: conteudo, inicio: area.selectionStart, fim: area.selectionEnd },
+      gerarTabela(colunas, linhas),
+    );
+    aoAplicar(resultado);
+  }
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-linha bg-superficie px-3 py-1.5">
       {ferramentas.map((ferramenta) => (
@@ -138,22 +155,95 @@ export function BarraFormatacao({
           {ferramenta.separarAntes ? (
             <span className="mx-1.5 h-4 w-px bg-linha" aria-hidden />
           ) : null}
-          <button
-            type="button"
-            title={ferramenta.atalho ? `${ferramenta.rotulo} (${ferramenta.atalho})` : ferramenta.rotulo}
-            aria-label={ferramenta.rotulo}
-            onClick={() => usar(ferramenta)}
-            className={clsx(
-              "flex size-7 items-center justify-center rounded-md text-tinta-2 transition-colors",
-              "hover:bg-realce-medio hover:text-tinta",
-            )}
-          >
-            {ferramenta.icone}
-          </button>
+          {ferramenta.id === "tabela" ? (
+            <Menu
+              gatilho={(abrir) => (
+                <button
+                  type="button"
+                  title={ferramenta.rotulo}
+                  aria-label={ferramenta.rotulo}
+                  onClick={abrir}
+                  className="flex size-7 items-center justify-center rounded-md text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta"
+                >
+                  {ferramenta.icone}
+                </button>
+              )}
+            >
+              {(fechar) => (
+                <PopoverTabela
+                  aoInserir={(colunas, linhas) => {
+                    fechar();
+                    inserirTabela(colunas, linhas);
+                  }}
+                />
+              )}
+            </Menu>
+          ) : (
+            <button
+              type="button"
+              title={ferramenta.atalho ? `${ferramenta.rotulo} (${ferramenta.atalho})` : ferramenta.rotulo}
+              aria-label={ferramenta.rotulo}
+              onClick={() => usar(ferramenta)}
+              className={clsx(
+                "flex size-7 items-center justify-center rounded-md text-tinta-2 transition-colors",
+                "hover:bg-realce-medio hover:text-tinta",
+              )}
+            >
+              {ferramenta.icone}
+            </button>
+          )}
         </span>
       ))}
       {extra ? <div className="ml-auto pl-2">{extra}</div> : null}
     </div>
+  );
+}
+
+const LIMITE_COLUNAS_LINHAS = 20;
+
+/** Popover pequeno pra escolher o tamanho da tabela antes de inserir — abre no ícone de tabela da barra. */
+function PopoverTabela({ aoInserir }: { aoInserir: (colunas: number, linhas: number) => void }) {
+  const [colunas, definirColunas] = useState(3);
+  const [linhas, definirLinhas] = useState(2);
+
+  return (
+    <form
+      className="w-52 p-3"
+      onSubmit={(evento) => {
+        evento.preventDefault();
+        aoInserir(colunas, linhas);
+      }}
+    >
+      <p className="mb-2 text-[11px] font-medium tracking-wide text-tinta-2 uppercase">Tamanho da tabela</p>
+      <div className="flex items-center gap-2">
+        <label className="flex-1">
+          <span className="mb-1 block text-[10.5px] text-tinta-3">Colunas</span>
+          <input
+            type="number"
+            min={1}
+            max={LIMITE_COLUNAS_LINHAS}
+            value={colunas}
+            autoFocus
+            onChange={(evento) => definirColunas(Number(evento.target.value))}
+            className="h-8 w-full rounded-md border border-linha bg-superficie-alta px-2 text-[13px] text-tinta focus:border-[var(--realce)] focus:outline-none"
+          />
+        </label>
+        <label className="flex-1">
+          <span className="mb-1 block text-[10.5px] text-tinta-3">Linhas</span>
+          <input
+            type="number"
+            min={1}
+            max={LIMITE_COLUNAS_LINHAS}
+            value={linhas}
+            onChange={(evento) => definirLinhas(Number(evento.target.value))}
+            className="h-8 w-full rounded-md border border-linha bg-superficie-alta px-2 text-[13px] text-tinta focus:border-[var(--realce)] focus:outline-none"
+          />
+        </label>
+      </div>
+      <Botao type="submit" variante="primario" className="mt-3 w-full justify-center">
+        Inserir tabela
+      </Botao>
+    </form>
   );
 }
 

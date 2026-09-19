@@ -40,7 +40,7 @@ import {
 import { pastaDe } from "@/lib/caminho-texto";
 import { contarCaracteres, contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
-import { coordenadasDoCursor } from "@/lib/cursor-editor";
+import { coordenadasDoCursor, offsetDaLinha } from "@/lib/cursor-editor";
 import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/editor-teclado";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
 import { useAbas } from "@/lib/abas";
@@ -995,6 +995,10 @@ export function PaginaNota({
                     conteudo={conteudoPreVisualizado}
                     pastaBase={pastaDaNota}
                     mapaDeLinks={mapaDeLinks}
+                    aoClicarNaLinha={(linha) => {
+                      const offset = offsetDaLinha(conteudo, linha);
+                      aplicarNoCampo(conteudo, { inicio: offset, fim: offset });
+                    }}
                   />
                 </div>
               ) : null}

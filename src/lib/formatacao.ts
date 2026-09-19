@@ -143,6 +143,16 @@ export function inserirBloco(selecao: Selecao, bloco: string): Selecao {
 }
 
 export const TABELA_EXEMPLO = ["| Coluna | Coluna |", "| --- | --- |", "|  |  |"].join("\n");
+
+/** Uma tabela em branco do tamanho pedido — pelo menos 1 coluna e 1 linha de dados. */
+export function gerarTabela(colunas: number, linhasDeDados: number): string {
+  const numColunas = Math.max(1, Math.round(colunas));
+  const numLinhas = Math.max(1, Math.round(linhasDeDados));
+  const cabecalho = `| ${Array(numColunas).fill("Coluna").join(" | ")} |`;
+  const separador = `| ${Array(numColunas).fill("---").join(" | ")} |`;
+  const linhaVazia = `| ${Array(numColunas).fill(" ").join(" | ")} |`;
+  return [cabecalho, separador, ...Array(numLinhas).fill(linhaVazia)].join("\n");
+}
 export const SEPARADOR_TEXTO = "─".repeat(40);
 
 const PADRAO_TAREFA = /^(\s*[-*+]\s+)\[([ xX])\](\s?)(.*)$/;
