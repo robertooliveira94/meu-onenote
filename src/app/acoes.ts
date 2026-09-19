@@ -21,6 +21,7 @@ import {
   reordenarPastasPara,
   salvarAnexo,
 } from "@/lib/arquivos";
+import { buscarSemanticaNoCaderno, indexarPagina, type ResultadoBuscaSemantica } from "@/lib/busca-semantica";
 import { nomeDe, pastaDe } from "@/lib/caminhos";
 import { gravarConfig } from "@/lib/config";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
@@ -279,9 +280,24 @@ export async function acaoDefinirCorCaderno(caminho: string, cor: string): Promi
  * O que a tela mostra do conteúdo (o trecho na lista de páginas) se atualiza
  * quando a edição termina: `concluirEdicao` chama `roteador.refresh()`.
  */
+/**
+ * Atualiza o vetor da busca semântica em segundo plano — sem `await` no
+ * chamador, pra não atrasar o salvamento automático nem quebrá-lo se o
+ * modelo de embeddings falhar (offline, sem espaço em disco na primeira
+ * vez que baixa o modelo, etc.). A busca de verdade reindexa o que faltar
+ * na hora de procurar, então uma falha aqui só atrasa a próxima busca.
+ */
+function reindexarSemPressa(caminho: string): void {
+  lerNota(caminho)
+    .then((nota) => nota && indexarPagina(nota.caminho, nota.titulo, nota.conteudo, nota.atualizadoEm))
+    .catch(() => {});
+}
+
 export async function acaoSalvarNota(caminho: string, conteudo: string): Promise<Resposta> {
   try {
-    await escreverNota(caminhoValido.parse(caminho), z.string().parse(conteudo));
+    const validado = caminhoValido.parse(caminho);
+    await escreverNota(validado, z.string().parse(conteudo));
+    reindexarSemPressa(validado);
     return { ok: true };
   } catch (erro) {
     return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para salvar" };
@@ -574,6 +590,19 @@ export async function acaoTitulosDeNotas(): Promise<TituloDeNota[]> {
 
 export async function acaoBuscar(termo: string): Promise<ResultadoBusca[]> {
   return buscar(z.string().max(120).parse(termo));
+}
+
+/**
+ * Busca inteligente (semântica) dentro de um único caderno — acha páginas
+ * por significado, não por palavra exata. Ver `busca-semantica.ts`.
+ */
+export async function acaoBuscarSemanticaNoCaderno(caminhoDoCaderno: string, pergunta: string): Promise<Resposta & { resultados?: ResultadoBuscaSemantica[] }> {
+  try {
+    const resultados = await buscarSemanticaNoCaderno(caminhoValido.parse(caminhoDoCaderno), z.string().max(300).parse(pergunta));
+    return { ok: true, resultados };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para buscar" };
+  }
 }
 
 // --------------------------------------------------------------- web clipper

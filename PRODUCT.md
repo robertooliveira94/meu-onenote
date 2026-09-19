@@ -106,9 +106,11 @@ limpas e abríveis em qualquer editor.
   aparece no Início), fixar só põe a página em primeiro na lista da
   própria seção. Um bit no índice, como a ordem manual.
 - Página em markdown abre em modo leitura por padrão (renderizado, com
-  realce de sintaxe), com a prosa limitada a ~70 caracteres por linha e
-  centralizada — passar disso cansa o olho; a medida acompanha o zoom do
-  texto. Um botão "Editar" abre a edição lado a lado (texto cru + prévia
+  realce de sintaxe), usando a tela toda — igual à largura da edição lado
+  a lado. Um botão (`Ctrl+Shift+W`) estreita a prosa pra ~70 caracteres
+  por linha e centraliza, pra quem prefere essa medida clássica de
+  leitura; a preferência acompanha o zoom do texto e fica salva entre
+  sessões. Um botão "Editar" abre a edição lado a lado (texto cru + prévia
   ao vivo), com a barra de formatação dentro da coluna do texto. O
   cabeçalho da nota tem duas linhas: título e ações; embaixo, trilha do
   caderno, etiquetas e "412 palavras · 2 min". **Modo foco**
@@ -184,6 +186,17 @@ limpas e abríveis em qualquer editor.
   que nenhuma outra ainda referencia.
 - Busca global no título e no corpo de todas as notas — hoje uma das
   seções da paleta de comandos (`Ctrl+K`), ao lado de tarefas e links.
+- **Busca inteligente**, por caderno (menu "⋯" do caderno → "Busca
+  inteligente"): acha páginas por significado, não pela palavra exata —
+  "quais anotações falam sobre X" em vez de precisar lembrar a palavra
+  usada. Um vetor por página inteira (embeddings locais, `@huggingface/
+  transformers` rodando em CPU, modelo baixado uma vez e cacheado fora de
+  `node_modules`) — nenhum texto sai da máquina, nem pra indexar nem pra
+  buscar. Reindexa sozinha depois de cada salvamento; a primeira busca
+  num caderno com páginas nunca indexadas (ou editadas por fora do app)
+  paga o preço de indexar o que faltar antes de responder. Devolve uma
+  lista de páginas ordenada por relevância, não uma resposta em texto —
+  sem chat, sem geração, de propósito.
 - Painel `/tarefas` junta toda `- [ ]`/`- [x]` do vault inteiro, agrupada por
   página; clicar na caixinha ali grava direto no arquivo de origem, sem abrir
   a nota. Um filtro "Mostrar concluídas" some com o que já foi feito por
@@ -291,9 +304,12 @@ limpas e abríveis em qualquer editor.
   - **Colunas configuráveis por quadro**: as 4 colunas padrão (Backlog,
     Fazendo, Impedido, Feito) são só o ponto de partida — dá pra criar,
     renomear, reordenar e excluir coluna (só vazia) pelo menu de três
-    pontos no cabeçalho de cada uma. Uma delas é marcada como "coluna de
-    conclusão" (Feito, por padrão) — é ela que o bloqueio de dependências
-    usa. Guardado em `_kanban/<Quadro>/config.json`.
+    pontos no cabeçalho de cada uma. Uma ou mais podem ser marcadas como
+    "coluna de conclusão" (Feito, por padrão) — cada uma ligada desbloqueia
+    dependentes, para de contar como atrasada, entra no arquivamento
+    (manual e automático) e dispara a próxima ocorrência de tarefa
+    repetida; pelo menos uma sempre fica ligada. Guardado em
+    `_kanban/<Quadro>/config.json`.
   - **Prioridade** (Baixa/Média/Alta/Urgente, com cor) e **prazo** (data
     opcional, cartão destaca em vermelho quando atrasado e a tarefa ainda
     não está na coluna de conclusão) por tarefa.

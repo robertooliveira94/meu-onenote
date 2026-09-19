@@ -29,3 +29,7 @@ npm-debug.log*
 # estado local de ferramentas de desenvolvimento (histórico de critique,
 # tokens de design, servidor do modo live) — não é parte do app.
 /.impeccable/
+
+# modelo de embeddings baixado uma vez (busca inteligente) — ~90MB,
+# artefato binário, se baixa sozinho na primeira busca.
+/.cache/

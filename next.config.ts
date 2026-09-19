@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // A busca inteligente (embeddings locais) usa um runtime nativo
+  // (onnxruntime-node, dentro de @huggingface/transformers) — o bundler do
+  // Next não sabe lidar com o binário `.node` dele, então fica de fora,
+  // carregado direto pelo Node em tempo de execução, como o `argon2` do
+  // cofre de senhas.
+  serverExternalPackages: ["@huggingface/transformers"],
   // As anotações vivem em disco, fora do controle do bundler.
   //
   // `standalone` só liga dentro do build Docker (ver Dockerfile, que passa

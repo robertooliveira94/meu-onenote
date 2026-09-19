@@ -17,6 +17,7 @@ import {
   Pin,
   Plus,
   Smile,
+  Sparkles,
   Star,
   Trash2,
 } from "lucide-react";
@@ -64,6 +65,7 @@ import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { formatarDataCurta, urlDaNota, urlDaNotaFlutuante, urlDaSecao } from "@/lib/rotas";
 import type { Caderno, Modelo, ResumoNota, Secao } from "@/lib/tipos";
 
+import { DialogoBuscaSemantica } from "./busca-semantica";
 import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoCor, DialogoIcone, DialogoMover, DialogoNome } from "./dialogos";
 import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
 import { BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
@@ -74,7 +76,7 @@ type Nivel = "caderno" | "secao" | "pagina";
 type Alvo = { nivel: Nivel; caminho: string; nome: string; formato?: string; favorita?: boolean };
 type Acao =
   | { tipo: "novo-caderno" }
-  | { tipo: "nova-secao" | "modelo" | "renomear" | "mover" | "excluir" | "cor" | "icone"; alvo: Alvo }
+  | { tipo: "nova-secao" | "modelo" | "renomear" | "mover" | "excluir" | "cor" | "icone" | "busca-semantica"; alvo: Alvo }
   | null;
 
 /**
@@ -579,6 +581,12 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
         }}
       />
 
+      <DialogoBuscaSemantica
+        aberto={acao?.tipo === "busca-semantica"}
+        caderno={alvo && acao?.tipo === "busca-semantica" ? { caminho: alvo.caminho, nome: alvo.nome } : null}
+        aoFechar={fechar}
+      />
+
       <DialogoCor
         aberto={acao?.tipo === "cor"}
         cores={CORES_CADERNO}
@@ -792,6 +800,15 @@ function LinhaCaderno({
                 }}
               >
                 Nova seção
+              </ItemMenu>
+              <ItemMenu
+                icone={<Sparkles size={14} />}
+                onClick={() => {
+                  fechar();
+                  aoAgir({ tipo: "busca-semantica", alvo });
+                }}
+              >
+                Busca inteligente
               </ItemMenu>
               <SeparadorMenu />
               <ItemMenu
