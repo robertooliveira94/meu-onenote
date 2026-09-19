@@ -604,6 +604,14 @@ textarea:focus {
   font-size: calc(13.5px * var(--escala-texto));
   line-height: 1.7;
   tab-size: 2;
+  /* JetBrains Mono liga certas sequências de símbolo repetido (ligadura de
+     "contextual alternates") num glifo combinado diferente do texto real —
+     inofensivo em código, enganoso aqui: precisa ver o caractere literal
+     ("#", "-", "*"...) exatamente como ele está no arquivo, sem decoração. */
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "calt" 0,
+    "liga" 0;
 }
 
 /* Texto puro se lê melhor na fonte da interface, com medida um pouco maior. */
