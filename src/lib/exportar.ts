@@ -1,6 +1,8 @@
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 
+import JSZip from "jszip";
+
 import { formatarDataHora } from "./rotas";
 import { listarNotas } from "./arquivos";
 import {
@@ -103,12 +105,38 @@ export async function exportarSecao(
 }
 
 /**
- * O vault inteiro — todo caderno, seção e página — num único arquivo.
- * Mesma lógica de `exportarSecao`, só que partindo da raiz e passando por
- * cada caderno de primeira linha, em vez de uma pasta escolhida.
+ * Copia uma pasta (caderno ou seção) inteira para dentro do zip, arquivo por
+ * arquivo, na mesma estrutura de `dados/` — pasta vira pasta, `.md`/`.txt`
+ * vira arquivo próprio, sem juntar nada. `zip.folder` entra mesmo em pastas
+ * vazias, pra uma seção sem página nenhuma ainda aparecer no zip.
  */
-export async function exportarTudo(): Promise<{ nome: string; conteudo: string }> {
-  const partes: string[] = [];
+async function copiarPastaParaZip(zip: JSZip, caminho: string): Promise<void> {
+  let entradas: Dirent[];
+  try {
+    entradas = await fs.readdir(resolverCaminho(caminho), { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entrada of entradas) {
+    if (entrada.isFile() && ehArquivoDeNota(entrada.name)) {
+      const conteudo = await fs.readFile(resolverCaminho(juntar(caminho, entrada.name)), "utf8");
+      zip.file(entrada.name, conteudo);
+    } else if (entrada.isDirectory() && !ehPastaInterna(entrada.name)) {
+      await copiarPastaParaZip(zip.folder(entrada.name)!, juntar(caminho, entrada.name));
+    }
+  }
+}
+
+/**
+ * O vault inteiro — todo caderno, seção e página — num `.zip`, cada página
+ * como arquivo `.md`/`.txt` próprio, exatamente na mesma árvore de pastas
+ * de `dados/`. Diferente de `exportarSecao` (que junta tudo num arquivo
+ * só): aqui a ideia é uma cópia de verdade da estrutura, não uma leitura
+ * corrida.
+ */
+export async function exportarTudoZip(): Promise<Uint8Array> {
+  const zip = new JSZip();
 
   let entradas: Dirent[];
   try {
@@ -122,14 +150,10 @@ export async function exportarTudo(): Promise<{ nome: string; conteudo: string }
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   for (const caderno of cadernos) {
-    await juntarPasta(caderno, 1, partes);
+    await copiarPastaParaZip(zip.folder(caderno)!, caderno);
   }
-  partes.push("---", `_Exportado de Meu bloco de anotações em ${formatarDataHora(new Date().toISOString())}._`);
 
-  return {
-    nome: "Meu bloco de anotações.md",
-    conteudo: partes.join("\n\n").replace(/\n{3,}/g, "\n\n"),
-  };
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 
 /** Exporta uma única página, preservando o formato original. */

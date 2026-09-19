@@ -16,26 +16,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTransition } from "react";
+import { useState } from "react";
 
-import { acaoExportarTudo } from "@/app/acoes";
 import { useColunas } from "@/lib/colunas";
 import { usePaleta } from "@/lib/paleta";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import type { Caderno, Modelo } from "@/lib/tipos";
 
 import { ArvoreNotas } from "./arvore-notas";
-import { AlcaRedimensionar, BotaoIcone } from "./ui";
+import { AlcaRedimensionar, Botao, BotaoIcone, Dialogo } from "./ui";
 
-/** Monta o vault inteiro num único arquivo no servidor e entrega ao navegador como download. */
-async function baixarTudo(): Promise<void> {
-  const { nome, conteudo } = await acaoExportarTudo();
-  const endereco = URL.createObjectURL(new Blob([conteudo], { type: "text/markdown" }));
+/** A rota entrega o zip pronto (ver `exportar-tudo/route.ts`) — clicar um link basta, o navegador cuida do download. */
+function baixarTudo(): void {
   const link = document.createElement("a");
-  link.href = endereco;
-  link.download = nome;
+  link.href = "/exportar-tudo";
   link.click();
-  URL.revokeObjectURL(endereco);
 }
 
 /**
@@ -58,7 +53,7 @@ export function ColunaSecoes({
 }) {
   const caminhoAtual = usePathname();
   const paleta = usePaleta();
-  const [exportando, iniciarExportacao] = useTransition();
+  const [confirmandoExportarTudo, definirConfirmandoExportarTudo] = useState(false);
   // 300 de partida (era 248): a coluna agora carrega a hierarquia inteira,
   // já que a lista de páginas deixou de ser uma coluna à parte.
   const largura = useLarguraRedimensionavel("largura-coluna-secoes", {
@@ -145,11 +140,7 @@ export function ColunaSecoes({
         <Atalho href="/clipper" icone={<PocketKnife size={14} />} ativo={caminhoAtual.startsWith("/clipper")}>
           Web Clipper
         </Atalho>
-        <AtalhoBotao
-          icone={<Download size={14} />}
-          disabled={exportando}
-          onClick={() => iniciarExportacao(baixarTudo)}
-        >
+        <AtalhoBotao icone={<Download size={14} />} onClick={() => definirConfirmandoExportarTudo(true)}>
           Exportar tudo
         </AtalhoBotao>
         <Atalho href="/lixeira" icone={<Trash2 size={14} />} ativo={caminhoAtual.startsWith("/lixeira")}>
@@ -162,6 +153,28 @@ export function ColunaSecoes({
         aoRestaurar={largura.restaurarPadrao}
         rotulo="Redimensionar a coluna de navegação"
       />
+
+      <Dialogo
+        titulo="Exportar tudo?"
+        descricao="Baixa um .zip com todos os cadernos, seções e páginas — cada uma como arquivo próprio, na mesma estrutura de pastas de dados/."
+        aberto={confirmandoExportarTudo}
+        aoFechar={() => definirConfirmandoExportarTudo(false)}
+      >
+        <div className="mt-4 flex justify-end gap-2">
+          <Botao variante="sutil" onClick={() => definirConfirmandoExportarTudo(false)}>
+            Cancelar
+          </Botao>
+          <Botao
+            variante="primario"
+            onClick={() => {
+              baixarTudo();
+              definirConfirmandoExportarTudo(false);
+            }}
+          >
+            Exportar
+          </Botao>
+        </div>
+      </Dialogo>
     </div>
   );
 }

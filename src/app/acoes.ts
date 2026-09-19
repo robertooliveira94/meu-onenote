@@ -25,7 +25,7 @@ import { buscarSemanticaNoCaderno, indexarPagina, type ResultadoBuscaSemantica }
 import { nomeDe, pastaDe } from "@/lib/caminhos";
 import { gravarConfig } from "@/lib/config";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
-import { exportarSecao, exportarTudo } from "@/lib/exportar";
+import { exportarSecao } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
 import { lerVersao, listarVersoes, registrarVersao } from "@/lib/historico";
 import { atualizarIndice, entradaDaNota, entradaDaPasta } from "@/lib/indice";
@@ -572,11 +572,6 @@ export async function acaoExportarSecao(
   caminho: string,
 ): Promise<{ nome: string; conteudo: string }> {
   return exportarSecao(caminhoValido.parse(caminho));
-}
-
-/** O vault inteiro, todo caderno, numa única exportação. */
-export async function acaoExportarTudo(): Promise<{ nome: string; conteudo: string }> {
-  return exportarTudo();
 }
 
 // ------------------------------------------------------------------- busca
