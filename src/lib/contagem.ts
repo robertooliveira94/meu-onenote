@@ -10,6 +10,11 @@ export function contarPalavras(texto: string): number {
   return trecho.split(/\s+/).length;
 }
 
+/** Caracteres do texto cru, mesma régua da contagem de palavras (sem renderizar, aparado nas pontas). */
+export function contarCaracteres(texto: string): number {
+  return texto.trim().length;
+}
+
 /** ~200 palavras por minuto, arredondado para cima — nunca "0 min" com texto de verdade. */
 export function tempoDeLeituraEmMinutos(palavras: number): number {
   if (palavras === 0) return 0;

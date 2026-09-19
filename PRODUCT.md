@@ -84,7 +84,8 @@ limpas e abríveis em qualquer editor.
   "Descer" e o "Mover para..." do menu continuam existindo, para quem
   prefere não arrastar.
 - Página nova não pergunta nada: o "+" cria na hora, com nome tirado da
-  seção mais a data e a hora ("Reuniões 08-09 21-05"), e já abre em edição.
+  seção mais a data e a hora ("Reuniões 08-09-2026 21-05"), e já abre em
+  edição.
   O título muda com dois cliques nele, na própria página — o arquivo é
   renomeado no disco junto, e o endereço acompanha. Perguntar o título antes
   era pedir a decisão mais difícil no pior momento: antes de existir texto.
@@ -113,7 +114,7 @@ limpas e abríveis em qualquer editor.
   sessões. Um botão "Editar" abre a edição lado a lado (texto cru + prévia
   ao vivo), com a barra de formatação dentro da coluna do texto. O
   cabeçalho da nota tem duas linhas: título e ações; embaixo, trilha do
-  caderno, etiquetas e "412 palavras · 2 min". **Modo foco**
+  caderno, etiquetas e "412 palavras · 2103 caracteres · 2 min". **Modo foco**
   (`Ctrl+Shift+F`) some com trilho, coluna e cabeçalho e deixa só o texto;
   Esc sai. Um **sumário** dos títulos aparece na margem direita a partir
   de três títulos (`]` alterna): em leitura o título na tela fica
@@ -169,6 +170,9 @@ limpas e abríveis em qualquer editor.
 - Modelos de página cadastráveis (nome, descrição, conteúdo em markdown) —
   um botão à parte ("começar de um modelo") cria a página já com o modelo
   escolhido, só aparecendo quando existe algum modelo cadastrado.
+  `/datadehoje` e `/horaagora` escritos dentro do conteúdo do modelo viram
+  a data/hora reais nesse momento — uma vez só, na criação; depois é texto
+  comum, não recalcula sozinho toda vez que a página é aberta.
 - Colar uma imagem (print, cópia de outro app) direto no editor de markdown
   salva o arquivo numa subpasta `_anexos/` ao lado da nota e insere
   `![](_anexos/arquivo.png)` — caminho relativo de verdade, que continua

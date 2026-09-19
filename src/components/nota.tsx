@@ -38,7 +38,7 @@ import {
   acaoTitulosDeNotas,
 } from "@/app/acoes";
 import { pastaDe } from "@/lib/caminho-texto";
-import { contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
+import { contarCaracteres, contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
 import { coordenadasDoCursor } from "@/lib/cursor-editor";
 import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/editor-teclado";
@@ -660,6 +660,7 @@ export function PaginaNota({
   const divididoEmDois = ehMarkdown && previaVisivel && !historicoAberto;
 
   const palavras = useMemo(() => contarPalavras(conteudo), [conteudo]);
+  const caracteres = useMemo(() => contarCaracteres(conteudo), [conteudo]);
   const minutosDeLeitura = tempoDeLeituraEmMinutos(palavras);
 
   const secoes = nota.caminho.split("/").slice(0, -1);
@@ -812,7 +813,7 @@ export function PaginaNota({
           <span className="ml-auto shrink-0 text-[11px] text-tinta-3">
             {palavras === 0
               ? "página em branco"
-              : `${palavras} ${palavras === 1 ? "palavra" : "palavras"} · ${minutosDeLeitura} min de leitura`}
+              : `${palavras} ${palavras === 1 ? "palavra" : "palavras"} · ${caracteres} ${caracteres === 1 ? "caractere" : "caracteres"} · ${minutosDeLeitura} min de leitura`}
           </span>
           <span className="shrink-0 font-mono text-[10px] tracking-wide text-tinta-3 uppercase">
             {nota.formato}
@@ -859,7 +860,7 @@ export function PaginaNota({
                 formato={nota.formato}
                 campo={area}
                 conteudo={conteudo}
-                aoMudar={definirConteudo}
+                aoAplicar={(resultado) => aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim })}
                 extra={
                   ehMarkdown ? (
                     <div className="flex items-center gap-0.5">

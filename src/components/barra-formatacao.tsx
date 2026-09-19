@@ -107,13 +107,14 @@ export function BarraFormatacao({
   formato,
   campo,
   conteudo,
-  aoMudar,
+  aoAplicar,
   extra,
 }: {
   formato: Formato;
   campo: React.RefObject<HTMLTextAreaElement | null>;
   conteudo: string;
-  aoMudar: (texto: string) => void;
+  /** Escreve no campo de verdade (não só no estado) — mesma `aplicarNoCampo` do editor, pra letra não "sumir" até a próxima tecla. */
+  aoAplicar: (resultado: Selecao) => void;
   extra?: React.ReactNode;
 }) {
   const ferramentas = formato === "md" ? FERRAMENTAS_MARKDOWN : FERRAMENTAS_TEXTO;
@@ -127,13 +128,7 @@ export function BarraFormatacao({
       inicio: area.selectionStart,
       fim: area.selectionEnd,
     });
-    aoMudar(resultado.texto);
-
-    // O valor só chega ao campo no próximo quadro; a seleção espera por ele.
-    requestAnimationFrame(() => {
-      area.focus();
-      area.setSelectionRange(resultado.inicio, resultado.fim);
-    });
+    aoAplicar(resultado);
   }
 
   return (

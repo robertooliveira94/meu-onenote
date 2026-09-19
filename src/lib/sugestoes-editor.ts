@@ -92,6 +92,16 @@ function horaDeAgora(): string {
   return `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
 }
 
+/**
+ * `/datadehoje` e `/horaagora` escritos dentro do texto salvo de um modelo
+ * viram a data/hora reais — uma vez só, no momento em que uma página nasce
+ * daquele modelo. Depois disso é texto comum: não recalcula de novo cada
+ * vez que a página é aberta (a data não muda sozinha semanas depois).
+ */
+export function aplicarPlaceholdersDeModelo(texto: string): string {
+  return texto.replaceAll("/datadehoje", dataDeHoje()).replaceAll("/horaagora", horaDeAgora());
+}
+
 /** Insere texto no cursor, com o cursor no fim do inserido (ou onde `cursorEm` mandar). */
 function inserir(selecao: Selecao, trecho: string, cursorEm = trecho.length): Selecao {
   const { texto, inicio } = selecao;

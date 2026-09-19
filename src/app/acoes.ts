@@ -32,6 +32,7 @@ import { atualizarIndice, entradaDaNota, entradaDaPasta } from "@/lib/indice";
 import { apagarDeVez, enviarParaLixeira, esvaziarLixeira, restaurar } from "@/lib/lixeira";
 import { criarModelo, editarModelo, excluirModelo, lerModelo } from "@/lib/modelos";
 import { urlDaNota, urlDaSecao } from "@/lib/rotas";
+import { aplicarPlaceholdersDeModelo } from "@/lib/sugestoes-editor";
 import type { TituloDeNota } from "@/lib/arquivos";
 import type { ResultadoBusca, ResumoNota, VersaoHistorico } from "@/lib/tipos";
 
@@ -89,17 +90,17 @@ export async function acaoCriarSecao(pai: string, nome: string): Promise<Respost
   return resposta;
 }
 
-/** "08-09 20-15" — data e hora curtas, seguras como nome de arquivo. */
+/** "19-09-2026 20-15" — data (com ano) e hora curtas, seguras como nome de arquivo. */
 function carimboDeAgora(): string {
   return new Date()
-    .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
     .replace(/[/:]/g, "-")
     .replace(", ", " ");
 }
 
 /**
  * Página nova é sempre markdown, e nasce sem perguntar nada: o nome sai da
- * seção + data e hora ("Reuniões 08-09 20-15"), e o título fica editável com
+ * seção + data e hora ("Reuniões 08-09-2026 20-15"), e o título fica editável com
  * dois cliques na própria página. Perguntar o título antes de escrever era
  * pedir a decisão mais difícil no pior momento — antes de existir o texto.
  *
@@ -108,7 +109,8 @@ function carimboDeAgora(): string {
  */
 export async function acaoCriarPagina(pasta: string, modeloId?: string): Promise<void> {
   const pastaValidada = caminhoValido.parse(pasta);
-  const conteudoInicial = modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
+  const conteudoDoModelo = modeloId ? ((await lerModelo(modeloId))?.conteudo ?? "") : "";
+  const conteudoInicial = conteudoDoModelo ? aplicarPlaceholdersDeModelo(conteudoDoModelo) : conteudoDoModelo;
   const caminho = await criarNota(
     pastaValidada,
     `${nomeDe(pastaValidada)} ${carimboDeAgora()}`,
