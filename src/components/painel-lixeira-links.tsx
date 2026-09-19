@@ -1,6 +1,7 @@
 "use client";
 
-import { Bookmark, Folder, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Folder, RotateCcw, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -24,6 +25,10 @@ export function PainelLixeiraLinks({ itens }: { itens: ItemLixeiraLinks[] }) {
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto max-w-3xl">
+        <Link href="/links" className="mb-4 flex items-center gap-1 text-[12px] text-tinta-2 hover:text-tinta">
+          <ArrowLeft size={13} />
+          Links
+        </Link>
         <div className="flex items-end justify-between gap-4">
           <div>
             <h1 className="text-[25px] leading-tight font-extrabold tracking-[-0.03em]">Lixeira dos Links</h1>

@@ -4,8 +4,11 @@ import clsx from "clsx";
 import {
   AlertTriangle,
   ArrowDownUp,
+  ArrowRight,
   Bookmark,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Circle,
   Download,
   ExternalLink,
@@ -124,11 +127,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     [todosOsLinks],
   );
   const recentes = useMemo(
-    () => [...todosOsLinks].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 9),
-    [todosOsLinks],
-  );
-  const naoLidos = useMemo(
-    () => todosOsLinks.filter((link) => !link.lido).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
+    () => [...todosOsLinks].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 12),
     [todosOsLinks],
   );
 
@@ -372,10 +371,11 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           <InicioLinks
             favoritos={favoritos}
             recentes={recentes}
-            naoLidos={naoLidos}
+            arvore={arvore}
             onAbrir={abrirLink}
             onFavoritar={favoritarLink}
             onVisitar={visitarLink}
+            onSelecionarPasta={selecionarPasta}
           />
         )}
       </div>
@@ -1409,52 +1409,143 @@ const TileLink = memo(function TileLink({
           <p className="mt-0.5 truncate text-[10.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
         </div>
       </a>
-      <BotaoIcone
-        rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
-        onClick={() => onFavoritar(link)}
+      {/* Faixa de ações no rodapé do cartão, não em cima do favicon/capa
+          (era ali antes e tampava o ícone) — some enquanto não tem hover,
+          com um fundo próprio pra não brigar com o domínio atrás dela. */}
+      <div
         className={clsx(
-          "absolute top-1.5 right-1.5 size-6 shrink-0",
-          !link.favorito && "opacity-0 group-hover:opacity-100",
+          "absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 rounded-b-[11px] px-1.5 py-1 opacity-0 transition-opacity group-hover:opacity-100",
+          "bg-gradient-to-t from-[var(--superficie-alta)] from-40% to-transparent",
         )}
       >
-        <Star size={12} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
-      </BotaoIcone>
-      <div className="absolute top-1.5 left-1.5 flex shrink-0 items-center opacity-0 group-hover:opacity-100">
-        <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="size-6">
-          <Pencil size={11} />
-        </BotaoIcone>
-        {onExcluir ? (
-          <BotaoIcone rotulo="Excluir" onClick={() => onExcluir(link)} className="size-6">
-            <Trash2 size={11} />
+        <div className="flex shrink-0 items-center">
+          <BotaoIcone rotulo="Editar" onClick={() => onAbrir(link)} className="size-6">
+            <Pencil size={11} />
           </BotaoIcone>
-        ) : null}
+          {onExcluir ? (
+            <BotaoIcone rotulo="Excluir" onClick={() => onExcluir(link)} className="size-6">
+              <Trash2 size={11} />
+            </BotaoIcone>
+          ) : null}
+        </div>
+        <BotaoIcone
+          rotulo={link.favorito ? "Tirar dos favoritos" : "Marcar como favorito"}
+          onClick={() => onFavoritar(link)}
+          className="size-6 shrink-0"
+        >
+          <Star size={12} className={link.favorito ? "fill-current text-[var(--realce)]" : undefined} />
+        </BotaoIcone>
       </div>
+      {link.favorito ? (
+        <Star
+          size={12}
+          aria-hidden
+          className="absolute top-1.5 right-1.5 fill-current text-[var(--realce)] opacity-100 transition-opacity group-hover:opacity-0"
+        />
+      ) : null}
     </div>
   );
 });
 
+const CHAVE_ORDEM_INICIO = "links-ordem-inicio";
+const LIMITE_POR_PASTA = 10;
+
+/** A ordem dos grupos da tela inicial, lembrada entre sessões — pastas novas entram no fim, pastas removidas somem sozinhas. */
+function useOrdemDosGrupos(idsAtuais: string[]) {
+  const [ordem, definirOrdemEstado] = useState<string[]>(idsAtuais);
+
+  useEffect(() => {
+    let salva: string[] = [];
+    try {
+      const bruto = localStorage.getItem(CHAVE_ORDEM_INICIO);
+      salva = bruto ? (JSON.parse(bruto) as string[]) : [];
+    } catch {
+      salva = [];
+    }
+    const doConjuntoAtual = new Set(idsAtuais);
+    const preservados = salva.filter((id) => doConjuntoAtual.has(id));
+    const novos = idsAtuais.filter((id) => !preservados.includes(id));
+    definirOrdemEstado([...preservados, ...novos]);
+    // Só na primeira vez que a lista de grupos possíveis é conhecida — depois
+    // disso quem manda na ordem é `mover`, não o efeito.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsAtuais.join(",")]);
+
+  function mover(id: string, direcao: -1 | 1) {
+    definirOrdemEstado((atual) => {
+      const indice = atual.indexOf(id);
+      const alvo = indice + direcao;
+      if (indice === -1 || alvo < 0 || alvo >= atual.length) return atual;
+      const proximo = [...atual];
+      [proximo[indice], proximo[alvo]] = [proximo[alvo], proximo[indice]];
+      try {
+        localStorage.setItem(CHAVE_ORDEM_INICIO, JSON.stringify(proximo));
+      } catch {
+        // Sem armazenamento: a ordem vale só para esta sessão.
+      }
+      return proximo;
+    });
+  }
+
+  return { ordem, mover };
+}
+
+type GrupoInicio = {
+  id: string;
+  titulo: string;
+  icone: React.ReactNode;
+  links: LinkComPasta[];
+  /** Presente só nos grupos de pasta — "ver todos" leva até ela. */
+  pastaId?: string;
+};
+
 /**
- * Tela inicial da app: todos os links, mais recentes primeiro, com uma
- * seção de favoritos acima — mesmo formato da página inicial de Anotações
- * ("Fixadas" + "Editadas recentemente"), mas achatando a árvore de pastas
- * inteira em vez de olhar só um caderno.
+ * Tela inicial da app: favoritos, recentes e depois um grupo por pasta de
+ * primeiro nível (os 10 links mais recentes dela, com "ver todos" pra
+ * entrar de vez) — assim dá pra ver o máximo de links possível sem abrir
+ * pasta nenhuma. A ordem dos grupos é reorganizável (setas no cabeçalho) e
+ * fica lembrada entre sessões.
  */
 function InicioLinks({
   favoritos,
   recentes,
-  naoLidos,
+  arvore,
   onAbrir,
   onFavoritar,
   onVisitar,
+  onSelecionarPasta,
 }: {
   favoritos: LinkComPasta[];
   recentes: LinkComPasta[];
-  naoLidos: LinkComPasta[];
+  arvore: PastaLink;
   onAbrir: (link: LinkSalvo) => void;
   onFavoritar: (link: LinkSalvo) => void;
   onVisitar: (link: LinkSalvo) => void;
+  onSelecionarPasta: (id: string) => void;
 }) {
-  if (favoritos.length === 0 && recentes.length === 0) {
+  const grupos = useMemo<GrupoInicio[]>(() => {
+    const lista: GrupoInicio[] = [];
+    if (favoritos.length > 0) lista.push({ id: "favoritos", titulo: "Favoritos", icone: <Star size={12} />, links: favoritos });
+    if (recentes.length > 0) lista.push({ id: "recentes", titulo: "Recentes", icone: null, links: recentes });
+    // A raiz também é "uma pasta" pra quem usa o app — aparece na árvore
+    // lateral com nome e ícone próprios, e pode ter links direto nela
+    // (sem entrar em nenhuma subpasta). Por isso entra na lista junto com
+    // as subpastas de primeiro nível, não só elas.
+    for (const pasta of [arvore, ...arvore.pastas]) {
+      if (pasta.links.length === 0) continue;
+      const links = [...pasta.links]
+        .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+        .map((link) => ({ ...link, pastaId: pasta.id }));
+      lista.push({ id: pasta.id, titulo: pasta.nome, icone: <span aria-hidden>{pasta.icone}</span>, links, pastaId: pasta.id });
+    }
+    return lista;
+  }, [favoritos, recentes, arvore]);
+
+  const idsAtuais = useMemo(() => grupos.map((g) => g.id), [grupos]);
+  const { ordem, mover } = useOrdemDosGrupos(idsAtuais);
+  const gruposNaOrdem = ordem.map((id) => grupos.find((g) => g.id === id)).filter((g): g is GrupoInicio => Boolean(g));
+
+  if (grupos.length === 0) {
     return (
       <div className="min-w-0 flex-1 overflow-y-auto bg-papel px-5 py-8">
         <Vazio
@@ -1465,42 +1556,55 @@ function InicioLinks({
       </div>
     );
   }
+
   return (
     <div className="min-w-0 flex-1 space-y-7 overflow-y-auto bg-papel px-5 py-5">
-      {naoLidos.length > 0 ? (
-        <section>
-          <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
-            <Circle size={10} className="fill-current text-[var(--realce)]" />
-            Não lidos · {naoLidos.length}
-          </h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
-            {naoLidos.map((link) => (
-              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {favoritos.length > 0 ? (
-        <section>
-          <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
-            <Star size={12} />
-            Favoritos
-          </h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
-            {favoritos.map((link) => (
-              <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-      <section>
-        <h2 className="mb-2 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Recentes</h2>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
-          {recentes.map((link) => (
-            <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
-          ))}
-        </div>
-      </section>
+      {gruposNaOrdem.map((grupo, indice) => {
+        const visiveis = grupo.pastaId ? grupo.links.slice(0, LIMITE_POR_PASTA) : grupo.links;
+        return (
+          <section key={grupo.id} className="group/grupo">
+            <div className="mb-2 flex items-center gap-1.5">
+              <h2 className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-tinta-3 uppercase">
+                {grupo.icone}
+                {grupo.titulo} · {grupo.links.length}
+              </h2>
+              <div className="flex items-center opacity-0 transition-opacity group-hover/grupo:opacity-100">
+                <BotaoIcone
+                  rotulo="Mover para cima"
+                  onClick={() => mover(grupo.id, -1)}
+                  className="size-5"
+                  disabled={indice === 0}
+                >
+                  <ChevronUp size={12} />
+                </BotaoIcone>
+                <BotaoIcone
+                  rotulo="Mover para baixo"
+                  onClick={() => mover(grupo.id, 1)}
+                  className="size-5"
+                  disabled={indice === gruposNaOrdem.length - 1}
+                >
+                  <ChevronDown size={12} />
+                </BotaoIcone>
+              </div>
+              {grupo.pastaId && grupo.links.length > LIMITE_POR_PASTA ? (
+                <button
+                  type="button"
+                  onClick={() => onSelecionarPasta(grupo.pastaId!)}
+                  className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-tinta-3 hover:text-tinta"
+                >
+                  Ver todos
+                  <ArrowRight size={11} />
+                </button>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
+              {visiveis.map((link) => (
+                <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -1594,6 +1698,23 @@ function DialogoImportarFavoritos({
       aoFechar={aoFechar}
     >
       <div className="space-y-3">
+        <details className="rounded-lg border border-linha bg-superficie-alta px-3 py-2 text-[12px] text-tinta-2">
+          <summary className="cursor-pointer font-medium text-tinta">Como exportar do navegador</summary>
+          <ul className="mt-2 space-y-1.5">
+            <li>
+              <strong className="text-tinta">Chrome:</strong> menu ⋮ → Favoritos → Gerenciador de favoritos → menu ⋮
+              no topo do gerenciador → Exportar favoritos.
+            </li>
+            <li>
+              <strong className="text-tinta">Firefox:</strong> menu ≡ → Favoritos → Gerenciar favoritos (abre a
+              Biblioteca) → Importar e Backup → Exportar favoritos para HTML.
+            </li>
+            <li>
+              <strong className="text-tinta">Edge:</strong> menu ⋯ → Favoritos → Gerenciar favoritos → menu ⋯ no
+              topo → Exportar favoritos.
+            </li>
+          </ul>
+        </details>
         <div>
           <Rotulo>Arquivo</Rotulo>
           <input

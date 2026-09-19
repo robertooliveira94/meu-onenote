@@ -1,6 +1,7 @@
 "use client";
 
-import { Bookmark, FolderOpen } from "lucide-react";
+import { ArrowLeft, Bookmark, FolderOpen } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 /** Um botão de favorito arrastável + o código equivalente, pra quem não pode arrastar. */
@@ -83,6 +84,10 @@ export function AtalhoDeLinks() {
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto max-w-xl">
+        <Link href="/links" className="mb-6 flex items-center gap-1 text-[12px] text-tinta-2 hover:text-tinta">
+          <ArrowLeft size={13} />
+          Links
+        </Link>
         <div
           className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl"
           style={{ background: "var(--realce-medio)", color: "var(--realce)" }}
