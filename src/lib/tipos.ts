@@ -293,8 +293,14 @@ export type ConfigQuadro = {
   wip?: Record<string, number>;
   /** Dias na coluna de conclusão até a tarefa ser arquivada sozinha. Ausente = 30; 0 = nunca. */
   arquivarApos?: number;
-  /** Qual coluna conta como "concluída" pro bloqueio de dependências. */
-  colunaConcluida: string;
+  /**
+   * Quais colunas contam como "concluída": desbloqueiam dependentes, não
+   * atrasam (nem avisam prazo), entram no arquivamento (manual e
+   * automático) e disparam a próxima ocorrência de tarefa repetida. Mais de
+   * uma pode contar ao mesmo tempo (ex.: "Feito" e "Cancelado"); pelo menos
+   * uma sempre existe.
+   */
+  colunasConcluidas: string[];
 };
 
 /** Um quadro inteiro: a configuração de colunas + as tarefas de cada uma, já na ordem manual. */

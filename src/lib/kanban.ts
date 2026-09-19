@@ -64,7 +64,7 @@ function caminhoConfig(quadro: string): string {
 }
 
 function configPadrao(): ConfigQuadro {
-  return { colunas: [...COLUNAS_KANBAN_PADRAO], colunaConcluida: "Feito" };
+  return { colunas: [...COLUNAS_KANBAN_PADRAO], colunasConcluidas: ["Feito"] };
 }
 
 async function existe(absoluto: string): Promise<boolean> {
@@ -97,12 +97,20 @@ export async function garantirQuadro(quadro: string): Promise<ConfigQuadro> {
   let config: ConfigQuadro;
   if (await existe(caminhoCfg)) {
     try {
-      const lida = JSON.parse(await fs.readFile(caminhoCfg, "utf8")) as Partial<ConfigQuadro>;
+      // `colunaConcluida` (string) é o formato de antes de várias colunas
+      // poderem contar como conclusão — vira um array de um item só na
+      // primeira leitura, sem precisar reescrever o arquivo na hora.
+      const lida = JSON.parse(await fs.readFile(caminhoCfg, "utf8")) as Partial<ConfigQuadro> & { colunaConcluida?: string };
+      const colunasConcluidas = Array.isArray(lida.colunasConcluidas)
+        ? lida.colunasConcluidas
+        : lida.colunaConcluida
+          ? [lida.colunaConcluida]
+          : null;
       config =
         Array.isArray(lida.colunas) && lida.colunas.length > 0
           ? {
               colunas: lida.colunas,
-              colunaConcluida: lida.colunaConcluida ?? lida.colunas[lida.colunas.length - 1],
+              colunasConcluidas: colunasConcluidas ?? [lida.colunas[lida.colunas.length - 1]],
               ...(lida.wip ? { wip: lida.wip } : {}),
               ...(typeof lida.arquivarApos === "number" ? { arquivarApos: lida.arquivarApos } : {}),
             }
@@ -212,10 +220,10 @@ async function arquivarVencidas(quadro: string, config: ConfigQuadro, indice: In
   const dias = config.arquivarApos ?? DIAS_PARA_ARQUIVAR_PADRAO;
   if (dias <= 0) return 0;
   const limite = Date.now() - dias * 86_400_000;
-  const pasta = pastaDaColuna(quadro, config.colunaConcluida);
+  const pastas = config.colunasConcluidas.map((coluna) => pastaDaColuna(quadro, coluna));
   let arquivadas = 0;
   for (const [caminho, entrada] of Object.entries(indice.notas)) {
-    if (!caminho.startsWith(`${pasta}/`) || !entrada.movidoEm) continue;
+    if (!pastas.some((pasta) => caminho.startsWith(`${pasta}/`)) || !entrada.movidoEm) continue;
     if (new Date(entrada.movidoEm).getTime() > limite) continue;
     if (!(await existe(resolverCaminho(caminho)))) continue;
     await arquivarTarefa(caminho);
@@ -292,10 +300,9 @@ export async function arquivarTarefa(caminho: string): Promise<string> {
   return alvo;
 }
 
-/** Arquiva tudo que está na coluna de conclusão. Devolve quantas foram. */
-export async function arquivarConcluidas(quadro: string): Promise<number> {
-  const config = await garantirQuadro(quadro);
-  const pasta = pastaDaColuna(quadro, config.colunaConcluida);
+/** Arquiva tudo que está numa coluna específica. Devolve quantas foram. */
+export async function arquivarUmaColuna(quadro: string, coluna: string): Promise<number> {
+  const pasta = pastaDaColuna(quadro, coluna);
   let entradas: Dirent[];
   try {
     entradas = await fs.readdir(resolverCaminho(pasta), { withFileTypes: true });
@@ -311,13 +318,21 @@ export async function arquivarConcluidas(quadro: string): Promise<number> {
   return quantas;
 }
 
-/** De volta ao quadro, na coluna de conclusão (de onde saiu). */
+/** Arquiva tudo que está em qualquer coluna de conclusão. Devolve quantas foram. */
+export async function arquivarConcluidas(quadro: string): Promise<number> {
+  const config = await garantirQuadro(quadro);
+  let quantas = 0;
+  for (const coluna of config.colunasConcluidas) quantas += await arquivarUmaColuna(quadro, coluna);
+  return quantas;
+}
+
+/** De volta ao quadro, na primeira coluna de conclusão (de onde a maioria sai). */
 export async function desarquivarTarefa(caminho: string): Promise<string> {
   garantirForaDoSistema(caminho);
   const quadro = segmentos(caminho)[1];
   if (segmentos(caminho)[2] !== PASTA_ARQUIVO) throw new Error("Esta tarefa não está arquivada");
   const config = await garantirQuadro(quadro);
-  const pastaDestino = pastaDaColuna(quadro, config.colunaConcluida);
+  const pastaDestino = pastaDaColuna(quadro, config.colunasConcluidas[0]);
   const nome = await nomeDisponivel(pastaDestino, tituloDe(caminho));
   const alvo = juntar(pastaDestino, nome);
 
@@ -477,7 +492,7 @@ export async function moverTarefa(caminho: string, colunaDestino: ColunaKanban):
     atualizarDependenciasApósMover(indice, caminho, alvo);
     entradaDaNota(indice, alvo).movidoEm = new Date().toISOString();
   });
-  if (colunaDestino === config.colunaConcluida) await gerarProximaOcorrencia(alvo, quadro, config);
+  if (config.colunasConcluidas.includes(colunaDestino)) await gerarProximaOcorrencia(alvo, quadro, config);
   return alvo;
 }
 
@@ -678,7 +693,7 @@ export async function renomearColuna(quadro: string, nomeAtual: string, novoNome
   });
 
   config.colunas = config.colunas.map((coluna) => (coluna === nomeAtual ? limpo : coluna));
-  if (config.colunaConcluida === nomeAtual) config.colunaConcluida = limpo;
+  config.colunasConcluidas = config.colunasConcluidas.map((coluna) => (coluna === nomeAtual ? limpo : coluna));
   await salvarConfigQuadro(quadro, config);
 }
 
@@ -701,7 +716,10 @@ export async function excluirColuna(quadro: string, nome: string): Promise<void>
 
   await fs.rm(resolverCaminho(pasta), { recursive: true, force: true });
   config.colunas = config.colunas.filter((coluna) => coluna !== nome);
-  if (config.colunaConcluida === nome) config.colunaConcluida = config.colunas[config.colunas.length - 1];
+  config.colunasConcluidas = config.colunasConcluidas.filter((coluna) => coluna !== nome);
+  // Sem nenhuma coluna de conclusão sobrando (era a única marcada), a
+  // última coluna que restou assume — mesma regra de antes, generalizada.
+  if (config.colunasConcluidas.length === 0) config.colunasConcluidas = [config.colunas[config.colunas.length - 1]];
   await salvarConfigQuadro(quadro, config);
 }
 
@@ -714,11 +732,22 @@ export async function reordenarColunas(quadro: string, novaOrdem: string[]): Pro
   await salvarConfigQuadro(quadro, config);
 }
 
-/** Qual coluna conta como "concluída" pro bloqueio de dependências ("Bloqueado por"). */
-export async function definirColunaConcluida(quadro: string, nome: string): Promise<void> {
+/**
+ * Liga ou desliga uma coluna como "concluída" (desbloqueia dependentes,
+ * não atrasa, entra no arquivamento — ver `ConfigQuadro.colunasConcluidas`).
+ * Mais de uma pode estar ligada ao mesmo tempo; a última não pode ser
+ * desligada, senão o quadro fica sem nenhuma.
+ */
+export async function alternarColunaConcluida(quadro: string, nome: string): Promise<void> {
   const config = await garantirQuadro(quadro);
   if (!config.colunas.includes(nome)) throw new Error("Coluna não encontrada");
-  config.colunaConcluida = nome;
+  const ligada = config.colunasConcluidas.includes(nome);
+  if (ligada && config.colunasConcluidas.length <= 1) {
+    throw new Error("O quadro precisa de pelo menos uma coluna de conclusão");
+  }
+  config.colunasConcluidas = ligada
+    ? config.colunasConcluidas.filter((coluna) => coluna !== nome)
+    : [...config.colunasConcluidas, nome];
   await salvarConfigQuadro(quadro, config);
 }
 
@@ -811,7 +840,7 @@ export async function listarTarefasComPrazo(hoje: string): Promise<TarefasAgenda
     if (coluna === PASTA_ARQUIVO) continue;
     if (!configs.has(quadro)) configs.set(quadro, garantirQuadro(quadro));
     const config = await configs.get(quadro)!;
-    if (coluna === config.colunaConcluida) continue;
+    if (config.colunasConcluidas.includes(coluna)) continue;
     const tarefa: TarefaAgendada = { ...montarTarefa(caminho, coluna, indice), quadro };
     if (prazo < hoje) grupos.atrasadas.push(tarefa);
     else if (prazo === hoje) grupos.hoje.push(tarefa);
@@ -850,7 +879,7 @@ export async function tarefasComPrazoVencendo(
     if (coluna === PASTA_ARQUIVO) continue;
     if (!configs.has(quadro)) configs.set(quadro, garantirQuadro(quadro));
     const config = await configs.get(quadro)!;
-    if (coluna === config.colunaConcluida) continue;
+    if (config.colunasConcluidas.includes(coluna)) continue;
     const tarefa: TarefaComPrazo = { caminho, titulo: tituloDe(caminho), quadro, coluna, prazo };
     (prazo < hoje ? atrasadas : vencemHoje).push(tarefa);
   }

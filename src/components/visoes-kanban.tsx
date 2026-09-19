@@ -57,7 +57,7 @@ export function VisaoLista({
   etiquetasKanban,
   sigla,
   hoje,
-  colunaConcluida,
+  colunasConcluidas,
   tarefaAberta,
   aoAbrir,
 }: {
@@ -67,7 +67,7 @@ export function VisaoLista({
   etiquetasKanban: EtiquetaKanban[];
   sigla: string;
   hoje: string;
-  colunaConcluida: string;
+  colunasConcluidas: string[];
   tarefaAberta: string | null;
   aoAbrir: (caminho: string) => void;
 }) {
@@ -122,7 +122,7 @@ export function VisaoLista({
             </tr>
           ) : (
             ordenadas.map((tarefa) => {
-              const atrasada = Boolean(tarefa.prazo) && tarefa.prazo! < hoje && tarefa.coluna !== colunaConcluida;
+              const atrasada = Boolean(tarefa.prazo) && tarefa.prazo! < hoje && !colunasConcluidas.includes(tarefa.coluna);
               const sprint = sprints.find((s) => s.id === tarefa.sprintId);
               const etiquetas = tarefa.etiquetas
                 .map((id) => etiquetasKanban.find((e) => e.id === id))
@@ -196,14 +196,14 @@ function chaveDoDia(data: Date): string {
 export function VisaoCalendario({
   tarefas,
   hoje,
-  colunaConcluida,
+  colunasConcluidas,
   sigla,
   tarefaAberta,
   aoAbrir,
 }: {
   tarefas: TarefaKanban[];
   hoje: string;
-  colunaConcluida: string;
+  colunasConcluidas: string[];
   sigla: string;
   tarefaAberta: string | null;
   aoAbrir: (caminho: string) => void;
@@ -305,8 +305,8 @@ export function VisaoCalendario({
                 {dia.getDate()}
               </span>
               {lista.slice(0, 4).map((tarefa) => {
-                const atrasada = chave < hoje && tarefa.coluna !== colunaConcluida;
-                const concluida = tarefa.coluna === colunaConcluida;
+                const atrasada = chave < hoje && !colunasConcluidas.includes(tarefa.coluna);
+                const concluida = colunasConcluidas.includes(tarefa.coluna);
                 return (
                   <button
                     key={tarefa.caminho}

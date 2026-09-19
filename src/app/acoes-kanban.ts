@@ -21,13 +21,14 @@ import { ESTIMATIVAS, PRIORIDADES, RECORRENCIAS } from "@/lib/tipos";
 import type { ExtrasDaTarefa } from "@/lib/tipos";
 import {
   adicionarComentario,
+  alternarColunaConcluida,
   arquivarConcluidas,
+  arquivarUmaColuna,
   arquivarTarefa,
   desarquivarTarefa,
   buscarTarefas,
   criarColuna,
   criarTarefa,
-  definirColunaConcluida,
   definirDependencias,
   definirEtiquetasDaTarefa,
   definirImpedimento,
@@ -195,6 +196,16 @@ export async function acaoArquivarTarefa(caminho: string): Promise<Resposta> {
 export async function acaoArquivarConcluidas(quadro: string): Promise<Resposta> {
   try {
     const quantas = await arquivarConcluidas(caminhoValido.parse(quadro));
+    atualizarTudo();
+    return { ok: true, mensagem: String(quantas) };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para arquivar" };
+  }
+}
+
+export async function acaoArquivarUmaColuna(quadro: string, coluna: string): Promise<Resposta> {
+  try {
+    const quantas = await arquivarUmaColuna(caminhoValido.parse(quadro), colunaValida.parse(coluna));
     atualizarTudo();
     return { ok: true, mensagem: String(quantas) };
   } catch (erro) {
@@ -423,9 +434,9 @@ export async function acaoReordenarColunas(quadro: string, novaOrdem: string[]):
   return resposta;
 }
 
-export async function acaoDefinirColunaConcluida(quadro: string, nome: string): Promise<Resposta> {
+export async function acaoAlternarColunaConcluida(quadro: string, nome: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await definirColunaConcluida(caminhoValido.parse(quadro), colunaValida.parse(nome));
+    await alternarColunaConcluida(caminhoValido.parse(quadro), colunaValida.parse(nome));
   });
   atualizarTudo();
   return resposta;

@@ -94,7 +94,7 @@ export async function fecharSprint(id: string, destino: string | null): Promise<
       const [, quadro, coluna] = caminho.split("/");
       if (coluna === PASTA_ARQUIVO) continue;
       if (!configs.has(quadro)) configs.set(quadro, await garantirQuadro(quadro));
-      if (coluna === configs.get(quadro)!.colunaConcluida) continue;
+      if (configs.get(quadro)!.colunasConcluidas.includes(coluna)) continue;
       entrada.sprintKanban = destino ?? undefined;
       movidas++;
     }

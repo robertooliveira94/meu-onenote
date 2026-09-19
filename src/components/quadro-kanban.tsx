@@ -42,13 +42,14 @@ import { useRouter } from "next/navigation";
 import { acaoAlternarFavorita } from "@/app/acoes";
 import {
   acaoAdicionarComentario,
+  acaoAlternarColunaConcluida,
   acaoArquivarConcluidas,
   acaoArquivarTarefa,
+  acaoArquivarUmaColuna,
   acaoCriarColuna,
   acaoDefinirArquivarApos,
   acaoCriarSprint,
   acaoCriarTarefa,
-  acaoDefinirColunaConcluida,
   acaoDefinirDatasDaSprint,
   acaoFecharSprint,
   acaoDefinirCorDaTarefa,
@@ -146,15 +147,15 @@ function formatarPrazo(iso: string): string {
 
 type Sobrevoo = { coluna: ColunaKanban; caminho: string; antes: boolean } | null;
 
-/** As dependências de uma tarefa que ainda não chegaram na coluna de conclusão. */
+/** As dependências de uma tarefa que ainda não chegaram numa coluna de conclusão. */
 function dependenciasPendentes(
   tarefa: TarefaKanban,
   mapa: Record<string, TarefaKanban>,
-  colunaConcluida: string,
+  colunasConcluidas: string[],
 ): TarefaKanban[] {
   return tarefa.dependeDe
     .map((caminho) => mapa[caminho])
-    .filter((dependencia): dependencia is TarefaKanban => Boolean(dependencia) && dependencia.coluna !== colunaConcluida);
+    .filter((dependencia): dependencia is TarefaKanban => Boolean(dependencia) && !colunasConcluidas.includes(dependencia.coluna));
 }
 
 /**
@@ -425,8 +426,8 @@ export function QuadroKanban({
       return;
     }
 
-    if (coluna === conteudo.config.colunaConcluida) {
-      const pendentes = dependenciasPendentes(tarefaOrigem, mapa, conteudo.config.colunaConcluida);
+    if (conteudo.config.colunasConcluidas.includes(coluna)) {
+      const pendentes = dependenciasPendentes(tarefaOrigem, mapa, conteudo.config.colunasConcluidas);
       if (pendentes.length > 0) {
         definirAviso(
           `"${tarefaOrigem.titulo}" ainda depende de ${pendentes.length === 1 ? "1 tarefa" : `${pendentes.length} tarefas`} não concluída${pendentes.length === 1 ? "" : "s"}: ${pendentes.map((p) => p.titulo).join(", ")}.`,
@@ -495,6 +496,18 @@ export function QuadroKanban({
 
   async function arquivarConcluidasAção() {
     const resposta = await acaoArquivarConcluidas(quadro.nome);
+    if (resposta.ok) {
+      const quantas = Number(resposta.mensagem ?? 0);
+      definirAviso(quantas === 0 ? "Nada para arquivar." : `${quantas} ${quantas === 1 ? "tarefa arquivada" : "tarefas arquivadas"}.`);
+    } else {
+      definirAviso(resposta.erro);
+    }
+    roteador.refresh();
+  }
+
+  /** Arquivar tudo a partir do menu de uma coluna específica — só aquela, não as outras de conclusão. */
+  async function arquivarUmaColunaAção(coluna: string) {
+    const resposta = await acaoArquivarUmaColuna(quadro.nome, coluna);
     if (resposta.ok) {
       const quantas = Number(resposta.mensagem ?? 0);
       definirAviso(quantas === 0 ? "Nada para arquivar." : `${quantas} ${quantas === 1 ? "tarefa arquivada" : "tarefas arquivadas"}.`);
@@ -658,7 +671,7 @@ export function QuadroKanban({
                   arquivarConcluidasAção();
                 }}
               >
-                Arquivar tudo em {conteudo.config.colunaConcluida}
+                Arquivar tudo em {conteudo.config.colunasConcluidas.join(", ")}
               </ItemMenu>
               <ItemMenu
                 icone={<ListChecks size={13} />}
@@ -824,7 +837,7 @@ export function QuadroKanban({
           etiquetasKanban={etiquetasKanban}
           sigla={sigla}
           hoje={hojeISO()}
-          colunaConcluida={conteudo.config.colunaConcluida}
+          colunasConcluidas={conteudo.config.colunasConcluidas}
           tarefaAberta={tarefaAberta}
           aoAbrir={(caminho) => abrirTarefa(caminho)}
         />
@@ -832,7 +845,7 @@ export function QuadroKanban({
         <VisaoCalendario
           tarefas={Object.values(mapa).filter(passaNoFiltro)}
           hoje={hojeISO()}
-          colunaConcluida={conteudo.config.colunaConcluida}
+          colunasConcluidas={conteudo.config.colunasConcluidas}
           sigla={sigla}
           tarefaAberta={tarefaAberta}
           aoAbrir={(caminho) => abrirTarefa(caminho)}
@@ -849,7 +862,7 @@ export function QuadroKanban({
           const limiteWip = conteudo.config.wip?.[coluna];
           const acimaDoWip = Boolean(limiteWip && tarefas.length > limiteWip);
           const pontos = tarefas.reduce((soma, t) => soma + (t.estimativa ? PONTOS_ESTIMATIVA[t.estimativa] : 0), 0);
-          const ehConclusao = coluna === conteudo.config.colunaConcluida;
+          const ehConclusao = conteudo.config.colunasConcluidas.includes(coluna);
 
           if (recolhidas.has(coluna)) {
             // Faixa de 40px com o nome de cima para baixo — mesmo gesto das
@@ -955,24 +968,23 @@ export function QuadroKanban({
                         >
                           Renomear
                         </ItemMenu>
-                        {coluna !== conteudo.config.colunaConcluida ? (
-                          <ItemMenu
-                            icone={<Check size={13} />}
-                            onClick={async () => {
-                              fechar();
-                              const resposta = await acaoDefinirColunaConcluida(quadro.nome, coluna);
-                              if (resposta.ok) roteador.refresh();
-                            }}
-                          >
-                            Marcar como conclusão
-                          </ItemMenu>
-                        ) : null}
+                        <ItemMenu
+                          icone={ehConclusao ? <X size={13} /> : <Check size={13} />}
+                          onClick={async () => {
+                            fechar();
+                            const resposta = await acaoAlternarColunaConcluida(quadro.nome, coluna);
+                            if (resposta.ok) roteador.refresh();
+                            else definirAviso(resposta.erro);
+                          }}
+                        >
+                          {ehConclusao ? "Desmarcar como conclusão" : "Marcar como conclusão"}
+                        </ItemMenu>
                         {ehConclusao && tarefas.length > 0 ? (
                           <ItemMenu
                             icone={<Archive size={13} />}
                             onClick={() => {
                               fechar();
-                              arquivarConcluidasAção();
+                              arquivarUmaColunaAção(coluna);
                             }}
                           >
                             Arquivar tudo ({tarefas.length})
@@ -1047,10 +1059,10 @@ export function QuadroKanban({
                     tarefa={tarefa}
                     etiquetasKanban={etiquetasKanban}
                     sprints={sprints}
-                    pendentes={dependenciasPendentes(tarefa, mapa, conteudo.config.colunaConcluida).length}
+                    pendentes={dependenciasPendentes(tarefa, mapa, conteudo.config.colunasConcluidas).length}
                     corDaColuna={cor}
                     outrasColunas={colunas.filter((c) => c !== coluna)}
-                    atrasada={Boolean(tarefa.prazo) && tarefa.prazo! < hojeISO() && coluna !== conteudo.config.colunaConcluida}
+                    atrasada={Boolean(tarefa.prazo) && tarefa.prazo! < hojeISO() && !conteudo.config.colunasConcluidas.includes(coluna)}
                     sobrevoo={sobrevoo?.caminho === tarefa.caminho ? sobrevoo : null}
                     aoPassarPorCima={(antes) => definirSobrevoo({ coluna, caminho: tarefa.caminho, antes })}
                     aoSairDeCima={() =>
@@ -1269,7 +1281,7 @@ export function QuadroKanban({
       <DialogoNome
         aberto={ajustandoArquivo}
         titulo="Arquivar sozinho"
-        descricao={`Depois de quantos dias em ${conteudo.config.colunaConcluida} a tarefa sai do quadro para o arquivo. 0 desliga. Só vale para tarefas movidas depois desta versão — as de antes ficam até alguém arquivar à mão.`}
+        descricao={`Depois de quantos dias em ${conteudo.config.colunasConcluidas.join(" ou ")} a tarefa sai do quadro para o arquivo. 0 desliga. Só vale para tarefas movidas depois desta versão — as de antes ficam até alguém arquivar à mão.`}
         rotulo="Dias"
         valorInicial={String(conteudo.config.arquivarApos ?? 30)}
         textoBotao="Guardar"
