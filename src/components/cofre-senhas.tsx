@@ -1236,6 +1236,10 @@ function Avatar({ entrada, tamanho = 28 }: { entrada: EntradaSenha; tamanho?: nu
       height={tamanho}
       className="shrink-0 rounded-md object-contain"
       style={{ width: tamanho, height: tamanho }}
+      // Sob demanda: um grupo com muitas entradas disparava uma requisição
+      // por favicon de uma vez só ao trocar de grupo — o navegador decide
+      // sozinho, pela distância até a tela, o que baixa agora e o que espera.
+      loading="lazy"
       // O cofre pode trancar entre a lista carregar e a imagem pedir — cai pra inicial.
       onError={() => definirFalhou(true)}
     />

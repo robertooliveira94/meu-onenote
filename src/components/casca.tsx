@@ -1,5 +1,6 @@
 "use client";
 
+import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -122,6 +123,37 @@ function AtalhosDoHub({
   return null;
 }
 
+/**
+ * Busca sempre à vista, no topo de qualquer aplicação — em vez de cada
+ * uma escondendo o próprio jeito de buscar (`Ctrl K` só documentado na
+ * folha de atalhos, ou um botão perdido na coluna). Abre a mesma paleta de
+ * sempre; não é uma busca nova. Ao lado, o caderno/quadro/pasta aberto no
+ * momento — útil quando se navegou fundo o bastante pra esquecer onde se
+ * está.
+ */
+function BarraSuperior({ contexto }: { contexto?: string | null }) {
+  const paleta = usePaleta();
+  return (
+    <div className="esconde-no-foco flex h-10 shrink-0 items-center gap-3 border-b border-linha bg-superficie px-3">
+      <button
+        type="button"
+        onClick={() => paleta.abrir()}
+        className="flex h-7 w-full max-w-sm items-center gap-2 rounded-lg border border-linha bg-superficie-alta px-2.5 text-left text-[12px] text-tinta-3 transition-colors hover:border-linha-forte hover:text-tinta-2"
+      >
+        <Search size={13} className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">Buscar ou fazer qualquer coisa…</span>
+        <span className="shrink-0 text-[10.5px]">Ctrl K</span>
+      </button>
+      {contexto ? (
+        <span className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 text-[12px] text-tinta-2">
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: "var(--realce)" }} />
+          <span className="truncate">{contexto}</span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function CascaInterna({
   cadernos,
   quadros,
@@ -163,6 +195,11 @@ function CascaInterna({
       : appAtual === "links"
         ? pastaLinkAtiva?.cor
         : cadernoAtivo?.cor) ?? null;
+  // Onde a pessoa está, pra mostrar ao lado da busca — Senhas fica de fora
+  // porque o grupo ativo é estado só do cliente, sem refletir na URL, então
+  // este nível (casca, guiado pela URL) não tem como saber qual é.
+  const contextoAtivo =
+    appAtual === "kanban" ? quadroAtivo?.nome : appAtual === "links" ? pastaLinkAtiva?.nome : cadernoAtivo?.nome;
 
   return (
     <div
@@ -175,6 +212,7 @@ function CascaInterna({
       {corAtiva ? (
         <div className="h-[3px] shrink-0" style={{ background: corAtiva }} aria-hidden />
       ) : null}
+      <BarraSuperior contexto={contextoAtivo} />
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <BarraAplicacoes
           appAtual={appAtual}
