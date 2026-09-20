@@ -23,7 +23,6 @@ import {
   Pencil,
   Plus,
   Rows3,
-  Search,
   ShieldQuestion,
   Star,
   Trash2,
@@ -131,16 +130,6 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     [todosOsLinks],
   );
 
-  const [busca, definirBusca] = useState("");
-  const buscando = busca.trim().length > 0;
-  const resultadosBusca = useMemo(() => {
-    const alvo = busca.trim().toLowerCase();
-    if (!alvo) return [];
-    return todosOsLinks
-      .filter((link) => link.titulo.toLowerCase().includes(alvo) || link.url.toLowerCase().includes(alvo))
-      .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm));
-  }, [busca, todosOsLinks]);
-
   const [linkEmEdicao, definirLinkEmEdicao] = useState<LinkSalvo | "novo" | null>(null);
   const [excluindoLink, definirExcluindoLink] = useState<LinkSalvo | null>(null);
   const [acaoPasta, definirAcaoPasta] = useState<{ tipo: "nova-subpasta" | "excluir"; pasta: PastaLink } | null>(
@@ -197,8 +186,6 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     URL.revokeObjectURL(url);
   }, []);
   useAtalho("n", { grupo: "Links", descricao: `Novo link em ${pastaAtiva.nome}`, acao: novoLink });
-  const campoBusca = useRef<HTMLInputElement>(null);
-  useAtalho("ctrl+f", { grupo: "Links", descricao: "Buscar", acao: () => campoBusca.current?.focus() });
   const caminhoAtual = useMemo(() => caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva], [arvore, pastaAtiva]);
   useAtalho("backspace", {
     grupo: "Links",
@@ -288,16 +275,6 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
       <header className="flex shrink-0 items-center gap-3 border-b border-linha bg-superficie px-5 py-2.5">
         <Bookmark size={15} className="shrink-0 text-tinta-3" />
         <h1 className="shrink-0 text-[13px] font-bold tracking-[-0.02em]">Links</h1>
-        <div className="relative max-w-xs flex-1">
-          <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-tinta-3" />
-          <input
-            ref={campoBusca}
-            value={busca}
-            onChange={(evento) => definirBusca(evento.target.value)}
-            placeholder="Buscar por título ou URL…"
-            className="h-8 w-full rounded-lg border border-linha bg-superficie-alta py-1 pr-2 pl-8 text-[12.5px] text-tinta placeholder:text-tinta-3 focus:border-[var(--realce)] focus:outline-none"
-          />
-        </div>
         <Link
           href="/links/atalho"
           className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"
@@ -342,15 +319,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           onMoverLink={moverLink}
           onRenomear={renomearPasta}
         />
-        {buscando ? (
-          <ResultadosBusca
-            termo={busca}
-            resultados={resultadosBusca}
-            onAbrir={abrirLink}
-            onFavoritar={favoritarLink}
-            onVisitar={visitarLink}
-          />
-        ) : modo === "pasta" ? (
+        {modo === "pasta" ? (
           <ColunaLinks
             pasta={pastaAtiva}
             raiz={arvore}
@@ -508,6 +477,12 @@ function ColunaPastasLinks({
   onMoverLink: (id: string, idNovaPasta: string) => void;
   onRenomear: (id: string, nome: string) => Promise<string | null>;
 }) {
+  // "Nova pasta" (o botão do cabeçalho, sem pasta-alvo óbvia como o menu de
+  // cada pasta tem) cria dentro de onde a pessoa está agora — não sempre na
+  // raiz, que fazia toda pasta nova nascer dentro de "Geral" mesmo navegando
+  // fundo em outra.
+  const pastaParaNovaPasta = (pastaAtivaId && encontrarPasta(raiz, pastaAtivaId)) || raiz;
+
   return (
     <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-linha bg-papel">
       <div className="px-2 pt-2">
@@ -525,7 +500,11 @@ function ColunaPastasLinks({
       </div>
       <div className="flex items-center justify-between px-3.5 pt-2.5 pb-2">
         <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Pastas</p>
-        <BotaoIcone rotulo="Nova pasta" onClick={() => onCriarSubpasta(raiz)} className="size-6">
+        <BotaoIcone
+          rotulo={pastaParaNovaPasta.id === raiz.id ? "Nova pasta" : `Nova pasta em ${pastaParaNovaPasta.nome}`}
+          onClick={() => onCriarSubpasta(pastaParaNovaPasta)}
+          className="size-6"
+        >
           <FolderPlus size={13} />
         </BotaoIcone>
       </div>
@@ -1605,35 +1584,6 @@ function InicioLinks({
           </section>
         );
       })}
-    </div>
-  );
-}
-
-function ResultadosBusca({
-  termo,
-  resultados,
-  onAbrir,
-  onFavoritar,
-  onVisitar,
-}: {
-  termo: string;
-  resultados: LinkComPasta[];
-  onAbrir: (link: LinkSalvo) => void;
-  onFavoritar: (link: LinkSalvo) => void;
-  onVisitar: (link: LinkSalvo) => void;
-}) {
-  return (
-    <div className="min-w-0 flex-1 overflow-y-auto bg-papel px-5 py-5">
-      <p className="mb-3 text-[11.5px] text-tinta-3">
-        {resultados.length === 0
-          ? `Nada encontrado para "${termo}".`
-          : `${resultados.length} ${resultados.length === 1 ? "resultado" : "resultados"} para "${termo}"`}
-      </p>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2.5">
-        {resultados.map((link) => (
-          <TileLink key={link.id} link={link} onAbrir={onAbrir} onFavoritar={onFavoritar} onVisitar={onVisitar} />
-        ))}
-      </div>
     </div>
   );
 }

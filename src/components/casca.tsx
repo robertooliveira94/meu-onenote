@@ -134,18 +134,23 @@ function AtalhosDoHub({
 function BarraSuperior({ contexto }: { contexto?: string | null }) {
   const paleta = usePaleta();
   return (
-    <div className="esconde-no-foco flex h-10 shrink-0 items-center gap-3 border-b border-linha bg-superficie px-3">
+    // Grade de 3 colunas iguais nas pontas: a busca fica centralizada de
+    // verdade (não só "colada à esquerda com espaço sobrando"), e o
+    // contexto na direita tem uma coluna espelhada vazia à esquerda pra
+    // não puxar o centro pro lado.
+    <div className="esconde-no-foco grid h-10 shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 border-b border-linha bg-superficie px-3">
+      <span aria-hidden />
       <button
         type="button"
         onClick={() => paleta.abrir()}
-        className="flex h-7 w-full max-w-sm items-center gap-2 rounded-lg border border-linha bg-superficie-alta px-2.5 text-left text-[12px] text-tinta-3 transition-colors hover:border-linha-forte hover:text-tinta-2"
+        className="flex h-7 w-full items-center gap-2 rounded-lg border border-linha bg-superficie-alta px-2.5 text-left text-[12px] text-tinta-3 transition-colors hover:border-linha-forte hover:text-tinta-2"
       >
         <Search size={13} className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">Buscar ou fazer qualquer coisa…</span>
         <span className="shrink-0 text-[10.5px]">Ctrl K</span>
       </button>
       {contexto ? (
-        <span className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 text-[12px] text-tinta-2">
+        <span className="flex min-w-0 items-center justify-end gap-1.5 text-[12px] text-tinta-2">
           <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: "var(--realce)" }} />
           <span className="truncate">{contexto}</span>
         </span>

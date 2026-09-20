@@ -10,7 +10,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PocketKnife,
-  Search,
   Tag,
   Trash2,
 } from "lucide-react";
@@ -19,7 +18,6 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { useColunas } from "@/lib/colunas";
-import { usePaleta } from "@/lib/paleta";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import type { Caderno, Modelo } from "@/lib/tipos";
 
@@ -52,7 +50,6 @@ export function ColunaSecoes({
   modelos: Modelo[];
 }) {
   const caminhoAtual = usePathname();
-  const paleta = usePaleta();
   const [confirmandoExportarTudo, definirConfirmandoExportarTudo] = useState(false);
   // 300 de partida (era 248): a coluna agora carrega a hierarquia inteira,
   // já que a lista de páginas deixou de ser uma coluna à parte.
@@ -108,14 +105,6 @@ export function ColunaSecoes({
           <PanelLeftClose size={14} />
         </BotaoIcone>
       </div>
-
-      <div className="px-2 pb-2">
-        <BotaoDaBarra icone={<Search size={14} />} atalho="Ctrl K" onClick={() => paleta.abrir()}>
-          Buscar
-        </BotaoDaBarra>
-      </div>
-
-      <div className="mx-3 h-px bg-linha" />
 
       <ArvoreNotas cadernos={cadernos} modelos={modelos} />
 
@@ -176,29 +165,6 @@ export function ColunaSecoes({
         </div>
       </Dialogo>
     </div>
-  );
-}
-
-/** Linha clicável da coluna, com o atalho de teclado à direita. */
-function BotaoDaBarra({
-  icone,
-  atalho,
-  children,
-  ...resto
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  icone: React.ReactNode;
-  atalho?: string;
-}) {
-  return (
-    <button
-      type="button"
-      {...resto}
-      className="flex w-full items-center gap-2.5 rounded-md px-2 py-[5px] text-left text-[12.5px] text-tinta-2 transition-colors hover:bg-realce-fraco hover:text-tinta disabled:opacity-50"
-    >
-      <span className="text-tinta-3">{icone}</span>
-      <span className="flex-1 truncate">{children}</span>
-      {atalho ? <kbd className="font-mono text-[10px] text-tinta-3">{atalho}</kbd> : null}
-    </button>
   );
 }
 
