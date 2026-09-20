@@ -66,7 +66,15 @@ import { formatarDataCurta, urlDaNota, urlDaNotaFlutuante, urlDaSecao } from "@/
 import type { Caderno, Modelo, ResumoNota, Secao } from "@/lib/tipos";
 
 import { DialogoBuscaSemantica } from "./busca-semantica";
-import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoCor, DialogoIcone, DialogoMover, DialogoNome } from "./dialogos";
+import {
+  DialogoConfirmar,
+  DialogoConfirmarComTexto,
+  DialogoCor,
+  DialogoIcone,
+  DialogoMover,
+  DialogoNome,
+  DialogoNovoCaderno,
+} from "./dialogos";
 import { DialogoModeloDePagina } from "./dialogo-nova-pagina";
 import { BotaoIcone, ItemMenu, Menu, SeparadorMenu } from "./ui";
 
@@ -482,15 +490,11 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
 
       {/* ------------------------------------------------------- diálogos */}
 
-      <DialogoNome
+      <DialogoNovoCaderno
         aberto={acao?.tipo === "novo-caderno"}
-        titulo="Novo caderno"
-        descricao="Vira uma pasta de primeiro nível dentro de dados/."
-        rotulo="Nome do caderno"
-        textoBotao="Criar caderno"
         aoFechar={fechar}
-        aoConfirmar={async (nome) => {
-          const resposta = await acaoCriarCaderno(nome);
+        aoConfirmar={async (nome, icone, cor) => {
+          const resposta = await acaoCriarCaderno(nome, icone ?? undefined, cor ?? undefined);
           if (resposta.ok) atualizar();
           return resposta.ok ? null : resposta.erro;
         }}

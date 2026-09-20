@@ -20,6 +20,7 @@ import {
   Printer,
   Star,
   StretchHorizontal,
+  Trash2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -32,6 +33,8 @@ import {
   acaoColarImagem,
   acaoConverterFormato,
   acaoDefinirEtiquetasDaNota,
+  acaoDestinoAposExcluir,
+  acaoExcluir,
   acaoRenomear,
   acaoSalvarAnexoDaNota,
   acaoSalvarNota,
@@ -69,6 +72,7 @@ import { useAtalho } from "@/lib/atalhos";
 import { useZoomTexto } from "@/lib/zoom";
 
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
+import { DialogoConfirmar } from "./dialogos";
 import { PainelHistorico } from "./painel-historico";
 import { LocalizarNota } from "./localizar-nota";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
@@ -194,6 +198,7 @@ export function PaginaNota({
   const [historicoAberto, definirHistoricoAberto] = useState(false);
   const [sumarioVisivel, definirSumarioVisivel] = useState(true);
   const [favorita, definirFavorita] = useState(nota.favorita);
+  const [excluindo, definirExcluindo] = useState(false);
   const [avisoImagem, definirAvisoImagem] = useState<string | null>(null);
   // As etiquetas da nota, em estado: o `#` do editor aplica uma sem passar
   // pelo seletor do cabeçalho, e o seletor precisa acompanhar.
@@ -273,6 +278,16 @@ export function PaginaNota({
     // páginas pega o trecho novo e a data nova.
     salvar(conteudo).then(() => roteador.refresh());
   }, [conteudo, ehMarkdown, nota.conteudo, roteador, salvar]);
+
+  /** Manda para a lixeira e sai desta página — não há mais nada para mostrar aqui. */
+  const excluirAgora = useCallback(async () => {
+    const destino = await acaoDestinoAposExcluir(nota.caminho);
+    const resposta = await acaoExcluir(nota.caminho);
+    if (!resposta.ok) return resposta.erro;
+    abas.remover(nota.caminho);
+    roteador.push(destino);
+    return null;
+  }, [abas, nota.caminho, roteador]);
 
   // Do texto adiado, não do imediato: em notas grandes, reextrair os títulos
   // a cada tecla competiria com o próprio campo de texto.
@@ -792,6 +807,10 @@ export function PaginaNota({
               </BotaoIcone>
             )}
 
+            <BotaoIcone rotulo="Excluir esta página" onClick={() => definirExcluindo(true)}>
+              <Trash2 size={15} />
+            </BotaoIcone>
+
             {ehMarkdown ? (
               editando ? (
                 <Botao onClick={concluirEdicao}>
@@ -1096,6 +1115,15 @@ export function PaginaNota({
           />
         ) : null}
       </div>
+
+      <DialogoConfirmar
+        aberto={excluindo}
+        titulo={`Excluir ${nota.titulo}?`}
+        descricao="A página vai para a lixeira, com etiquetas e favorito preservados. Dá para restaurar depois."
+        textoBotao="Mandar para a lixeira"
+        aoFechar={() => definirExcluindo(false)}
+        aoConfirmar={excluirAgora}
+      />
     </section>
   );
 }

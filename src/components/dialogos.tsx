@@ -5,6 +5,7 @@ import { Check, Folder, Notebook } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { pastaDe } from "@/lib/caminho-texto";
+import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
 import type { Caderno } from "@/lib/tipos";
 
 import { Aviso, Botao, Campo, Dialogo, Rotulo } from "./ui";
@@ -377,6 +378,115 @@ export function DialogoCor({
         ))}
       </div>
       <Aviso>{erro}</Aviso>
+    </Dialogo>
+  );
+}
+
+/**
+ * Criar caderno com ícone e cor já na hora — sem ícone/cor escolhidos, o
+ * caderno nasce com o padrão de sempre (próximo da sequência, ver
+ * `entradaPastaPadrao`), então os dois são opcionais.
+ */
+export function DialogoNovoCaderno({
+  aberto,
+  aoConfirmar,
+  aoFechar,
+}: {
+  aberto: boolean;
+  aoConfirmar: (nome: string, icone: string | null, cor: string | null) => Promise<string | null>;
+  aoFechar: () => void;
+}) {
+  const [nome, definirNome] = useState("");
+  const [icone, definirIcone] = useState<string | null>(null);
+  const [cor, definirCor] = useState<string | null>(null);
+  const [erro, definirErro] = useState<string | null>(null);
+  const [criando, definirCriando] = useState(false);
+
+  useEffect(() => {
+    if (aberto) {
+      definirNome("");
+      definirIcone(null);
+      definirCor(null);
+      definirErro(null);
+    }
+  }, [aberto]);
+
+  async function confirmar() {
+    if (!nome.trim()) {
+      definirErro("Dê um nome antes de continuar");
+      return;
+    }
+    definirCriando(true);
+    const falha = await aoConfirmar(nome.trim(), icone, cor);
+    definirCriando(false);
+    if (falha) definirErro(falha);
+    else aoFechar();
+  }
+
+  return (
+    <Dialogo titulo="Novo caderno" descricao="Vira uma pasta de primeiro nível dentro de dados/." aberto={aberto} aoFechar={aoFechar}>
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          confirmar();
+        }}
+      >
+        <label className="block">
+          <Rotulo>Nome do caderno</Rotulo>
+          <Campo value={nome} autoFocus onChange={(evento) => definirNome(evento.target.value)} />
+        </label>
+
+        <div className="mt-3.5">
+          <Rotulo>Ícone (opcional)</Rotulo>
+        </div>
+        <div className="grid grid-cols-8 gap-1">
+          {ICONES_DISPONIVEIS.map((opcao) => (
+            <button
+              key={opcao}
+              type="button"
+              aria-label={`Usar o ícone ${opcao}`}
+              onClick={() => definirIcone((atual) => (atual === opcao ? null : opcao))}
+              className={clsx(
+                "flex aspect-square items-center justify-center rounded-lg text-[19px] transition-colors",
+                icone === opcao ? "bg-realce-medio" : "hover:bg-realce-fraco",
+              )}
+            >
+              {opcao}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3.5">
+          <Rotulo>Cor (opcional)</Rotulo>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {CORES_CADERNO.map((opcao) => (
+            <button
+              key={opcao}
+              type="button"
+              aria-label={`Usar a cor ${opcao}`}
+              onClick={() => definirCor((atual) => (atual === opcao ? null : opcao))}
+              className={clsx(
+                "flex size-9 items-center justify-center rounded-lg border-2 transition-transform hover:scale-105",
+                cor === opcao ? "border-tinta" : "border-transparent",
+              )}
+              style={{ background: opcao }}
+            >
+              {cor === opcao ? <Check size={15} className="text-white" /> : null}
+            </button>
+          ))}
+        </div>
+
+        <Aviso>{erro}</Aviso>
+        <div className="mt-4 flex justify-end gap-2">
+          <Botao variante="sutil" onClick={aoFechar}>
+            Cancelar
+          </Botao>
+          <Botao type="submit" variante="primario" disabled={criando}>
+            Criar caderno
+          </Botao>
+        </div>
+      </form>
     </Dialogo>
   );
 }

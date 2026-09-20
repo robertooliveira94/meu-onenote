@@ -74,9 +74,19 @@ function atualizarTudo(): void {
 
 // ---------------------------------------------------------------- estrutura
 
-export async function acaoCriarCaderno(nome: string): Promise<Resposta> {
+/** `icone`/`cor` opcionais: sem eles, a pasta nova recebe os padrões de sempre (ver `arquivos.ts`), na ordem de criação. */
+export async function acaoCriarCaderno(nome: string, icone?: string, cor?: string): Promise<Resposta> {
   const resposta = await tentar(async () => {
-    await criarPasta("", z.string().min(1).max(120).parse(nome));
+    const caminho = await criarPasta("", z.string().min(1).max(120).parse(nome));
+    if (icone || cor) {
+      const iconeValido = icone ? z.string().min(1).max(8).parse(icone) : undefined;
+      const corValida = cor ? z.string().regex(/^#[0-9a-fA-F]{6}$/).parse(cor) : undefined;
+      await atualizarIndice((indice) => {
+        const entrada = entradaDaPasta(indice, caminho);
+        if (iconeValido) entrada.icone = iconeValido;
+        if (corValida) entrada.cor = corValida;
+      });
+    }
   });
   atualizarTudo();
   return resposta;
