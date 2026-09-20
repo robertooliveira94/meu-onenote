@@ -522,6 +522,36 @@ limpas e abríveis em qualquer editor.
     imagem já vêm buscados, resta escolher categoria, prioridade e anotar
     o preço. URL que já está em algum produto vira "adicionar como outra
     loja" em vez de duplicar.
+- **Saúde** (`/saude`): o histórico médico pessoal — de uma pessoa só
+  (sem campo "paciente"). A árvore começa pela **especialidade** (nome
+  livre com ícone e cor: Cardiologia, Dentista, Fisioterapia — do jeito
+  que se pensa, não a lista oficial) e dentro dela os **registros**:
+  consulta, exame, procedimento ou vacina, cada um com título, data e
+  hora, profissional, local, status (solicitado → agendado → realizado /
+  cancelado; exame tem ainda "aguardando resultado"), observações em
+  markdown e **anexos** (laudo, receita, foto — arquivos reais em
+  `_saude/anexos/<registro>/`, sem cifra: a fricção de destrancar um cofre
+  pra ver um exame de rotina mataria o uso; quem quer esconder algo anexa
+  no cofre de Senhas). Um JSON só (`_saude/saude.json`), como Links e
+  Compras. Upload é rota multipart, não Server Action (limite de 1 MB no
+  corpo); o arquivo abre em nova aba.
+  - **Cadastros de apoio**, no rodapé da coluna: **Locais** (nome,
+    endereço, telefone, observações — "estacionamento pago") e
+    **Profissionais** (nome, especialidade, local habitual, contato — o
+    WhatsApp da secretária que se perde). Escolher o profissional num
+    registro já preenche o local.
+  - **Consulta cria o que vem depois**: "retorno em" gera a consulta de
+    retorno já agendada; "pedidos" (um por linha) viram exames
+    "solicitado", ligados à consulta que os pediu — o exame mostra "pedido
+    em: …" e a consulta lista os pedidos com o status de cada um.
+  - Layout de Senhas: coluna de especialidades, lista de registros da
+    aberta (sem data no topo — o que falta marcar não pode sumir no
+    rodapé), detalhe à direita com troca rápida de status. Data preenchida
+    sugere "agendado", vazia "solicitado". Título vazio vira o nome do
+    tipo. Busca global (`Ctrl K`, prefixo `+`) acha por título,
+    observações, profissional ou especialidade e abre o registro; `n`
+    cria dentro da tela; `Alt+6` vai pra Saúde. Fases seguintes: Próximos
+    e linha do tempo, lixeira, alerta "está na hora" por especialidade.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de

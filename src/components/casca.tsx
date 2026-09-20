@@ -111,6 +111,7 @@ function AtalhosDoHub({
   useAtalho("alt+3", { grupo, descricao: "Ir para Senhas", acao: () => roteador.push("/senhas") });
   useAtalho("alt+4", { grupo, descricao: "Ir para Links", acao: () => roteador.push("/links") });
   useAtalho("alt+5", { grupo, descricao: "Ir para Compras", acao: () => roteador.push("/compras") });
+  useAtalho("alt+6", { grupo, descricao: "Ir para Saúde", acao: () => roteador.push("/saude") });
 
   const colunaDaApp = appAtual === "notas" ? "secoes" : appAtual === "kanban" ? "quadros" : null;
   useAtalho("[", {
@@ -180,8 +181,8 @@ function CascaInterna({
   const [folhaAberta, definirFolhaAberta] = useState(false);
   const avisosDePrazo = useAvisosDePrazo();
 
-  // As aplicações são independentes: fora de /kanban/..., /senhas, /links e
-  // /compras, é sempre Anotações — mesmo nas telas globais (início,
+  // As aplicações são independentes: fora de /kanban/..., /senhas, /links,
+  // /compras e /saude, é sempre Anotações — mesmo nas telas globais (início,
   // etiquetas, grafo...) que não têm um caderno "aberto".
   const appAtual: App = caminhoAtual.startsWith("/kanban")
     ? "kanban"
@@ -191,7 +192,9 @@ function CascaInterna({
         ? "links"
         : caminhoAtual.startsWith("/compras")
           ? "compras"
-          : "notas";
+          : caminhoAtual.startsWith("/saude")
+            ? "saude"
+            : "notas";
 
   const cadernoAtivo = cadernos.find((item) => item.nome === cadernoDaUrl(caminhoAtual)) ?? null;
   const quadroAtivo = quadros.find((item) => item.nome === quadroDaUrl(caminhoAtual)) ?? null;

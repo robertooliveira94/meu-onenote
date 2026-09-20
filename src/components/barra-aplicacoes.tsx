@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, KanbanSquare, KeyRound, Keyboard, NotebookText, ShoppingCart, SquareArrowOutUpRight } from "lucide-react";
+import { Bookmark, HeartPulse, KanbanSquare, KeyRound, Keyboard, NotebookText, ShoppingCart, SquareArrowOutUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { urlDaSecao, urlDoQuadro } from "@/lib/rotas";
@@ -9,7 +9,7 @@ import type { Caderno, ResumoQuadro } from "@/lib/tipos";
 
 import { BotaoIcone, BotaoTema, ItemMenu, Menu } from "./ui";
 
-export type App = "notas" | "kanban" | "senhas" | "links" | "compras";
+export type App = "notas" | "kanban" | "senhas" | "links" | "compras" | "saude";
 
 /**
  * O trilho de aplicativos: a coluna mais à esquerda, só com ícones.
@@ -95,6 +95,13 @@ export function BarraAplicacoes({
           icone={<ShoppingCart size={18} />}
           onClick={() => appAtual !== "compras" && roteador.push("/compras")}
           janela="/compras"
+        />
+        <BotaoApp
+          nome="Saúde"
+          ativo={appAtual === "saude"}
+          icone={<HeartPulse size={18} />}
+          onClick={() => appAtual !== "saude" && roteador.push("/saude")}
+          janela="/saude"
         />
       </nav>
 

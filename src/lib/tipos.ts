@@ -506,3 +506,79 @@ export type DadosCompras = {
   categorias: CategoriaProduto[];
   produtos: Produto[];
 };
+
+// -------------------------------------------------------------------- saúde
+
+export type TipoEventoSaude = "consulta" | "exame" | "procedimento" | "vacina";
+
+/**
+ * O ciclo de um evento: o médico pede (`solicitado`, ainda sem data), marca-se
+ * (`agendado`), acontece (`realizado`) — ou não (`cancelado`). Exame tem o
+ * intervalo entre fazer e sair o laudo (`aguardando-resultado`).
+ */
+export type StatusEventoSaude = "solicitado" | "agendado" | "aguardando-resultado" | "realizado" | "cancelado";
+
+/** A árvore começa aqui: "Cardiologia", "Dentista", "Fisioterapia" — como a pessoa pensa, não a lista oficial. */
+export type EspecialidadeSaude = {
+  id: string;
+  nome: string;
+  icone: string;
+  cor: string;
+  /** Meses sem consulta realizada até avisar "está na hora"; `null` = sem alerta. */
+  mesesAlerta: number | null;
+};
+
+export type LocalSaude = {
+  id: string;
+  nome: string;
+  endereco: string;
+  telefone: string;
+  observacoes: string;
+};
+
+export type ProfissionalSaude = {
+  id: string;
+  nome: string;
+  especialidadeId: string | null;
+  /** Onde costuma atender — escolher o profissional no evento preenche o local com este. */
+  localId: string | null;
+  contato: string;
+};
+
+export type AnexoSaude = {
+  id: string;
+  /** Nome original do arquivo, pra lista. */
+  nome: string;
+  /** Nome em disco, dentro de `_saude/anexos/<evento>/`. */
+  arquivo: string;
+  tamanho: number;
+  adicionadoEm: string;
+};
+
+export type EventoSaude = {
+  id: string;
+  tipo: TipoEventoSaude;
+  especialidadeId: string;
+  titulo: string;
+  /** "AAAA-MM-DD", ou `null` quando ainda só foi solicitado. */
+  data: string | null;
+  /** "HH:MM", ou `null`. */
+  hora: string | null;
+  profissionalId: string | null;
+  localId: string | null;
+  status: StatusEventoSaude;
+  /** Markdown livre — o que o médico disse, o que perguntar da próxima vez. */
+  observacoes: string;
+  anexos: AnexoSaude[];
+  /** A consulta que pediu este exame/procedimento, quando veio de "pedidos". */
+  pedidoPorId: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+export type DadosSaude = {
+  especialidades: EspecialidadeSaude[];
+  locais: LocalSaude[];
+  profissionais: ProfissionalSaude[];
+  eventos: EventoSaude[];
+};

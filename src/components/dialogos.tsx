@@ -385,14 +385,23 @@ export function DialogoCor({
 /**
  * Criar caderno com ícone e cor já na hora — sem ícone/cor escolhidos, o
  * caderno nasce com o padrão de sempre (próximo da sequência, ver
- * `entradaPastaPadrao`), então os dois são opcionais.
+ * `entradaPastaPadrao`), então os dois são opcionais. Os textos são
+ * trocáveis porque a mesma tela serve pra uma especialidade de Saúde.
  */
 export function DialogoNovoCaderno({
   aberto,
+  titulo = "Novo caderno",
+  descricao = "Vira uma pasta de primeiro nível dentro de dados/.",
+  rotulo = "Nome do caderno",
+  textoBotao = "Criar caderno",
   aoConfirmar,
   aoFechar,
 }: {
   aberto: boolean;
+  titulo?: string;
+  descricao?: string;
+  rotulo?: string;
+  textoBotao?: string;
   aoConfirmar: (nome: string, icone: string | null, cor: string | null) => Promise<string | null>;
   aoFechar: () => void;
 }) {
@@ -424,7 +433,7 @@ export function DialogoNovoCaderno({
   }
 
   return (
-    <Dialogo titulo="Novo caderno" descricao="Vira uma pasta de primeiro nível dentro de dados/." aberto={aberto} aoFechar={aoFechar}>
+    <Dialogo titulo={titulo} descricao={descricao} aberto={aberto} aoFechar={aoFechar}>
       <form
         onSubmit={(evento) => {
           evento.preventDefault();
@@ -432,7 +441,7 @@ export function DialogoNovoCaderno({
         }}
       >
         <label className="block">
-          <Rotulo>Nome do caderno</Rotulo>
+          <Rotulo>{rotulo}</Rotulo>
           <Campo value={nome} autoFocus onChange={(evento) => definirNome(evento.target.value)} />
         </label>
 
@@ -483,7 +492,7 @@ export function DialogoNovoCaderno({
             Cancelar
           </Botao>
           <Botao type="submit" variante="primario" disabled={criando}>
-            Criar caderno
+            {textoBotao}
           </Botao>
         </div>
       </form>

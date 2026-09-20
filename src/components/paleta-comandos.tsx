@@ -6,6 +6,7 @@ import {
   CornerDownLeft,
   FileText,
   Folder,
+  HeartPulse,
   KanbanSquare,
   Palette,
   Rows3,
@@ -21,9 +22,12 @@ import { acaoBuscar } from "@/app/acoes";
 import { acaoBuscarTarefas } from "@/app/acoes-kanban";
 import { acaoBuscarProdutos } from "@/app/acoes-compras";
 import { acaoBuscarLinks } from "@/app/acoes-links";
+import { acaoBuscarEventosSaude } from "@/app/acoes-saude";
 import { partesDoCombo, useExecutarAtalho, useListaDeAtalhos } from "@/lib/atalhos";
 import type { ProdutoAchado } from "@/lib/compras-app";
 import type { TarefaAchada } from "@/lib/kanban";
+import type { EventoAchado } from "@/lib/saude-app";
+import { ROTULO_STATUS, ROTULO_TIPO, formatarDataSaude } from "@/lib/saude-comum";
 import { DENSIDADES, useDensidade } from "@/lib/densidade";
 import { usePaleta } from "@/lib/paleta";
 import { urlDaNota, urlDaPastaLink, urlDaSecao, urlDoQuadro } from "@/lib/rotas";
@@ -60,7 +64,7 @@ function destacar(texto: string, termo: string): React.ReactNode {
   return partes;
 }
 
-type Secao = "Ações" | "Ir para" | "Notas" | "Tarefas" | "Links" | "Compras";
+type Secao = "Ações" | "Ir para" | "Notas" | "Tarefas" | "Links" | "Compras" | "Saúde";
 
 type Item = {
   id: string;
@@ -78,7 +82,7 @@ type Item = {
  * Prefixo no começo do texto restringe a uma seção só — o `>` do VS Code,
  * o resto por analogia. Mostrado como dica no rodapé.
  */
-const PREFIXOS: Record<string, Secao> = { ">": "Ações", "#": "Notas", "@": "Tarefas", "!": "Links", "$": "Compras" };
+const PREFIXOS: Record<string, Secao> = { ">": "Ações", "#": "Notas", "@": "Tarefas", "!": "Links", "$": "Compras", "+": "Saúde" };
 
 function lerPrefixo(texto: string): { secao: Secao | null; termo: string } {
   const prefixo = texto[0];
@@ -121,6 +125,7 @@ export function PaletaComandos({
   const [tarefas, definirTarefas] = useState<TarefaAchada[]>([]);
   const [links, definirLinks] = useState<(Link & { pastaId: string })[]>([]);
   const [produtos, definirProdutos] = useState<ProdutoAchado[]>([]);
+  const [eventosSaude, definirEventosSaude] = useState<EventoAchado[]>([]);
   const [selecionado, definirSelecionado] = useState(0);
   const [buscando, definirBuscando] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -133,6 +138,7 @@ export function PaletaComandos({
       definirTarefas([]);
       definirLinks([]);
       definirProdutos([]);
+      definirEventosSaude([]);
       definirSelecionado(0);
       requestAnimationFrame(() => campo.current?.focus());
     }
@@ -149,22 +155,25 @@ export function PaletaComandos({
       definirTarefas([]);
       definirLinks([]);
       definirProdutos([]);
+      definirEventosSaude([]);
       definirBuscando(false);
       return;
     }
     definirBuscando(true);
     const espera = setTimeout(async () => {
       const quer = (s: Secao) => secaoForcada === null || secaoForcada === s;
-      const [n, t, l, p] = await Promise.all([
+      const [n, t, l, p, s] = await Promise.all([
         quer("Notas") ? acaoBuscar(termoLimpo) : Promise.resolve([]),
         quer("Tarefas") ? acaoBuscarTarefas(termoLimpo) : Promise.resolve([]),
         quer("Links") ? acaoBuscarLinks(termoLimpo) : Promise.resolve([]),
         quer("Compras") ? acaoBuscarProdutos(termoLimpo) : Promise.resolve([]),
+        quer("Saúde") ? acaoBuscarEventosSaude(termoLimpo) : Promise.resolve([]),
       ]);
       definirNotas(n.slice(0, 8));
       definirTarefas(t);
       definirLinks(l.slice(0, 6));
       definirProdutos(p.slice(0, 6));
+      definirEventosSaude(s.slice(0, 6));
       definirSelecionado(0);
       definirBuscando(false);
     }, 220);
@@ -227,6 +236,7 @@ export function PaletaComandos({
         ["Senhas", "/senhas"],
         ["Links", "/links"],
         ["Compras", "/compras"],
+        ["Saúde", "/saude"],
       ] as const) {
         const rotulo = `Abrir ${nome} em nova janela`;
         if (!casa(rotulo, "janela")) continue;
@@ -257,6 +267,7 @@ export function PaletaComandos({
         ["Atalho do navegador (Links)", "/links/atalho", <Bookmark key="la" size={14} />],
         ["Compras", "/compras", <ShoppingCart key="c" size={14} />],
         ["Novo produto (Compras)", "/compras?novo=1", <ShoppingCart key="cn" size={14} />],
+        ["Saúde", "/saude", <HeartPulse key="sa" size={14} />],
       ];
       for (const [rotulo, href, icone] of fixas) {
         if (!casa(rotulo)) continue;
@@ -346,6 +357,18 @@ export function PaletaComandos({
         executar: () => window.open(link.url, "_blank", "noopener,noreferrer"),
       });
     }
+    for (const evento of eventosSaude) {
+      todos.push({
+        id: `saude:${evento.id}`,
+        secao: "Saúde",
+        icone: <HeartPulse size={14} />,
+        titulo: destacar(evento.titulo, termoLimpo),
+        detalhe: [ROTULO_TIPO[evento.tipo], evento.especialidade, evento.profissional, formatarDataSaude(evento.data), ROTULO_STATUS[evento.status]]
+          .filter(Boolean)
+          .join(" · "),
+        executar: () => roteador.push(`/saude?evento=${encodeURIComponent(evento.id)}`),
+      });
+    }
     for (const produto of produtos) {
       todos.push({
         id: `produto:${produto.id}`,
@@ -359,7 +382,7 @@ export function PaletaComandos({
       });
     }
     return todos;
-  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, densidade, mudarDensidade, cadernos, quadros, linksRaiz, notas, tarefas, links, produtos, etiquetas, roteador]);
+  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, densidade, mudarDensidade, cadernos, quadros, linksRaiz, notas, tarefas, links, produtos, eventosSaude, etiquetas, roteador]);
 
   useEffect(() => {
     definirSelecionado(0);
@@ -391,7 +414,7 @@ export function PaletaComandos({
     }
   }
 
-  const secoesNaOrdem: Secao[] = ["Ações", "Ir para", "Notas", "Tarefas", "Links", "Compras"];
+  const secoesNaOrdem: Secao[] = ["Ações", "Ir para", "Notas", "Tarefas", "Links", "Compras", "Saúde"];
   const vazio = !buscando && itens.length === 0;
   const placeholder =
     secaoForcada === null
@@ -440,7 +463,7 @@ export function PaletaComandos({
               <div key={secao} className="mb-1">
                 <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">
                   {secao}
-                  {buscando && ["Notas", "Tarefas", "Links", "Compras"].includes(secao) ? " · buscando…" : ""}
+                  {buscando && ["Notas", "Tarefas", "Links", "Compras", "Saúde"].includes(secao) ? " · buscando…" : ""}
                 </div>
                 {daSecao.map((item) => {
                   const posicao = itens.indexOf(item);
@@ -487,6 +510,7 @@ export function PaletaComandos({
           <span><kbd className="font-mono">@</kbd> só tarefas</span>
           <span><kbd className="font-mono">!</kbd> só links</span>
           <span><kbd className="font-mono">$</kbd> só compras</span>
+          <span><kbd className="font-mono">+</kbd> só saúde</span>
           {buscando && !buscaNoServidor ? null : <span className="ml-auto">{buscando ? "buscando…" : `${itens.length} ${itens.length === 1 ? "item" : "itens"}`}</span>}
         </div>
       </div>

@@ -30,10 +30,11 @@ export const CORES_PRIORIDADE: Record<"baixa" | "media" | "alta" | "urgente", st
 /** Ícone inicial de cada caderno, na ordem de criação. */
 export const ICONES_CADERNO = ["📓", "📗", "📘", "📙", "📕", "📔"];
 
-/** Opções do seletor de ícone — coisas que costumam virar caderno. */
+/** Opções do seletor de ícone — coisas que costumam virar caderno (e, na última linha, especialidade de Saúde). */
 export const ICONES_DISPONIVEIS = [
   "📓", "📗", "📘", "📙", "📕", "📔", "📚", "🗂️",
   "🏡", "💼", "💰", "🧾", "🎯", "🌱", "🍳", "🛒",
   "✈️", "🚗", "🏋️", "💊", "🎬", "🎸", "📸", "🐾",
   "💡", "🔧", "🧠", "❤️", "⭐", "🎓", "📅", "✏️",
+  "🩺", "🦷", "💉", "🫀", "👁️", "🦴", "🧘", "🏥",
 ];
