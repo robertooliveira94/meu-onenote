@@ -82,13 +82,18 @@
       .rodape a {
         color: #7a8ba1;
       }
-      #quadroLinks {
+      #quadroLinks,
+      #quadroCompras {
         display: block;
         width: 100%;
         height: 420px;
         border: 0;
       }
-      #linksCarregando {
+      #quadroCompras {
+        height: 560px;
+      }
+      #linksCarregando,
+      #comprasCarregando {
         padding: 24px 16px;
         text-align: center;
         color: #7a8ba1;
@@ -100,6 +105,7 @@
     <div class="abas">
       <button type="button" class="aba ativa" id="abaSenhas">🔑 Senhas</button>
       <button type="button" class="aba" id="abaLinks">🔖 Links</button>
+      <button type="button" class="aba" id="abaCompras">🛒 Compras</button>
     </div>
 
     <div class="painel ativo" id="painelSenhas">
@@ -115,6 +121,11 @@
       <p id="linksCarregando">Carregando…</p>
       <iframe id="quadroLinks" title="Seus links" hidden></iframe>
       <p class="rodape">Painel maior e mais confortável: clique com o botão direito no ícone da extensão → <strong>Abrir painel lateral</strong>.</p>
+    </div>
+
+    <div class="painel" id="painelCompras">
+      <p id="comprasCarregando">Carregando…</p>
+      <iframe id="quadroCompras" title="Salvar produto" hidden></iframe>
     </div>
 
     <script src="popup.js"></script>

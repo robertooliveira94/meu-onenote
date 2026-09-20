@@ -456,3 +456,53 @@ export type ItemLixeiraLinks = {
   tipo: "link" | "pasta-link";
   excluidoEm: string;
 };
+
+// ------------------------------------------------------------------ compras
+
+export type PrioridadeProduto = "muito" | "quero" | "talvez";
+
+/** `quero` é a lista viva; `comprado` e `desisti` moram no histórico e podem voltar. */
+export type EstadoProduto = "quero" | "comprado" | "desisti";
+
+/** Onde comprar: uma linha por loja, com o preço visto na hora de anotar (em reais, `null` = não anotou). */
+export type LojaProduto = {
+  id: string;
+  url: string;
+  loja: string;
+  preco: number | null;
+};
+
+export type CategoriaProduto = {
+  id: string;
+  nome: string;
+  cor: string;
+};
+
+/**
+ * Um item da lista de desejos. Sem link é válido (a loja pode estar só na
+ * cabeça); com link, o primeiro preenche nome e imagem sozinho. `modelo` é
+ * o detalhe que se esquece — tamanho, cor, versão, código.
+ */
+export type Produto = {
+  id: string;
+  nome: string;
+  modelo: string;
+  categoriaId: string | null;
+  prioridade: PrioridadeProduto;
+  /** Arquivo em `_compras/imagens/`, ou `null` (sem imagem). */
+  imagem: string | null;
+  observacoes: string;
+  lojas: LojaProduto[];
+  estado: EstadoProduto;
+  /** Preenchidos ao marcar como comprado — ficam no histórico. */
+  compradoEm: string | null;
+  precoPago: number | null;
+  lojaDaCompra: string;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+export type DadosCompras = {
+  categorias: CategoriaProduto[];
+  produtos: Produto[];
+};

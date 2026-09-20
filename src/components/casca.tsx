@@ -13,7 +13,7 @@ import { cadernoDaUrl, pastaLinkDaUrl, quadroDaUrl, urlDaSecao, urlDoQuadro } fr
 import type { Caderno, Etiqueta, Modelo, PastaLink, ResumoQuadro } from "@/lib/tipos";
 
 import { AbasNotas } from "./abas-notas";
-import { BarraAplicacoes } from "./barra-aplicacoes";
+import { BarraAplicacoes, type App } from "./barra-aplicacoes";
 import { ColunaQuadros } from "./coluna-quadros";
 import { ColunaSecoes } from "./coluna-secoes";
 import { FolhaAtalhos } from "./folha-atalhos";
@@ -80,7 +80,7 @@ function AtalhosDoHub({
   quadros,
   aoAbrirFolha,
 }: {
-  appAtual: "notas" | "kanban" | "senhas" | "links";
+  appAtual: App;
   cadernos: Caderno[];
   quadros: ResumoQuadro[];
   aoAbrirFolha: () => void;
@@ -110,6 +110,7 @@ function AtalhosDoHub({
   });
   useAtalho("alt+3", { grupo, descricao: "Ir para Senhas", acao: () => roteador.push("/senhas") });
   useAtalho("alt+4", { grupo, descricao: "Ir para Links", acao: () => roteador.push("/links") });
+  useAtalho("alt+5", { grupo, descricao: "Ir para Compras", acao: () => roteador.push("/compras") });
 
   const colunaDaApp = appAtual === "notas" ? "secoes" : appAtual === "kanban" ? "quadros" : null;
   useAtalho("[", {
@@ -179,16 +180,18 @@ function CascaInterna({
   const [folhaAberta, definirFolhaAberta] = useState(false);
   const avisosDePrazo = useAvisosDePrazo();
 
-  // As quatro aplicações são independentes: fora de /kanban/..., /senhas e
-  // /links, é sempre Anotações — mesmo nas telas globais (início, etiquetas,
-  // grafo...) que não têm um caderno "aberto".
-  const appAtual: "notas" | "kanban" | "senhas" | "links" = caminhoAtual.startsWith("/kanban")
+  // As aplicações são independentes: fora de /kanban/..., /senhas, /links e
+  // /compras, é sempre Anotações — mesmo nas telas globais (início,
+  // etiquetas, grafo...) que não têm um caderno "aberto".
+  const appAtual: App = caminhoAtual.startsWith("/kanban")
     ? "kanban"
     : caminhoAtual.startsWith("/senhas")
       ? "senhas"
       : caminhoAtual.startsWith("/links")
         ? "links"
-        : "notas";
+        : caminhoAtual.startsWith("/compras")
+          ? "compras"
+          : "notas";
 
   const cadernoAtivo = cadernos.find((item) => item.nome === cadernoDaUrl(caminhoAtual)) ?? null;
   const quadroAtivo = quadros.find((item) => item.nome === quadroDaUrl(caminhoAtual)) ?? null;

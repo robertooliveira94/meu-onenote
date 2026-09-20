@@ -495,6 +495,33 @@ limpas e abríveis em qualquer editor.
     `extensao/`) ganhou uma aba "Links" no popup da barra e um painel
     lateral (`chrome.sidePanel`) com o mesmo `/links-popup` embutido —
     útil pra manter os favoritos à mão numa coluna fixa ao lado da aba.
+- **Compras** (`/compras`): uma lista de desejos — o lugar de anotar o
+  produto antes de esquecer. Um JSON só (`_compras/compras.json`, mesmo
+  esquema de Links) e as imagens em `_compras/imagens/`. Cada produto tem
+  nome, modelo/especificação livre (o detalhe que se esquece: tamanho,
+  cor, versão), categoria única com cor, prioridade (quero muito / quero /
+  talvez um dia), foto, observações e uma lista "onde comprar" opcional —
+  URL, loja e preço visto por loja. Colar o primeiro link busca nome e
+  foto na própria página (`og:title`/`og:image`, o mesmo fetch de Links);
+  produto sem link é válido.
+  - **Tela**: lista compacta agrupada por categoria, na ordem que a
+    pessoa define (tela "Categorias": criar, renomear, cor, excluir —
+    produtos ficam sem categoria, não somem —, subir/descer); dentro do
+    grupo, prioridade primeiro e depois o mais recente. Cada linha:
+    miniatura, nome, modelo, selo de prioridade, menor preço visto e a
+    loja. Ações: comprei (data, preço pago e loja, pré-preenchidos com o
+    melhor preço visto), desisti, editar, excluir (sem lixeira — "desisti"
+    é o jeito de tirar da lista sem perder).
+  - **Histórico**: comprados e desistidos, com data, preço pago e loja;
+    "voltar para a lista" reabre. A busca global (`Ctrl K`, prefixo `$`)
+    acha por nome, modelo ou loja e abre o produto; "Novo produto" também
+    está na paleta de qualquer lugar; `n` cria dentro da tela; `Alt+5` vai
+    pra Compras.
+  - **Extensão** (mesma pasta `extensao/`): aba "Compras" no popup, que
+    embute `/salvar-produto` com a URL e o título da aba aberta — nome e
+    imagem já vêm buscados, resta escolher categoria, prioridade e anotar
+    o preço. URL que já está em algum produto vira "adicionar como outra
+    loja" em vez de duplicar.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de

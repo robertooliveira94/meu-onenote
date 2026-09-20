@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bookmark, KanbanSquare, KeyRound, Keyboard, NotebookText, SquareArrowOutUpRight } from "lucide-react";
+import { Bookmark, KanbanSquare, KeyRound, Keyboard, NotebookText, ShoppingCart, SquareArrowOutUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { urlDaSecao, urlDoQuadro } from "@/lib/rotas";
@@ -9,7 +9,7 @@ import type { Caderno, ResumoQuadro } from "@/lib/tipos";
 
 import { BotaoIcone, BotaoTema, ItemMenu, Menu } from "./ui";
 
-export type App = "notas" | "kanban" | "senhas" | "links";
+export type App = "notas" | "kanban" | "senhas" | "links" | "compras";
 
 /**
  * O trilho de aplicativos: a coluna mais à esquerda, só com ícones.
@@ -88,6 +88,13 @@ export function BarraAplicacoes({
           icone={<Bookmark size={18} />}
           onClick={() => appAtual !== "links" && roteador.push("/links")}
           janela="/links"
+        />
+        <BotaoApp
+          nome="Compras"
+          ativo={appAtual === "compras"}
+          icone={<ShoppingCart size={18} />}
+          onClick={() => appAtual !== "compras" && roteador.push("/compras")}
+          janela="/compras"
         />
       </nav>
 

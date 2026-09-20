@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Meu bloco de anotações",
   "short_name": "Meu bloco",
-  "version": "1.1.0",
-  "description": "Captura e preenche senhas do seu cofre local, e abre seus links favoritos sem sair da aba.",
+  "version": "1.2.0",
+  "description": "Captura e preenche senhas do seu cofre local, abre seus links favoritos e salva produtos na sua lista de compras sem sair da aba.",
   "icons": {
     "16": "icones/icone-16.png",
     "32": "icones/icone-32.png",
@@ -24,7 +24,7 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "sidePanel", "activeTab"],
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src http://localhost/* http://127.0.0.1/*;"

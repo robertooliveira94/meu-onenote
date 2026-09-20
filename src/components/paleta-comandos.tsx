@@ -10,6 +10,7 @@ import {
   Palette,
   Rows3,
   Search,
+  ShoppingCart,
   SquareArrowOutUpRight,
   Zap,
 } from "lucide-react";
@@ -18,8 +19,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { acaoBuscar } from "@/app/acoes";
 import { acaoBuscarTarefas } from "@/app/acoes-kanban";
+import { acaoBuscarProdutos } from "@/app/acoes-compras";
 import { acaoBuscarLinks } from "@/app/acoes-links";
 import { partesDoCombo, useExecutarAtalho, useListaDeAtalhos } from "@/lib/atalhos";
+import type { ProdutoAchado } from "@/lib/compras-app";
 import type { TarefaAchada } from "@/lib/kanban";
 import { DENSIDADES, useDensidade } from "@/lib/densidade";
 import { usePaleta } from "@/lib/paleta";
@@ -57,7 +60,7 @@ function destacar(texto: string, termo: string): React.ReactNode {
   return partes;
 }
 
-type Secao = "Ações" | "Ir para" | "Notas" | "Tarefas" | "Links";
+type Secao = "Ações" | "Ir para" | "Notas" | "Tarefas" | "Links" | "Compras";
 
 type Item = {
   id: string;
@@ -75,7 +78,7 @@ type Item = {
  * Prefixo no começo do texto restringe a uma seção só — o `>` do VS Code,
  * o resto por analogia. Mostrado como dica no rodapé.
  */
-const PREFIXOS: Record<string, Secao> = { ">": "Ações", "#": "Notas", "@": "Tarefas", "!": "Links" };
+const PREFIXOS: Record<string, Secao> = { ">": "Ações", "#": "Notas", "@": "Tarefas", "!": "Links", "$": "Compras" };
 
 function lerPrefixo(texto: string): { secao: Secao | null; termo: string } {
   const prefixo = texto[0];
@@ -117,6 +120,7 @@ export function PaletaComandos({
   const [notas, definirNotas] = useState<ResultadoBusca[]>([]);
   const [tarefas, definirTarefas] = useState<TarefaAchada[]>([]);
   const [links, definirLinks] = useState<(Link & { pastaId: string })[]>([]);
+  const [produtos, definirProdutos] = useState<ProdutoAchado[]>([]);
   const [selecionado, definirSelecionado] = useState(0);
   const [buscando, definirBuscando] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
@@ -128,6 +132,7 @@ export function PaletaComandos({
       definirNotas([]);
       definirTarefas([]);
       definirLinks([]);
+      definirProdutos([]);
       definirSelecionado(0);
       requestAnimationFrame(() => campo.current?.focus());
     }
@@ -137,26 +142,29 @@ export function PaletaComandos({
   const termoLimpo = termo.trim();
   const buscaNoServidor = termoLimpo.length >= 2;
 
-  // As três buscas de servidor saem juntas, depois que a digitação parar.
+  // As buscas de servidor saem juntas, depois que a digitação parar.
   useEffect(() => {
     if (!aberta || !buscaNoServidor) {
       definirNotas([]);
       definirTarefas([]);
       definirLinks([]);
+      definirProdutos([]);
       definirBuscando(false);
       return;
     }
     definirBuscando(true);
     const espera = setTimeout(async () => {
       const quer = (s: Secao) => secaoForcada === null || secaoForcada === s;
-      const [n, t, l] = await Promise.all([
+      const [n, t, l, p] = await Promise.all([
         quer("Notas") ? acaoBuscar(termoLimpo) : Promise.resolve([]),
         quer("Tarefas") ? acaoBuscarTarefas(termoLimpo) : Promise.resolve([]),
         quer("Links") ? acaoBuscarLinks(termoLimpo) : Promise.resolve([]),
+        quer("Compras") ? acaoBuscarProdutos(termoLimpo) : Promise.resolve([]),
       ]);
       definirNotas(n.slice(0, 8));
       definirTarefas(t);
       definirLinks(l.slice(0, 6));
+      definirProdutos(p.slice(0, 6));
       definirSelecionado(0);
       definirBuscando(false);
     }, 220);
@@ -218,6 +226,7 @@ export function PaletaComandos({
         ["Kanban", "/kanban"],
         ["Senhas", "/senhas"],
         ["Links", "/links"],
+        ["Compras", "/compras"],
       ] as const) {
         const rotulo = `Abrir ${nome} em nova janela`;
         if (!casa(rotulo, "janela")) continue;
@@ -246,6 +255,8 @@ export function PaletaComandos({
         ["Links", "/links", <Bookmark key="lk" size={14} />],
         ["Lixeira dos links", "/links/lixeira", <Bookmark key="ll" size={14} />],
         ["Atalho do navegador (Links)", "/links/atalho", <Bookmark key="la" size={14} />],
+        ["Compras", "/compras", <ShoppingCart key="c" size={14} />],
+        ["Novo produto (Compras)", "/compras?novo=1", <ShoppingCart key="cn" size={14} />],
       ];
       for (const [rotulo, href, icone] of fixas) {
         if (!casa(rotulo)) continue;
@@ -335,8 +346,20 @@ export function PaletaComandos({
         executar: () => window.open(link.url, "_blank", "noopener,noreferrer"),
       });
     }
+    for (const produto of produtos) {
+      todos.push({
+        id: `produto:${produto.id}`,
+        secao: "Compras",
+        icone: <ShoppingCart size={14} />,
+        titulo: destacar(produto.nome, termoLimpo),
+        detalhe: [produto.modelo, produto.categoria, produto.estado === "quero" ? null : produto.estado === "comprado" ? "comprado" : "desisti"]
+          .filter(Boolean)
+          .join(" · "),
+        executar: () => roteador.push(`/compras?produto=${encodeURIComponent(produto.id)}`),
+      });
+    }
     return todos;
-  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, densidade, mudarDensidade, cadernos, quadros, linksRaiz, notas, tarefas, links, etiquetas, roteador]);
+  }, [termoLimpo, secaoForcada, atalhos, executarAtalho, tema, mudarTema, densidade, mudarDensidade, cadernos, quadros, linksRaiz, notas, tarefas, links, produtos, etiquetas, roteador]);
 
   useEffect(() => {
     definirSelecionado(0);
@@ -368,7 +391,7 @@ export function PaletaComandos({
     }
   }
 
-  const secoesNaOrdem: Secao[] = ["Ações", "Ir para", "Notas", "Tarefas", "Links"];
+  const secoesNaOrdem: Secao[] = ["Ações", "Ir para", "Notas", "Tarefas", "Links", "Compras"];
   const vazio = !buscando && itens.length === 0;
   const placeholder =
     secaoForcada === null
@@ -417,7 +440,7 @@ export function PaletaComandos({
               <div key={secao} className="mb-1">
                 <div className="px-2.5 pt-2 pb-1 text-[10.5px] font-bold tracking-[0.08em] text-tinta-3 uppercase">
                   {secao}
-                  {buscando && ["Notas", "Tarefas", "Links"].includes(secao) ? " · buscando…" : ""}
+                  {buscando && ["Notas", "Tarefas", "Links", "Compras"].includes(secao) ? " · buscando…" : ""}
                 </div>
                 {daSecao.map((item) => {
                   const posicao = itens.indexOf(item);
@@ -463,6 +486,7 @@ export function PaletaComandos({
           <span><kbd className="font-mono">#</kbd> só notas</span>
           <span><kbd className="font-mono">@</kbd> só tarefas</span>
           <span><kbd className="font-mono">!</kbd> só links</span>
+          <span><kbd className="font-mono">$</kbd> só compras</span>
           {buscando && !buscaNoServidor ? null : <span className="ml-auto">{buscando ? "buscando…" : `${itens.length} ${itens.length === 1 ? "item" : "itens"}`}</span>}
         </div>
       </div>

@@ -53,6 +53,11 @@ Windows, não algo desta extensão. Duas saídas:
   de extensão própria pra Links — o app já serve essa página pronta (é a
   mesma que o bookmarklet "Abrir meus links" abre), então a extensão só
   precisa embuti-la.
+- A aba **Compras** segue o mesmo esquema: embute `/salvar-produto` do app
+  com a URL e o título da aba aberta (a permissão `activeTab` libera isso
+  no clique no ícone). O formulário — nome e imagem já buscados da página,
+  categoria, prioridade, preço visto — é todo do app; se a URL já está em
+  algum produto, oferece juntar como outra loja em vez de duplicar.
 - Sem servidor nenhum além do seu: nada disso fala com a internet, exceto
   o "Verificar vazamentos" do relatório de saúde (dentro do app), que é
   outra funcionalidade, separada e sob pedido.
