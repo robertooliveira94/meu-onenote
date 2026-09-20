@@ -52,6 +52,7 @@ import {
   COMANDO_IMAGEM,
   aplicarComando,
   aplicarLink,
+  aplicarPlaceholdersDeModelo,
   detectarGatilho,
   limparGatilho,
   sugestoesDeComando,
@@ -501,10 +502,25 @@ export function PaginaNota({
         seletorDeArquivo.current?.click();
         return;
       }
-      const resultado = aplicarComando(selecao, gatilho, item.id, modelos);
+      const resultado = aplicarComando(selecao, gatilho, item.id, modelos, nota.titulo);
       aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
     },
-    [gatilho, etiquetasAtuais, modelos, nota.caminho, aplicarNoCampo],
+    [gatilho, etiquetasAtuais, modelos, nota.caminho, nota.titulo, aplicarNoCampo],
+  );
+
+  /** Cola um modelo inteiro no ponto do cursor — mesma coisa do comando `/modelo`, só que pelo botão da barra. */
+  const inserirModelo = useCallback(
+    (modelo: Modelo) => {
+      const campoAtual = area.current;
+      if (!campoAtual) return;
+      const conteudoModelo = aplicarPlaceholdersDeModelo(modelo.conteudo, nota.titulo);
+      const resultado = inserirBloco(
+        { texto: conteudo, inicio: campoAtual.selectionStart, fim: campoAtual.selectionEnd },
+        conteudoModelo,
+      );
+      aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+    },
+    [conteudo, nota.titulo, aplicarNoCampo],
   );
 
   // ------------------------------------------------------------ teclado
@@ -861,6 +877,8 @@ export function PaginaNota({
                 campo={area}
                 conteudo={conteudo}
                 aoAplicar={(resultado) => aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim })}
+                modelos={modelos}
+                aoInserirModelo={inserirModelo}
                 extra={
                   ehMarkdown ? (
                     <div className="flex items-center gap-0.5">

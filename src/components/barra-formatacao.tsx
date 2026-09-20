@@ -8,6 +8,7 @@ import {
   Heading,
   Indent,
   Italic,
+  LayoutTemplate,
   Link2,
   List,
   ListChecks,
@@ -29,7 +30,7 @@ import {
   sublinharLinha,
   transformarSelecao,
 } from "@/lib/formatacao";
-import type { Formato } from "@/lib/tipos";
+import type { Formato, Modelo } from "@/lib/tipos";
 
 import { Botao, Menu } from "./ui";
 
@@ -39,8 +40,8 @@ type Ferramenta = {
   icone: React.ReactNode;
   aplicar: (selecao: Selecao) => Selecao;
   separarAntes?: boolean;
-  /** "tabela" abre um popover pedindo linhas/colunas em vez de aplicar direto no clique. */
-  id?: "tabela";
+  /** "tabela" abre um popover pedindo linhas/colunas, "modelo" um popover com a lista de modelos — nenhum dos dois aplica direto no clique. */
+  id?: "tabela" | "modelo";
 };
 
 const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
@@ -72,6 +73,13 @@ const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
     icone: <Table size={14} />,
     aplicar: (s) => inserirBloco(s, gerarTabela(3, 2)),
     id: "tabela",
+  },
+  {
+    rotulo: "Modelo",
+    icone: <LayoutTemplate size={14} />,
+    aplicar: (s) => s,
+    id: "modelo",
+    separarAntes: true,
   },
 ];
 
@@ -115,6 +123,8 @@ export function BarraFormatacao({
   campo,
   conteudo,
   aoAplicar,
+  modelos,
+  aoInserirModelo,
   extra,
 }: {
   formato: Formato;
@@ -122,9 +132,15 @@ export function BarraFormatacao({
   conteudo: string;
   /** Escreve no campo de verdade (não só no estado) — mesma `aplicarNoCampo` do editor, pra letra não "sumir" até a próxima tecla. */
   aoAplicar: (resultado: Selecao) => void;
+  /** Sem modelo cadastrado, o botão "Modelo" nem aparece. */
+  modelos?: Modelo[];
+  aoInserirModelo?: (modelo: Modelo) => void;
   extra?: React.ReactNode;
 }) {
-  const ferramentas = formato === "md" ? FERRAMENTAS_MARKDOWN : FERRAMENTAS_TEXTO;
+  const semModelos = !modelos || modelos.length === 0;
+  const ferramentas = (formato === "md" ? FERRAMENTAS_MARKDOWN : FERRAMENTAS_TEXTO).filter(
+    (ferramenta) => ferramenta.id !== "modelo" || !semModelos,
+  );
 
   function usar(ferramenta: Ferramenta) {
     const area = campo.current;
@@ -174,6 +190,30 @@ export function BarraFormatacao({
                   aoInserir={(colunas, linhas) => {
                     fechar();
                     inserirTabela(colunas, linhas);
+                  }}
+                />
+              )}
+            </Menu>
+          ) : ferramenta.id === "modelo" ? (
+            <Menu
+              gatilho={(abrir) => (
+                <button
+                  type="button"
+                  title={ferramenta.rotulo}
+                  aria-label={ferramenta.rotulo}
+                  onClick={abrir}
+                  className="flex size-7 items-center justify-center rounded-md text-tinta-2 transition-colors hover:bg-realce-medio hover:text-tinta"
+                >
+                  {ferramenta.icone}
+                </button>
+              )}
+            >
+              {(fechar) => (
+                <PopoverModelos
+                  modelos={modelos ?? []}
+                  aoEscolher={(modelo) => {
+                    fechar();
+                    aoInserirModelo?.(modelo);
                   }}
                 />
               )}
@@ -244,6 +284,30 @@ function PopoverTabela({ aoInserir }: { aoInserir: (colunas: number, linhas: num
         Inserir tabela
       </Botao>
     </form>
+  );
+}
+
+/** Popover com a lista de modelos cadastrados — cola o escolhido no cursor, sem sair da página. */
+function PopoverModelos({ modelos, aoEscolher }: { modelos: Modelo[]; aoEscolher: (modelo: Modelo) => void }) {
+  return (
+    <div className="max-h-72 w-64 overflow-y-auto p-1">
+      {modelos.map((modelo) => (
+        <button
+          key={modelo.id}
+          type="button"
+          onClick={() => aoEscolher(modelo)}
+          className="flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-realce-fraco"
+        >
+          <LayoutTemplate size={14} className="mt-0.5 shrink-0 text-tinta-3" />
+          <span className="min-w-0">
+            <span className="block text-[12.5px] font-medium">{modelo.nome}</span>
+            {modelo.descricao ? (
+              <span className="mt-0.5 block text-[11.5px] leading-snug text-tinta-2">{modelo.descricao}</span>
+            ) : null}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

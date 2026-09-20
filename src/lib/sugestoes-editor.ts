@@ -241,12 +241,17 @@ export function aplicarLink(selecao: Selecao, gatilho: Gatilho, titulo: string):
   };
 }
 
-/** `/` + escolha → o markdown do comando no lugar do gatilho. Modelos colam o conteúdo inteiro. */
-export function aplicarComando(selecao: Selecao, gatilho: Gatilho, id: string, modelos: Modelo[]): Selecao {
+/**
+ * `/` + escolha → o markdown do comando no lugar do gatilho. Modelos colam o
+ * conteúdo inteiro, com os placeholders (`/titulo`, `/datadehoje`,
+ * `/horaagora`) já resolvidos — mesma régua de quando a página nasce de um
+ * modelo, só que aqui o título é o da página aberta, não o de uma nova.
+ */
+export function aplicarComando(selecao: Selecao, gatilho: Gatilho, id: string, modelos: Modelo[], titulo: string): Selecao {
   const limpo = limparGatilho(selecao, gatilho);
   if (id.startsWith(PREFIXO_MODELO)) {
     const modelo = modelos.find((item) => item.id === id.slice(PREFIXO_MODELO.length));
-    return modelo ? inserir(limpo, modelo.conteudo) : limpo;
+    return modelo ? inserir(limpo, aplicarPlaceholdersDeModelo(modelo.conteudo, titulo)) : limpo;
   }
   const comando = COMANDOS.find((item) => item.id === id);
   return comando ? comando.aplicar(limpo, modelos) : limpo;
