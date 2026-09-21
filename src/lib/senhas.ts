@@ -5,6 +5,7 @@ import argon2 from "argon2";
 import * as kdbxweb from "kdbxweb";
 
 import { RAIZ } from "./caminhos";
+import { gravarAtomico, gravarJson } from "./gravacao";
 import type {
   AnexoSenha,
   CampoExtraSenha,
@@ -52,8 +53,7 @@ export async function obterConfig(): Promise<ConfigSenhas> {
 export async function definirConfig(mudanca: Partial<ConfigSenhas>): Promise<ConfigSenhas> {
   const atual = await obterConfig();
   const nova: ConfigSenhas = { ...atual, ...mudanca };
-  await fs.mkdir(path.dirname(CAMINHO_CONFIG), { recursive: true });
-  await fs.writeFile(CAMINHO_CONFIG, JSON.stringify(nova, null, 2));
+  await gravarJson(CAMINHO_CONFIG, nova);
   const sessao = guardaGlobal.__cofreSessao;
   if (sessao) {
     sessao.esperaTravamentoMs = nova.minutosTrava === null ? null : nova.minutosTrava * 60_000;
@@ -168,10 +168,16 @@ async function descarregar(sessao: Sessao): Promise<void> {
   }
   if (sessao.salvando) await sessao.salvando;
   if (!sessao.sujo) return;
-  sessao.sujo = false;
-  sessao.salvando = salvarNoDisco(sessao.db).finally(() => {
-    sessao.salvando = null;
-  });
+  // `sujo` só cai depois da gravação dar certo: se ela falhar, a mudança
+  // continua marcada e a próxima tentativa (ou o trancar) grava de novo, em
+  // vez de a alteração em memória sumir sem aviso.
+  sessao.salvando = salvarNoDisco(sessao.db)
+    .then(() => {
+      sessao.sujo = false;
+    })
+    .finally(() => {
+      sessao.salvando = null;
+    });
   await sessao.salvando;
 }
 
@@ -191,6 +197,35 @@ export async function trancar(): Promise<void> {
 
 export function estaDestrancado(): boolean {
   return sessaoAtiva() !== null;
+}
+
+/** Os tempos que o seletor "manter aberto" oferece, em minutos — de 15 min a 8 h. */
+export const OPCOES_MANTER_ABERTO = [15, 30, 60, 120, 240, 480] as const;
+
+/**
+ * Estende a trava só nesta sessão, sem tocar na config: `null` volta ao
+ * valor da config (é o que a tela chama ao carregar, pra recarregar a
+ * página zerar a extensão — reiniciar o app zera sozinho, a sessão mora na
+ * memória). Devolve os minutos em vigor.
+ */
+export async function definirTravaDaSessao(minutos: number | null): Promise<number | null> {
+  const sessao = sessaoEmUso();
+  if (minutos === null) {
+    const config = await obterConfig();
+    sessao.esperaTravamentoMs = config.minutosTrava === null ? null : config.minutosTrava * 60_000;
+  } else {
+    const valido = (OPCOES_MANTER_ABERTO as readonly number[]).includes(minutos) ? minutos : OPCOES_MANTER_ABERTO[0];
+    sessao.esperaTravamentoMs = valido * 60_000;
+  }
+  tocarSessao(sessao);
+  return sessao.esperaTravamentoMs === null ? null : sessao.esperaTravamentoMs / 60_000;
+}
+
+/** Minutos da trava em vigor nesta sessão (`null` = nunca), ou `undefined` trancado. */
+export function minutosDaTravaDaSessao(): number | null | undefined {
+  const sessao = sessaoAtiva();
+  if (!sessao) return undefined;
+  return sessao.esperaTravamentoMs === null ? null : sessao.esperaTravamentoMs / 60_000;
 }
 
 export function minutosRestantes(): number {
@@ -219,10 +254,15 @@ export async function excluirCofre(): Promise<void> {
   await fs.rm(CAMINHO_COFRE, { force: true });
 }
 
+/**
+ * Sempre por arquivo temporário + rename, guardando a versão anterior em
+ * `cofre.kdbx.bak`: este arquivo é a única cópia de todas as senhas, e uma
+ * gravação interrompida no meio (queda de energia, lock do OneDrive) não
+ * pode deixá-lo truncado — um `.kdbx` pela metade não abre em lugar nenhum.
+ */
 async function salvarNoDisco(db: kdbxweb.Kdbx): Promise<void> {
   const bytes = await db.save();
-  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
-  await fs.writeFile(CAMINHO_COFRE, Buffer.from(bytes));
+  await gravarAtomico(CAMINHO_COFRE, new Uint8Array(bytes), { manterCopia: true });
 }
 
 /** Cria um cofre novo — nasce já com um grupo "Geral" para as primeiras senhas. */
@@ -255,8 +295,7 @@ export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise
   } catch {
     return false;
   }
-  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
-  await fs.writeFile(CAMINHO_COFRE, bytes);
+  await gravarAtomico(CAMINHO_COFRE, bytes, { manterCopia: true });
   await abrirSessao(db);
   return true;
 }
@@ -299,8 +338,8 @@ export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): 
   // save leva junto qualquer mudança de conteúdo que estivesse pendente.
   if (sessao.timerSalvar) clearTimeout(sessao.timerSalvar);
   sessao.timerSalvar = null;
-  sessao.sujo = false;
   await salvarNoDisco(sessao.db);
+  sessao.sujo = false;
   tocarSessao(sessao);
   return "ok";
 }

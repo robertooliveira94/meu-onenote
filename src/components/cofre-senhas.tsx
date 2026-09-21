@@ -47,6 +47,7 @@ import {
   acaoCriarEntrada,
   acaoCriarGrupo,
   acaoDefinirConfig,
+  acaoDefinirTravaDaSessao,
   acaoEsvaziarLixeira,
   acaoExcluirCofre,
   acaoExcluirDaLixeiraDeVez,
@@ -112,6 +113,9 @@ import { Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMen
 
 /** De quanto em quanto tempo confere se o cofre ainda está destrancado (o timeout é controlado pelo servidor). */
 const INTERVALO_VERIFICAR_TRANCA = 30_000;
+
+/** Mesmos tempos de `OPCOES_MANTER_ABERTO` em `senhas.ts` — duplicado porque aquele módulo não entra no cliente. */
+const OPCOES_MANTER_ABERTO: number[] = [15, 30, 60, 120, 240, 480];
 
 /** Quantas entradas "Recentes" mostra. */
 const LIMITE_RECENTES = 30;
@@ -259,6 +263,25 @@ export function CofreAberto({
   const [vendoSaude, definirVendoSaude] = useState(false);
   const [configurandoTrava, definirConfigurandoTrava] = useState(false);
   const campoBusca = useRef<HTMLInputElement>(null);
+
+  // "Manter aberto por…": extensão só desta sessão. Ao montar (abrir ou
+  // recarregar a página), volta ao valor da config — a extensão não deve
+  // sobreviver a um F5, muito menos a reiniciar o app.
+  const [manterAberto, definirManterAberto] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    acaoDefinirTravaDaSessao(null).then((resposta) => {
+      if (!cancelado && resposta.ok) definirManterAberto(resposta.minutos);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+  async function mudarManterAberto(minutos: number) {
+    const resposta = await acaoDefinirTravaDaSessao(minutos);
+    if (resposta.ok) definirManterAberto(resposta.minutos);
+    else aoTrancar();
+  }
 
   // O timeout de inatividade é controlado pelo servidor — aqui só se confere
   // de tempos em tempos se ele já trancou sozinho, para voltar pra tela de
@@ -457,6 +480,28 @@ export function CofreAberto({
           {todas.length} {todas.length === 1 ? "senha" : "senhas"}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
+          <label className="flex items-center gap-1.5 text-[11.5px] text-tinta-3" title="Só nesta sessão — recarregar a página volta ao padrão">
+            <Clock size={13} />
+            <span className="hidden sm:inline">Manter aberto por</span>
+            <select
+              value={manterAberto ?? ""}
+              onChange={(evento) => {
+                if (evento.target.value) void mudarManterAberto(Number(evento.target.value));
+              }}
+              aria-label="Manter o cofre aberto por"
+              className="h-7 rounded-md border border-linha bg-superficie-alta px-1.5 text-[11.5px] text-tinta focus:outline-none"
+            >
+              {manterAberto === null ? <option value="">nunca trancar</option> : null}
+              {manterAberto !== null && !OPCOES_MANTER_ABERTO.includes(manterAberto) ? (
+                <option value="">{manterAberto} min</option>
+              ) : null}
+              {OPCOES_MANTER_ABERTO.map((minutos) => (
+                <option key={minutos} value={minutos}>
+                  {minutos < 60 ? `${minutos} min` : `${minutos / 60} h`}
+                </option>
+              ))}
+            </select>
+          </label>
           <BotaoComoFunciona />
           <Menu
             gatilho={(abrir) => (

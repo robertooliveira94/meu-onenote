@@ -29,12 +29,20 @@ export type Atalho = {
 
 type Registro = Atalho & { id: number };
 
-const AtalhosContexto = createContext<{
+/**
+ * Dois contextos de propósito: quem só registra (todo componente com
+ * `useAtalho`) assina o de ações, que nunca muda; quem lê a lista (a folha
+ * e a paleta) assina o de lista. Com um contexto só, cada registro — e o
+ * cofre re-registra "n" a cada troca de grupo, porque a descrição leva o
+ * nome do grupo — re-renderizava todo componente que tinha um atalho.
+ */
+const AcoesContexto = createContext<{
   registrar: (atalho: Atalho) => () => void;
   /** Dispara o atalho que vence pra este combo, como se a tecla tivesse sido apertada. */
   executar: (combo: string) => void;
-  lista: Registro[];
 } | null>(null);
+
+const ListaContexto = createContext<Registro[]>([]);
 
 /** "ctrl+shift+f" → forma canônica, com modificadores em ordem fixa. */
 function normalizar(combo: string): string {
@@ -111,13 +119,17 @@ export function AtalhosProvedor({ children }: { children: React.ReactNode }) {
     candidatos[candidatos.length - 1]?.acao(new KeyboardEvent("keydown", { key: alvo }));
   }, []);
 
-  const valor = useMemo(() => ({ registrar, executar, lista }), [registrar, executar, lista]);
-  return <AtalhosContexto.Provider value={valor}>{children}</AtalhosContexto.Provider>;
+  const acoes = useMemo(() => ({ registrar, executar }), [registrar, executar]);
+  return (
+    <AcoesContexto.Provider value={acoes}>
+      <ListaContexto.Provider value={lista}>{children}</ListaContexto.Provider>
+    </AcoesContexto.Provider>
+  );
 }
 
 /** Roda um atalho por fora do teclado — é como a paleta de comandos oferece as mesmas ações. */
 export function useExecutarAtalho(): (combo: string) => void {
-  const contexto = useContext(AtalhosContexto);
+  const contexto = useContext(AcoesContexto);
   return contexto?.executar ?? (() => {});
 }
 
@@ -134,10 +146,7 @@ export function useAtalho(
     ativo?: boolean;
   },
 ): void {
-  // Só `registrar` (estável) entra nas dependências — o objeto do contexto
-  // muda a cada registro (carrega a lista), e depender dele fazia o efeito
-  // registrar → mudar a lista → re-registrar, sem fim.
-  const registrar = useContext(AtalhosContexto)?.registrar;
+  const registrar = useContext(AcoesContexto)?.registrar;
   const acaoRef = useRef(opcoes.acao);
   acaoRef.current = opcoes.acao;
   const { descricao, grupo, mesmoEmCampo, ativo = true } = opcoes;
@@ -156,8 +165,7 @@ export function useAtalho(
 
 /** Os atalhos ativos agora, agrupados na ordem em que os grupos apareceram — é o que a folha mostra. */
 export function useListaDeAtalhos(): { grupo: string; atalhos: { combo: string; descricao: string }[] }[] {
-  const contexto = useContext(AtalhosContexto);
-  const lista = contexto?.lista ?? [];
+  const lista = useContext(ListaContexto);
   const grupos: { grupo: string; atalhos: { combo: string; descricao: string }[] }[] = [];
   // Mesmo combo registrado duas vezes: só o que vence (o último) aparece.
   const vistos = new Set<string>();
@@ -171,7 +179,7 @@ export function useListaDeAtalhos(): { grupo: string; atalhos: { combo: string; 
     }
     grupo.atalhos.unshift({ combo: item.combo, descricao: item.descricao });
   }
-  const ordem = ["Hub", "Anotações", "Kanban", "Senhas", "Links"];
+  const ordem = ["Hub", "Anotações", "Kanban", "Senhas", "Links", "Compras", "Saúde"];
   return grupos.sort((a, b) => ordem.indexOf(a.grupo) - ordem.indexOf(b.grupo));
 }
 

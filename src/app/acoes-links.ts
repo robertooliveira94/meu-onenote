@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { gravarConfig } from "@/lib/config";
 import { analisarBookmarksHtml } from "@/lib/importar-favoritos";
 import * as linksApp from "@/lib/links-app";
+import { normalizarUrl } from "@/lib/url";
 import type { ItemLixeiraLinks, PastaLink } from "@/lib/tipos";
 
 type Resposta = { ok: true } | { ok: false; erro: string };
@@ -202,6 +203,7 @@ export async function acaoDefinirDestinoLink(idPasta: string): Promise<void> {
  */
 export async function acaoSalvarLinkDoClipper(idPasta: string, titulo: string, url: string): Promise<Resposta> {
   if (!url.trim()) return { ok: false, erro: "URL em branco." };
+  url = normalizarUrl(url);
   try {
     const { favicon } = await linksApp.buscarMetadadosUrl(url);
     await linksApp.criarLink(idPasta, { titulo, url, nota: "", favorito: false }, favicon);

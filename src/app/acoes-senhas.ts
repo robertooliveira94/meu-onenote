@@ -48,6 +48,15 @@ export async function acaoDestrancar(senhaMestra: string): Promise<RespostaSenha
   return { ok: true, arvore: senhas.obterArvore() };
 }
 
+/** "Manter aberto por…" no cabeçalho — só nesta sessão; `null` volta ao valor da config. */
+export async function acaoDefinirTravaDaSessao(minutos: number | null): Promise<{ ok: true; minutos: number | null } | { ok: false; erro: string }> {
+  try {
+    return { ok: true, minutos: await senhas.definirTravaDaSessao(minutos) };
+  } catch {
+    return { ok: false, erro: "O cofre está trancado." };
+  }
+}
+
 export async function acaoTrancar(): Promise<void> {
   await senhas.trancar();
 }

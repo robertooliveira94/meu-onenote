@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
 import type { NoImportado } from "./importar-favoritos";
 import {
@@ -13,6 +14,7 @@ import {
   popItemLixeiraLinks,
 } from "./lixeira-links";
 import type { ItemLixeiraLinks, Link, PastaLink } from "./tipos";
+import { normalizarUrl } from "./url";
 
 /**
  * A app de Links: uma árvore de pastas/subpastas com links dentro, guardada
@@ -70,8 +72,7 @@ async function lerArvore(): Promise<PastaLink> {
 }
 
 async function gravarArvore(raiz: PastaLink): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_ARVORE), { recursive: true });
-  await fs.writeFile(ARQUIVO_ARVORE, JSON.stringify(raiz, null, 2), "utf8");
+  await gravarJson(ARQUIVO_ARVORE, raiz);
 }
 
 let fila: Promise<unknown> = Promise.resolve();
@@ -251,9 +252,9 @@ export async function criarLink(
   favicon?: FaviconBuscado,
   capa?: FaviconBuscado,
 ): Promise<PastaLink> {
-  const titulo = campos.titulo.trim().slice(0, 200) || campos.url.trim();
-  const url = campos.url.trim();
+  const url = normalizarUrl(campos.url);
   if (!url) throw new Error("Informe uma URL.");
+  const titulo = campos.titulo.trim().slice(0, 200) || url;
   const id = gerarId();
   const [nomeFavicon, nomeCapa] = await Promise.all([salvarFavicon(id, favicon), salvarCapa(id, capa)]);
   return alterar((raiz) => {
@@ -311,7 +312,7 @@ export async function reordenarLinks(idPasta: string, ordemIds: string[]): Promi
 /** Outro link com a mesma URL (em qualquer pasta) — para o aviso "já está em X" ao criar/editar. */
 export async function acharDuplicado(url: string, exceto?: string): Promise<{ id: string; titulo: string; pastaNome: string } | null> {
   const raiz = await lerArvore();
-  const alvo = url.trim().toLowerCase();
+  const alvo = normalizarUrl(url).toLowerCase();
   if (!alvo) return null;
   function buscar(pasta: PastaLink): { id: string; titulo: string; pastaNome: string } | null {
     for (const link of pasta.links) {
@@ -341,7 +342,7 @@ export async function atualizarLink(
   return alterar((raiz) => {
     const achado = encontrarLinkComPai(raiz, id);
     if (!achado) throw new Error("Link não encontrado.");
-    const url = campos.url.trim();
+    const url = normalizarUrl(campos.url);
     if (!url) throw new Error("Informe uma URL.");
     achado.link.titulo = campos.titulo.trim().slice(0, 200) || url;
     achado.link.url = url;
@@ -427,7 +428,7 @@ export async function buscarMetadadosUrl(
 ): Promise<{ titulo: string | null; descricao: string | null; favicon: FaviconBuscado; capa: FaviconBuscado }> {
   let base: URL;
   try {
-    base = new URL(url);
+    base = new URL(normalizarUrl(url));
   } catch {
     return { titulo: null, descricao: null, favicon: null, capa: null };
   }

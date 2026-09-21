@@ -50,6 +50,8 @@ import {
   acaoMoverLink,
   acaoMoverPastaLink,
   acaoMoverVarios,
+  acaoRecolorirPastaLink,
+  acaoReiconizarPastaLink,
   acaoReordenarLinks,
   acaoRenomearPastaLink,
   acaoVerificarLinks,
@@ -67,8 +69,11 @@ import {
 import { useAtalho } from "@/lib/atalhos";
 import { urlDaPastaLink } from "@/lib/rotas";
 import type { Link as LinkSalvo, PastaLink } from "@/lib/tipos";
+import { normalizarUrl } from "@/lib/url";
 
-import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoNome } from "./dialogos";
+import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
+
+import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoCor, DialogoIcone, DialogoNome } from "./dialogos";
 import { TituloEditavel } from "./titulo-editavel";
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMenu, Vazio } from "./ui";
 
@@ -132,7 +137,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
 
   const [linkEmEdicao, definirLinkEmEdicao] = useState<LinkSalvo | "novo" | null>(null);
   const [excluindoLink, definirExcluindoLink] = useState<LinkSalvo | null>(null);
-  const [acaoPasta, definirAcaoPasta] = useState<{ tipo: "nova-subpasta" | "excluir"; pasta: PastaLink } | null>(
+  const [acaoPasta, definirAcaoPasta] = useState<{ tipo: "nova-subpasta" | "excluir" | "renomear" | "icone" | "cor"; pasta: PastaLink } | null>(
     null,
   );
   const [importando, definirImportando] = useState(false);
@@ -146,10 +151,16 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     return false;
   }, []);
 
-  const selecionarPasta = useCallback(
-    (id: string) => roteador.push(urlDaPastaLink(id)),
-    [roteador],
-  );
+  // `history.pushState` em vez de `roteador.push`: o App Router integra com
+  // o histórico nativo e atualiza `useSearchParams` sem buscar a página de
+  // novo no servidor — trocar de pasta era uma ida ao servidor (que relia a
+  // árvore inteira) só pra mudar `?pasta=`, e isso é o que parecia "lento".
+  const selecionarPasta = useCallback((id: string) => {
+    window.history.pushState(null, "", urlDaPastaLink(id));
+  }, []);
+  const irParaInicio = useCallback(() => {
+    window.history.pushState(null, "", "/links");
+  }, []);
   const abrirNovaSubpasta = useCallback(
     (pasta: PastaLink) => definirAcaoPasta({ tipo: "nova-subpasta", pasta }),
     [],
@@ -311,13 +322,14 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
         <ColunaPastasLinks
           raiz={arvore}
           pastaAtivaId={modo === "pasta" ? pastaAtiva.id : null}
-          onInicio={() => roteador.push("/links")}
+          onInicio={irParaInicio}
           onSelecionar={selecionarPasta}
           onCriarSubpasta={abrirNovaSubpasta}
           onExcluir={abrirExcluirPasta}
           onMoverPasta={moverPasta}
           onMoverLink={moverLink}
           onRenomear={renomearPasta}
+          onAgir={(tipo, pasta) => definirAcaoPasta({ tipo, pasta })}
         />
         {modo === "pasta" ? (
           <ColunaLinks
@@ -382,7 +394,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
       {acaoPasta?.tipo === "nova-subpasta" ? (
         <DialogoNome
           aberto
-          titulo={`Nova pasta em ${acaoPasta.pasta.nome}`}
+          titulo={acaoPasta.pasta.id === arvore.id ? "Nova pasta" : `Nova pasta em ${acaoPasta.pasta.nome}`}
           rotulo="Nome"
           textoBotao="Criar pasta"
           aoFechar={() => definirAcaoPasta(null)}
@@ -415,7 +427,7 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
               if (!resposta.ok) return resposta.erro;
               definirArvore(resposta.arvore);
               definirAcaoPasta(null);
-              if (idPastaNaUrl === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
+              if (idPastaNaUrl === acaoPasta.pasta.id) selecionarPasta(arvore.id);
               return null;
             }}
           />
@@ -431,12 +443,59 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
               if (!resposta.ok) return resposta.erro;
               definirArvore(resposta.arvore);
               definirAcaoPasta(null);
-              if (idPastaNaUrl === acaoPasta.pasta.id) roteador.push(urlDaPastaLink(arvore.id));
+              if (idPastaNaUrl === acaoPasta.pasta.id) selecionarPasta(arvore.id);
               return null;
             }}
           />
         )
       ) : null}
+
+      {acaoPasta?.tipo === "renomear" ? (
+        <DialogoNome
+          aberto
+          titulo="Renomear pasta"
+          rotulo="Nome"
+          valorInicial={acaoPasta.pasta.nome}
+          textoBotao="Salvar"
+          aoFechar={() => definirAcaoPasta(null)}
+          aoConfirmar={async (nome) => {
+            const falha = await renomearPasta(acaoPasta.pasta.id, nome);
+            if (falha) return falha;
+            definirAcaoPasta(null);
+            return null;
+          }}
+        />
+      ) : null}
+
+      <DialogoIcone
+        aberto={acaoPasta?.tipo === "icone"}
+        icones={ICONES_DISPONIVEIS}
+        iconeAtual={acaoPasta?.tipo === "icone" ? acaoPasta.pasta.icone : ""}
+        aoFechar={() => definirAcaoPasta(null)}
+        aoEscolher={async (icone) => {
+          if (acaoPasta?.tipo !== "icone") return null;
+          const resposta = await acaoReiconizarPastaLink(acaoPasta.pasta.id, icone);
+          if (!resposta.ok) return resposta.erro;
+          definirArvore(resposta.arvore);
+          roteador.refresh();
+          return null;
+        }}
+      />
+
+      <DialogoCor
+        aberto={acaoPasta?.tipo === "cor"}
+        cores={CORES_CADERNO}
+        corAtual={acaoPasta?.tipo === "cor" ? acaoPasta.pasta.cor : ""}
+        aoFechar={() => definirAcaoPasta(null)}
+        aoEscolher={async (cor) => {
+          if (acaoPasta?.tipo !== "cor") return null;
+          const resposta = await acaoRecolorirPastaLink(acaoPasta.pasta.id, cor);
+          if (!resposta.ok) return resposta.erro;
+          definirArvore(resposta.arvore);
+          roteador.refresh();
+          return null;
+        }}
+      />
 
       {importando ? (
         <DialogoImportarFavoritos
@@ -465,6 +524,7 @@ function ColunaPastasLinks({
   onMoverPasta,
   onMoverLink,
   onRenomear,
+  onAgir,
 }: {
   raiz: PastaLink;
   /** `null` = nenhuma pasta selecionada (tela inicial de favoritos + recentes). */
@@ -476,11 +536,11 @@ function ColunaPastasLinks({
   onMoverPasta: (id: string, idNovoPai: string) => void;
   onMoverLink: (id: string, idNovaPasta: string) => void;
   onRenomear: (id: string, nome: string) => Promise<string | null>;
+  onAgir: (tipo: "renomear" | "icone" | "cor", pasta: PastaLink) => void;
 }) {
   // "Nova pasta" (o botão do cabeçalho, sem pasta-alvo óbvia como o menu de
-  // cada pasta tem) cria dentro de onde a pessoa está agora — não sempre na
-  // raiz, que fazia toda pasta nova nascer dentro de "Geral" mesmo navegando
-  // fundo em outra.
+  // cada pasta tem) cria dentro de onde a pessoa está agora; no Início (ou
+  // em "Geral", que é a raiz), nasce no primeiro nível.
   const pastaParaNovaPasta = (pastaAtivaId && encontrarPasta(raiz, pastaAtivaId)) || raiz;
 
   return (
@@ -501,13 +561,17 @@ function ColunaPastasLinks({
       <div className="flex items-center justify-between px-3.5 pt-2.5 pb-2">
         <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Pastas</p>
         <BotaoIcone
-          rotulo={pastaParaNovaPasta.id === raiz.id ? "Nova pasta" : `Nova pasta em ${pastaParaNovaPasta.nome}`}
+          rotulo={pastaParaNovaPasta.id === raiz.id ? "Nova pasta (no primeiro nível)" : `Nova pasta em ${pastaParaNovaPasta.nome}`}
           onClick={() => onCriarSubpasta(pastaParaNovaPasta)}
           className="size-6"
         >
           <FolderPlus size={13} />
         </BotaoIcone>
       </div>
+      {/* A raiz ("Geral") aparece como uma pasta comum, só com os links soltos
+          dela; as pastas de primeiro nível ficam ao lado, não dentro — era
+          tudo aninhado sob "Geral", e "nova pasta" parecia nascer sempre
+          dentro de uma pasta em vez de na raiz. */}
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         <NoPastaLink
           pasta={raiz}
@@ -520,7 +584,23 @@ function ColunaPastasLinks({
           onMoverPasta={onMoverPasta}
           onMoverLink={onMoverLink}
           onRenomear={onRenomear}
+          onAgir={onAgir}
         />
+        {raiz.pastas.map((sub) => (
+          <NoPastaLink
+            key={sub.id}
+            pasta={sub}
+            profundidade={0}
+            pastaAtivaId={pastaAtivaId}
+            onSelecionar={onSelecionar}
+            onCriarSubpasta={onCriarSubpasta}
+            onExcluir={onExcluir}
+            onMoverPasta={onMoverPasta}
+            onMoverLink={onMoverLink}
+            onRenomear={onRenomear}
+            onAgir={onAgir}
+          />
+        ))}
       </div>
     </div>
   );
@@ -543,6 +623,7 @@ type PropsNoPasta = {
   onMoverPasta: (id: string, idNovoPai: string) => void;
   onMoverLink: (id: string, idNovaPasta: string) => void;
   onRenomear: (id: string, nome: string) => Promise<string | null>;
+  onAgir: (tipo: "renomear" | "icone" | "cor", pasta: PastaLink) => void;
 };
 
 /**
@@ -567,6 +648,7 @@ function NoPastaLinkImpl({
   onMoverPasta,
   onMoverLink,
   onRenomear,
+  onAgir,
 }: PropsNoPasta) {
   const [sobre, definirSobre] = useState(false);
   const [renomeando, definirRenomeando] = useState(false);
@@ -644,6 +726,36 @@ function NoPastaLinkImpl({
               >
                 Nova subpasta
               </ItemMenu>
+              <SeparadorMenu />
+              {!raiz ? (
+                <ItemMenu
+                  icone={<Pencil size={14} />}
+                  onClick={() => {
+                    fechar();
+                    onAgir("renomear", pasta);
+                  }}
+                >
+                  Renomear
+                </ItemMenu>
+              ) : null}
+              <ItemMenu
+                icone={<span className="text-[13px]">{pasta.icone}</span>}
+                onClick={() => {
+                  fechar();
+                  onAgir("icone", pasta);
+                }}
+              >
+                Ícone
+              </ItemMenu>
+              <ItemMenu
+                icone={<span className="size-3 rounded-full" style={{ background: pasta.cor }} />}
+                onClick={() => {
+                  fechar();
+                  onAgir("cor", pasta);
+                }}
+              >
+                Cor
+              </ItemMenu>
               {!raiz ? (
                 <>
                   <SeparadorMenu />
@@ -663,7 +775,7 @@ function NoPastaLinkImpl({
           )}
         </Menu>
       </div>
-      {pasta.pastas.length > 0 ? (
+      {!raiz && pasta.pastas.length > 0 ? (
         <div>
           {pasta.pastas.map((sub) => (
             <NoPastaLink
@@ -677,6 +789,7 @@ function NoPastaLinkImpl({
               onMoverPasta={onMoverPasta}
               onMoverLink={onMoverLink}
               onRenomear={onRenomear}
+              onAgir={onAgir}
             />
           ))}
         </div>
@@ -1358,7 +1471,7 @@ const TileLink = memo(function TileLink({
           }
           onVisitar(link);
         }}
-        className="flex flex-col items-center gap-2"
+        className="flex w-full min-w-0 flex-col items-center gap-2"
       >
         {link.capa ? (
           // eslint-disable-next-line @next/next/no-img-element -- capa local, não vale a pena o otimizador de imagens do Next pra isso.
@@ -1380,9 +1493,16 @@ const TileLink = memo(function TileLink({
             <Bookmark size={15} />
           </div>
         )}
-        <div className="min-w-0">
-          <p className="flex items-center justify-center gap-1 line-clamp-2 text-[12px] leading-tight font-medium text-tinta">
-            {!link.lido ? <PontoNaoLido /> : null}
+        <div className="w-full min-w-0">
+          {/* `line-clamp` precisa de display -webkit-box — junto com `flex` não
+              cortava nada, e um título sem espaços (URL como título)
+              vazava pra fora do cartão. */}
+          <p className="line-clamp-2 text-[12px] leading-tight font-medium break-words text-tinta">
+            {!link.lido ? (
+              <span className="mr-1 inline-flex align-middle">
+                <PontoNaoLido />
+              </span>
+            ) : null}
             {link.titulo}
           </p>
           <p className="mt-0.5 truncate text-[10.5px] text-tinta-3">{dominioDaUrl(link.url)}</p>
@@ -1724,8 +1844,10 @@ function DialogoLink({
   const [duplicado, definirDuplicado] = useState<{ id: string; titulo: string; pastaNome: string } | null>(null);
 
   async function buscarMetadados() {
-    const url = campos.url.trim();
+    const url = normalizarUrl(campos.url);
     if (!url || url === urlOriginal.current) return;
+    // "www.google.com" vira "https://www.google.com" já no campo, pra pessoa ver o que vai ser salvo.
+    if (url !== campos.url) definirCampos((atual) => ({ ...atual, url }));
     definirBuscando(true);
     const [resultado, achadoDuplicado] = await Promise.all([
       acaoBuscarMetadadosUrl(url),

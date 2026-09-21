@@ -1,4 +1,4 @@
-import { linksFavoritos, linksRecentes, obterArvore } from "@/lib/links-app";
+import { obterArvore } from "@/lib/links-app";
 
 import { PopupLinks } from "@/components/popup-links";
 
@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Janelinha compacta pra abrir um favorito sem entrar no app inteiro —
- * destino do bookmarklet "Abrir meus links" (ver `atalho-links.tsx`) e do
- * atalho da extensão de navegador. Fora do grupo `(app)` de propósito, sem
+ * destino do atalho "Abrir meus links" (ver `atalho-links.tsx`) e da aba
+ * Links da extensão de navegador. Fora do grupo `(app)` de propósito, sem
  * a moldura do hub, igual a `/salvar-link` e `/nota-flutuante`: nasceu pra
  * abrir numa janela pequena por cima do que a pessoa estava vendo, não pra
  * navegar o hub. Não reaproveita a rota `/links` (dentro do grupo) porque
@@ -15,6 +15,6 @@ export const dynamic = "force-dynamic";
  * um nome de segmento diferente, como `nota-flutuante` fez com `nota`.
  */
 export default async function PaginaLinksPopup() {
-  const [favoritos, recentes, arvore] = await Promise.all([linksFavoritos(), linksRecentes(12), obterArvore()]);
-  return <PopupLinks favoritos={favoritos} recentes={recentes} arvore={arvore} />;
+  const arvore = await obterArvore();
+  return <PopupLinks arvore={arvore} />;
 }

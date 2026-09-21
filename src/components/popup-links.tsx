@@ -1,29 +1,10 @@
 "use client";
 
-import { Bookmark, ChevronLeft, ChevronRight, Folder, Star } from "lucide-react";
+import { Bookmark, ChevronDown, ChevronRight, Folder } from "lucide-react";
 import { useState } from "react";
 
 import { acaoMarcarComoAberto } from "@/app/acoes-links";
 import type { Link as LinkSalvo, PastaLink } from "@/lib/tipos";
-
-function encontrarPasta(raiz: PastaLink, id: string): PastaLink | null {
-  if (raiz.id === id) return raiz;
-  for (const sub of raiz.pastas) {
-    const achada = encontrarPasta(sub, id);
-    if (achada) return achada;
-  }
-  return null;
-}
-
-/** Da raiz até `id`, inclusive — usado só pra achar o pai (pra "voltar"). */
-function caminhoAte(raiz: PastaLink, id: string): PastaLink[] | null {
-  if (raiz.id === id) return [raiz];
-  for (const sub of raiz.pastas) {
-    const resto = caminhoAte(sub, id);
-    if (resto) return [raiz, ...resto];
-  }
-  return null;
-}
 
 function dominioDaUrl(url: string): string {
   try {
@@ -51,14 +32,15 @@ function IconeDoLink({ link }: { link: LinkSalvo }) {
   );
 }
 
-function LinhaLink({ link, onAbrir }: { link: LinkSalvo; onAbrir: (link: LinkSalvo) => void }) {
+function LinhaLink({ link, profundidade, onAbrir }: { link: LinkSalvo; profundidade: number; onAbrir: (link: LinkSalvo) => void }) {
   return (
     <a
       href={link.url}
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => onAbrir(link)}
-      className="flex items-center gap-2 rounded-md px-1.5 py-[3px] text-left transition-colors hover:bg-realce-fraco"
+      style={{ paddingLeft: 6 + profundidade * 14 }}
+      className="flex items-center gap-2 rounded-md py-[3px] pr-1.5 text-left transition-colors hover:bg-realce-fraco"
     >
       <IconeDoLink link={link} />
       <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-tinta">{link.titulo}</span>
@@ -67,45 +49,80 @@ function LinhaLink({ link, onAbrir }: { link: LinkSalvo; onAbrir: (link: LinkSal
   );
 }
 
-function LinhaPasta({ pasta, onEntrar }: { pasta: PastaLink; onEntrar: (id: string) => void }) {
-  const total = pasta.pastas.length + pasta.links.length;
+/** Uma pasta da árvore, fechada até clicar; aberta, mostra subpastas e depois os links, recuados. */
+function NoPasta({
+  pasta,
+  profundidade,
+  abertas,
+  onAlternar,
+  onAbrir,
+  soLinks = false,
+}: {
+  pasta: PastaLink;
+  profundidade: number;
+  abertas: Set<string>;
+  onAlternar: (id: string) => void;
+  onAbrir: (link: LinkSalvo) => void;
+  /** A raiz ("Geral") só carrega os links soltos dela — as pastas de primeiro nível ficam ao lado, como no app. */
+  soLinks?: boolean;
+}) {
+  const aberta = abertas.has(pasta.id);
+  const subpastas = soLinks ? [] : pasta.pastas;
+  const total = subpastas.length + pasta.links.length;
   return (
-    <button
-      type="button"
-      onClick={() => onEntrar(pasta.id)}
-      className="flex w-full items-center gap-2 rounded-md px-1.5 py-[3px] text-left transition-colors hover:bg-realce-fraco"
-    >
-      <span aria-hidden className="flex size-5 shrink-0 items-center justify-center text-[13px]">
-        {pasta.icone || <Folder size={13} style={{ color: pasta.cor }} />}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-tinta">{pasta.nome}</span>
-      <span className="shrink-0 text-[10px] tabular-nums text-tinta-3">{total}</span>
-      <ChevronRight size={12} className="shrink-0 text-tinta-3" />
-    </button>
+    <div>
+      <button
+        type="button"
+        onClick={() => onAlternar(pasta.id)}
+        aria-expanded={aberta}
+        style={{ paddingLeft: 6 + profundidade * 14 }}
+        className="flex w-full items-center gap-1.5 rounded-md py-[3px] pr-1.5 text-left transition-colors hover:bg-realce-fraco"
+      >
+        {aberta ? <ChevronDown size={12} className="shrink-0 text-tinta-3" /> : <ChevronRight size={12} className="shrink-0 text-tinta-3" />}
+        <span aria-hidden className="flex size-5 shrink-0 items-center justify-center text-[13px]">
+          {pasta.icone || <Folder size={13} style={{ color: pasta.cor }} />}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-tinta">{pasta.nome}</span>
+        <span className="shrink-0 text-[10px] text-tinta-3 tabular-nums">{total || ""}</span>
+      </button>
+      {aberta ? (
+        <div>
+          {subpastas.map((sub) => (
+            <NoPasta key={sub.id} pasta={sub} profundidade={profundidade + 1} abertas={abertas} onAlternar={onAlternar} onAbrir={onAbrir} />
+          ))}
+          {pasta.links.map((link) => (
+            <LinhaLink key={link.id} link={link} profundidade={profundidade + 1} onAbrir={onAbrir} />
+          ))}
+          {total === 0 ? (
+            <p style={{ paddingLeft: 6 + (profundidade + 1) * 14 }} className="py-1 text-[11px] text-tinta-3">
+              Pasta vazia.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function Rubrica({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-0.5 flex items-center gap-1.5 px-1.5 pt-2 text-[10px] font-medium tracking-wide text-tinta-3 uppercase">{children}</h2>;
-}
-
 /**
- * Janelinha compacta de Links: começa em favoritos + recentes + as pastas
- * de primeiro nível, e deixa entrar em qualquer pasta (com subpastas
- * dentro) sem sair da janelinha — mesma árvore do app cheio, só que densa
- * o bastante pra caber muita coisa de uma vez. Clicar num link abre numa
- * aba nova (pra não perder a janelinha antes dela fechar sozinha) e marca
- * como lido; clicar numa pasta só navega, não fecha nada. Fecha sozinha ao
- * abrir um link, como `/salvar-link`, porque só existe como pop-up.
+ * Janelinha compacta de Links: a árvore de pastas, toda fechada, do jeito
+ * que está no app — nada de favoritos ou recentes na frente. Clicar numa
+ * pasta abre ela ali mesmo (subpastas e links recuados); clicar num link
+ * abre numa aba nova, marca como lido e fecha a janelinha sozinha, porque
+ * ela só existe como pop-up (igual a `/salvar-link`).
  */
-export function PopupLinks({ favoritos, recentes, arvore }: { favoritos: LinkSalvo[]; recentes: LinkSalvo[]; arvore: PastaLink }) {
-  const [pastaId, definirPastaId] = useState(arvore.id);
+export function PopupLinks({ arvore }: { arvore: PastaLink }) {
+  const [abertas, definirAbertas] = useState<Set<string>>(() => new Set());
   const [aberto, definirAberto] = useState<string | null>(null);
 
-  const pastaAtual = encontrarPasta(arvore, pastaId) ?? arvore;
-  const caminho = caminhoAte(arvore, pastaId) ?? [arvore];
-  const naRaiz = pastaAtual.id === arvore.id;
-  const pastaPai = caminho.length > 1 ? caminho[caminho.length - 2] : null;
+  function alternar(id: string) {
+    definirAbertas((atuais) => {
+      const proximas = new Set(atuais);
+      if (proximas.has(id)) proximas.delete(id);
+      else proximas.add(id);
+      return proximas;
+    });
+  }
 
   function abrir(link: LinkSalvo) {
     definirAberto(link.id);
@@ -113,72 +130,23 @@ export function PopupLinks({ favoritos, recentes, arvore }: { favoritos: LinkSal
     setTimeout(() => window.close(), 350);
   }
 
-  const vazio =
-    (!naRaiz || (favoritos.length === 0 && recentes.length === 0)) &&
-    pastaAtual.pastas.length === 0 &&
-    pastaAtual.links.length === 0;
+  const vazio = arvore.pastas.length === 0 && arvore.links.length === 0;
 
   return (
     <div className="flex h-screen w-full flex-col overflow-y-auto bg-papel px-2.5 py-2.5">
-      <div className="mb-0.5 flex items-center gap-1.5 px-0.5">
-        {naRaiz ? (
-          <>
-            <Bookmark size={14} className="shrink-0 text-[var(--realce)]" />
-            <h1 className="truncate text-[12.5px] font-bold tracking-[-0.02em]">Links</h1>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => definirPastaId(pastaPai ? pastaPai.id : arvore.id)}
-            className="flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1.5 text-[12.5px] font-bold tracking-[-0.02em] text-tinta transition-colors hover:text-[var(--realce)]"
-          >
-            <ChevronLeft size={14} className="shrink-0" />
-            <span className="truncate">{pastaAtual.nome}</span>
-          </button>
-        )}
+      <div className="mb-1 flex items-center gap-1.5 px-0.5">
+        <Bookmark size={14} className="shrink-0 text-[var(--realce)]" />
+        <h1 className="truncate text-[12.5px] font-bold tracking-[-0.02em]">Links</h1>
       </div>
 
       {vazio ? (
-        <p className="px-2 py-6 text-center text-[12px] text-tinta-3">
-          {naRaiz ? "Nenhum link salvo ainda." : "Pasta vazia."}
-        </p>
+        <p className="px-2 py-6 text-center text-[12px] text-tinta-3">Nenhum link salvo ainda.</p>
       ) : (
-        <div className="pb-1">
-          {naRaiz && favoritos.length > 0 ? (
-            <section>
-              <Rubrica>
-                <Star size={9} />
-                Favoritos
-              </Rubrica>
-              {favoritos.map((link) => (
-                <LinhaLink key={link.id} link={link} onAbrir={abrir} />
-              ))}
-            </section>
-          ) : null}
-          {naRaiz && recentes.length > 0 ? (
-            <section>
-              <Rubrica>Recentes</Rubrica>
-              {recentes.map((link) => (
-                <LinhaLink key={link.id} link={link} onAbrir={abrir} />
-              ))}
-            </section>
-          ) : null}
-          {pastaAtual.pastas.length > 0 ? (
-            <section>
-              <Rubrica>{naRaiz ? "Pastas" : "Subpastas"}</Rubrica>
-              {pastaAtual.pastas.map((sub) => (
-                <LinhaPasta key={sub.id} pasta={sub} onEntrar={definirPastaId} />
-              ))}
-            </section>
-          ) : null}
-          {pastaAtual.links.length > 0 ? (
-            <section>
-              <Rubrica>{naRaiz ? "Nesta pasta" : "Links"}</Rubrica>
-              {pastaAtual.links.map((link) => (
-                <LinhaLink key={link.id} link={link} onAbrir={abrir} />
-              ))}
-            </section>
-          ) : null}
+        <div className="space-y-0.5 pb-1">
+          <NoPasta pasta={arvore} profundidade={0} abertas={abertas} onAlternar={alternar} onAbrir={abrir} soLinks />
+          {arvore.pastas.map((sub) => (
+            <NoPasta key={sub.id} pasta={sub} profundidade={0} abertas={abertas} onAlternar={alternar} onAbrir={abrir} />
+          ))}
         </div>
       )}
       {aberto ? <p className="mt-auto pt-2 text-center text-[11px] text-tinta-3">Abrindo…</p> : null}

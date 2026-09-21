@@ -450,7 +450,9 @@ limpas e abríveis em qualquer editor.
     botão. Escrita em disco é adiada ~1s após a última mudança (o KDF do
     Argon2id é caro de recalcular a cada save) — as mudanças aparecem na
     tela na hora, vindas da cópia em memória, então a navegação não fica
-    lenta esperando o disco.
+    lenta esperando o disco. "Manter aberto por" no cabeçalho (15 min a
+    8 h) estende a trava só nesta sessão — recarregar a página ou
+    reiniciar o app volta ao valor da config ("Trava e privacidade").
 - **Links** (`/links`): um gerenciador de favoritos — pastas e subpastas
   (aninhamento livre, mesma forma de árvore do cofre de senhas, mas sem
   cifra: um único JSON, `_links/arvore.json`), cada uma com cor e ícone
@@ -479,8 +481,15 @@ limpas e abríveis em qualquer editor.
     `o` abre, `e` edita, `f` favorita.
   - Um clique abre o link em nova aba e marca como lido; editar/mover/
     excluir é ação separada. Tela inicial mostra favoritos e recentes
-    (achatando a árvore inteira) com um mosaico de não lidos; busca
-    simples por título/URL. Excluir sempre vai para uma lixeira própria
+    (achatando a árvore inteira) com um mosaico de não lidos. Na coluna,
+    a raiz ("Geral") aparece como uma pasta comum só com os links soltos
+    dela, e as pastas de primeiro nível ficam ao lado, não dentro — "nova
+    pasta" no Início nasce na raiz de verdade. Toda pasta (raiz inclusive)
+    renomeia, troca ícone e cor pelo menu. Trocar de pasta é
+    `history.pushState`, não navegação do roteador: sem ida ao servidor,
+    instantâneo mesmo com centenas de pastas. URL colada sem esquema
+    ("www.google.com") ganha `https://` ao salvar, ao buscar favicon e ao
+    checar duplicidade. Excluir sempre vai para uma lixeira própria
     (recuperável); pasta com conteúdo dentro exige digitar o nome pra
     confirmar, igual excluir um caderno. Dá para importar de uma vez um
     arquivo de favoritos exportado do navegador (`.html`, formato padrão
@@ -489,9 +498,12 @@ limpas e abríveis em qualquer editor.
     Clipper das Anotações): dois botões pra barra de favoritos — "Salvar
     como link" abre uma janela pop-up pequena por cima da página atual
     (escolhe a pasta, salva, fecha sozinha, sem trocar de aba nem virar
-    nota) e "Abrir meus links" abre a mesma janelinha compacta de
-    `/links-popup` (favoritos + recentes; clicar num link abre e fecha a
-    janela sozinha). A extensão de navegador (ver Senhas, mesma pasta
+    nota) e "Abrir meus links" — este um endereço comum pra `/links-popup`
+    (favorito `javascript:` não recebe ícone em navegador nenhum; um
+    endereço normal ganha o ícone do app). A janelinha é a árvore de
+    pastas toda fechada, sem favoritos nem recentes na frente: clicar numa
+    pasta abre ela ali mesmo; clicar num link abre e fecha a janela
+    sozinha. A extensão de navegador (ver Senhas, mesma pasta
     `extensao/`) ganhou uma aba "Links" no popup da barra e um painel
     lateral (`chrome.sidePanel`) com o mesmo `/links-popup` embutido —
     útil pra manter os favoritos à mão numa coluna fixa ao lado da aba.

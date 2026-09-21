@@ -38,7 +38,7 @@ function BlocoBookmarklet({ rotulo, icone, codigo }: { rotulo: string; icone: Re
       </a>
       <p className="mt-3 text-[12px] text-tinta-3">
         Arraste este botão para a barra de favoritos. Clicar nele aqui não faz nada — ele precisa
-        estar salvo como favorito para funcionar nas outras páginas.
+        estar salvo como favorito para funcionar.
       </p>
       <div className="mt-3 border-t border-linha pt-3 text-left">
         <button
@@ -77,9 +77,11 @@ export function AtalhoDeLinks() {
   const salvarLink = origem
     ? `javascript:void(window.open('${origem}/salvar-link?url='+encodeURIComponent(location.href)+'&titulo='+encodeURIComponent(document.title),'_blank','width=420,height=520'))`
     : "";
-  const abrirLinks = origem
-    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=340,height=560'))`
-    : "";
+  // Endereço comum, não bookmarklet: um favorito `javascript:` nunca ganha
+  // ícone na barra do navegador (não há página por trás dele), e um
+  // favorito pra `/links-popup` ganha o ícone do app. Abre numa aba, com a
+  // mesma janelinha de pastas.
+  const abrirLinks = origem ? `${origem}/links-popup` : "";
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -112,6 +114,11 @@ export function AtalhoDeLinks() {
             <div>
               <h2 className="mb-2 text-[12px] font-semibold text-tinta">Abrir meus links</h2>
               <BlocoBookmarklet rotulo="Abrir meus links" icone={<FolderOpen size={14} />} codigo={abrirLinks} />
+              <p className="mt-2 text-[11.5px] leading-relaxed text-tinta-3">
+                Este é um endereço normal, então o favorito fica com o ícone do app. O “Salvar como link” não
+                tem como: ele precisa ser código (pega a página aberta), e favorito de código não recebe ícone
+                em nenhum navegador — a extensão do Chrome faz a mesma coisa com ícone.
+              </p>
             </div>
           </div>
         ) : (
