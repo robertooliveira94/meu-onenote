@@ -8,7 +8,10 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  CreditCard,
+  Download,
   ExternalLink,
+  FileArchive,
   FolderPlus,
   HeartPulse,
   History,
@@ -17,11 +20,13 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Printer,
   RotateCcw,
   Stethoscope,
   Trash2,
   Upload,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -32,26 +37,32 @@ import {
   acaoAtualizarEspecialidade,
   acaoAtualizarEvento,
   acaoAtualizarLocal,
+  acaoAtualizarPessoa,
   acaoAtualizarProfissional,
   acaoCriarEspecialidade,
   acaoCriarEvento,
   acaoCriarLocal,
+  acaoCriarPessoa,
+  acaoCriarPlano,
   acaoCriarProfissional,
   acaoExcluirEspecialidade,
   acaoExcluirEvento,
   acaoExcluirLocal,
+  acaoExcluirPessoa,
+  acaoExcluirPlano,
   acaoExcluirProfissional,
   acaoEsvaziarLixeiraSaude,
   acaoListarLixeiraSaude,
   acaoMudarStatusEvento,
   acaoRemoverAnexo,
+  acaoRenomearPlano,
   acaoReordenarEspecialidades,
   acaoRestaurarDaLixeiraSaude,
   type RespostaSaude,
 } from "@/app/acoes-saude";
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
-import type { CamposEvento, CamposLocal, CamposProfissional, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
+import type { CamposEvento, CamposLocal, CamposPessoa, CamposProfissional, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
 import {
   ROTULO_STATUS,
   ROTULO_TIPO,
@@ -60,6 +71,7 @@ import {
   formatarDataSaude,
   formatarTamanho,
   hojeIso,
+  idadeEmAnos,
   ordenarEventos,
   rotuloDoMes,
   statusDisponiveis,
@@ -70,6 +82,8 @@ import type {
   EspecialidadeSaude,
   EventoSaude,
   LocalSaude,
+  PessoaSaude,
+  PlanoSaude,
   ProfissionalSaude,
   StatusEventoSaude,
   TipoEventoSaude,
@@ -85,7 +99,11 @@ type Selecao =
   | { tipo: "especialidade"; id: string }
   | { tipo: "locais" }
   | { tipo: "profissionais" }
+  | { tipo: "pessoas" }
+  | { tipo: "planos" }
   | { tipo: "lixeira" };
+
+const CHAVE_PESSOA = "saude-pessoa";
 
 /** As visões em que clicar num registro abre o painel de detalhe ao lado. */
 function mostraDetalhe(selecao: Selecao | null): boolean {
@@ -136,8 +154,28 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
         ? { tipo: "especialidade", id: dadosIniciais.especialidades[0].id }
         : null,
   );
-  // Especialidade pré-escolhida ao abrir "novo registro" fora de uma especialidade (Próximos, "está na hora").
+  // Especialidade (e pessoa, no "está na hora") pré-escolhidas ao abrir "novo registro" fora de uma especialidade.
   const [especialidadeParaNovo, definirEspecialidadeParaNovo] = useState<string | null>(null);
+  const [pessoaParaNovo, definirPessoaParaNovo] = useState<string | null>(null);
+  // O seletor de pessoa do cabeçalho: `null` = todas. Lembrado no navegador,
+  // restaurado depois de montar pra não divergir do HTML do servidor.
+  const [pessoaFiltro, definirPessoaFiltro] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const salva = localStorage.getItem(CHAVE_PESSOA);
+      if (salva && dadosIniciais.pessoas.some((pessoa) => pessoa.id === salva)) definirPessoaFiltro(salva);
+    } catch {}
+  }, [dadosIniciais.pessoas]);
+  const mudarPessoaFiltro = useCallback((id: string | null) => {
+    definirPessoaFiltro(id);
+    definirEventoAtivoId(null);
+    try {
+      if (id) localStorage.setItem(CHAVE_PESSOA, id);
+      else localStorage.removeItem(CHAVE_PESSOA);
+    } catch {}
+  }, []);
+  const [pessoaEmEdicao, definirPessoaEmEdicao] = useState<"nova" | null>(null);
+  const [exportando, definirExportando] = useState<{ especialidade: EspecialidadeSaude | null } | null>(null);
   const [eventoAtivoId, definirEventoAtivoId] = useState<string | null>(null);
   const [eventoEmEdicao, definirEventoEmEdicao] = useState<EventoSaude | "novo" | null>(null);
   const [excluindoEvento, definirExcluindoEvento] = useState<EventoSaude | null>(null);
@@ -179,9 +217,19 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
     }
   }, [selecao, especialidadeAtiva, dados.especialidades]);
 
+  // Pessoa do filtro sumiu (excluída): volta pra "todas".
+  useEffect(() => {
+    if (pessoaFiltro && !dados.pessoas.some((pessoa) => pessoa.id === pessoaFiltro)) mudarPessoaFiltro(null);
+  }, [pessoaFiltro, dados.pessoas, mudarPessoaFiltro]);
+
+  // Tudo abaixo — árvore, Início, linha do tempo, alertas — olha só a pessoa escolhida.
+  const eventosVisiveis = useMemo(
+    () => (pessoaFiltro ? dados.eventos.filter((evento) => evento.pessoaId === pessoaFiltro) : dados.eventos),
+    [dados.eventos, pessoaFiltro],
+  );
   const eventosDaEspecialidade = useMemo(
-    () => (especialidadeAtiva ? ordenarEventos(dados.eventos.filter((evento) => evento.especialidadeId === especialidadeAtiva.id)) : []),
-    [dados.eventos, especialidadeAtiva],
+    () => (especialidadeAtiva ? ordenarEventos(eventosVisiveis.filter((evento) => evento.especialidadeId === especialidadeAtiva.id)) : []),
+    [eventosVisiveis, especialidadeAtiva],
   );
   const eventoAtivo = eventoAtivoId ? (dados.eventos.find((item) => item.id === eventoAtivoId) ?? null) : null;
 
@@ -196,20 +244,25 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
     acao: () => definirEventoEmEdicao("novo"),
   });
 
-  const alertas = useMemo(() => alertasDeSaude(dados), [dados]);
+  const alertas = useMemo(() => alertasDeSaude(dados, pessoaFiltro), [dados, pessoaFiltro]);
   const hoje = hojeIso();
   const proximos = useMemo(() => {
-    const agendados = dados.eventos
+    const agendados = eventosVisiveis
       .filter((evento) => evento.status === "agendado" && evento.data !== null)
       .sort((a, b) => a.data!.localeCompare(b.data!) || (a.hora ?? "").localeCompare(b.hora ?? ""));
-    const aguardando = ordenarEventos(dados.eventos.filter((evento) => evento.status === "aguardando-resultado"));
-    const solicitados = ordenarEventos(dados.eventos.filter((evento) => evento.status === "solicitado"));
-    return { agendados, aguardando, solicitados };
-  }, [dados.eventos]);
+    const aguardando = ordenarEventos(eventosVisiveis.filter((evento) => evento.status === "aguardando-resultado"));
+    const solicitados = ordenarEventos(eventosVisiveis.filter((evento) => evento.status === "solicitado"));
+    const ultimos = eventosVisiveis
+      .filter((evento) => evento.status === "realizado" && evento.data !== null)
+      .sort((a, b) => b.data!.localeCompare(a.data!) || (b.hora ?? "").localeCompare(a.hora ?? ""))
+      .slice(0, 8);
+    return { agendados, aguardando, solicitados, ultimos };
+  }, [eventosVisiveis]);
   const totalProximos = alertas.length + proximos.agendados.length + proximos.aguardando.length + proximos.solicitados.length;
 
-  const abrirNovo = useCallback((especialidadeId?: string) => {
+  const abrirNovo = useCallback((especialidadeId?: string, pessoaId?: string) => {
     definirEspecialidadeParaNovo(especialidadeId ?? null);
+    definirPessoaParaNovo(pessoaId ?? null);
     definirEventoEmEdicao("novo");
   }, []);
 
@@ -225,9 +278,11 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
 
   const contagemPorEspecialidade = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const evento of dados.eventos) mapa.set(evento.especialidadeId, (mapa.get(evento.especialidadeId) ?? 0) + 1);
+    for (const evento of eventosVisiveis) mapa.set(evento.especialidadeId, (mapa.get(evento.especialidadeId) ?? 0) + 1);
     return mapa;
-  }, [dados.eventos]);
+  }, [eventosVisiveis]);
+  // Nas linhas, o nome da pessoa só quando faz diferença: mais de uma cadastrada e filtro em "todas".
+  const mostrarPessoaNasLinhas = pessoaFiltro === null && dados.pessoas.length > 1;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -235,8 +290,18 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
         <HeartPulse size={15} className="shrink-0 text-tinta-3" />
         <h1 className="shrink-0 text-[13px] font-bold tracking-[-0.02em]">Saúde</h1>
         <span className="text-[11.5px] text-tinta-3">
-          {dados.eventos.length ? `${dados.eventos.length} ${dados.eventos.length === 1 ? "registro" : "registros"}` : ""}
+          {eventosVisiveis.length ? `${eventosVisiveis.length} ${eventosVisiveis.length === 1 ? "registro" : "registros"}` : ""}
         </span>
+        <SeletorPessoa
+          pessoas={dados.pessoas}
+          ativa={pessoaFiltro}
+          onMudar={mudarPessoaFiltro}
+          onNova={() => definirPessoaEmEdicao("nova")}
+          onGerenciar={() => {
+            definirSelecao({ tipo: "pessoas" });
+            definirEventoAtivoId(null);
+          }}
+        />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -259,6 +324,10 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
           <CadastroLocais dados={dados} aplicar={aplicar} />
         ) : selecao?.tipo === "profissionais" ? (
           <CadastroProfissionais dados={dados} aplicar={aplicar} />
+        ) : selecao?.tipo === "pessoas" ? (
+          <CadastroPessoas dados={dados} aplicar={aplicar} />
+        ) : selecao?.tipo === "planos" ? (
+          <CadastroPlanos dados={dados} aplicar={aplicar} />
         ) : selecao?.tipo === "lixeira" ? (
           <LixeiraSaude aplicar={aplicar} />
         ) : selecao?.tipo === "proximos" ? (
@@ -268,23 +337,35 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
             agendados={proximos.agendados}
             aguardando={proximos.aguardando}
             solicitados={proximos.solicitados}
+            ultimos={proximos.ultimos}
             hoje={hoje}
+            mostrarPessoa={mostrarPessoaNasLinhas}
             eventoAtivoId={eventoAtivoId}
             onSelecionar={definirEventoAtivoId}
             onNovo={abrirNovo}
             onConfigurarAlerta={(especialidade) => definirAcaoEspecialidade({ tipo: "alerta", especialidade })}
           />
         ) : selecao?.tipo === "linha" ? (
-          <VisaoLinhaDoTempo dados={dados} eventoAtivoId={eventoAtivoId} onSelecionar={definirEventoAtivoId} onNovo={() => abrirNovo()} />
+          <VisaoLinhaDoTempo
+            dados={dados}
+            eventos={eventosVisiveis}
+            mostrarPessoa={mostrarPessoaNasLinhas}
+            eventoAtivoId={eventoAtivoId}
+            onSelecionar={definirEventoAtivoId}
+            onNovo={() => abrirNovo()}
+            onExportar={() => definirExportando({ especialidade: null })}
+          />
         ) : especialidadeAtiva ? (
           <ListaEventos
             especialidade={especialidadeAtiva}
             eventos={eventosDaEspecialidade}
             dados={dados}
+            mostrarPessoa={mostrarPessoaNasLinhas}
             eventoAtivoId={eventoAtivoId}
             onSelecionar={definirEventoAtivoId}
             onNovo={() => abrirNovo(especialidadeAtiva.id)}
             onAgirEspecialidade={(tipo) => definirAcaoEspecialidade({ tipo, especialidade: especialidadeAtiva })}
+            onExportar={() => definirExportando({ especialidade: especialidadeAtiva })}
           />
         ) : (
           <div className="flex min-w-0 flex-1 items-center justify-center">
@@ -317,6 +398,7 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
         <DialogoEvento
           evento={eventoEmEdicao === "novo" ? null : eventoEmEdicao}
           especialidadeInicial={especialidadeParaNovo ?? especialidadeAtiva?.id ?? dados.especialidades[0].id}
+          pessoaInicial={pessoaParaNovo ?? pessoaFiltro ?? dados.pessoas[0].id}
           dados={dados}
           aoFechar={() => definirEventoEmEdicao(null)}
           aoSalvar={async (id, campos, extras) => {
@@ -436,6 +518,34 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
         />
       ) : null}
 
+      {pessoaEmEdicao ? (
+        <DialogoPessoa
+          pessoa={null}
+          aoFechar={() => definirPessoaEmEdicao(null)}
+          aoSalvar={async (_id, campos) => {
+            const resposta = await acaoCriarPessoa(campos);
+            if (!resposta.ok) return resposta.erro;
+            definirDados(resposta.dados);
+            mudarPessoaFiltro(resposta.id);
+            definirPessoaEmEdicao(null);
+            return null;
+          }}
+        />
+      ) : null}
+
+      {exportando ? (
+        <DialogoExportar
+          especialidade={exportando.especialidade}
+          pessoa={pessoaFiltro ? (dados.pessoas.find((item) => item.id === pessoaFiltro) ?? null) : null}
+          quantidade={
+            exportando.especialidade
+              ? eventosVisiveis.filter((evento) => evento.especialidadeId === exportando.especialidade!.id).length
+              : eventosVisiveis.length
+          }
+          aoFechar={() => definirExportando(null)}
+        />
+      ) : null}
+
       {acaoEspecialidade?.tipo === "excluir" ? (
         (contagemPorEspecialidade.get(acaoEspecialidade.especialidade.id) ?? 0) > 0 ? (
           <DialogoConfirmarComTexto
@@ -522,7 +632,7 @@ function ColunaSaude({
           alerta={temAlerta}
           onClick={() => onSelecionar({ tipo: "proximos" })}
         >
-          Próximos
+          Início
         </BotaoRodape>
         <BotaoRodape ativo={selecao?.tipo === "linha"} icone={<History size={13} />} contagem={0} onClick={() => onSelecionar({ tipo: "linha" })}>
           Linha do tempo
@@ -622,6 +732,22 @@ function ColunaSaude({
         >
           Profissionais
         </BotaoRodape>
+        <BotaoRodape
+          ativo={selecao?.tipo === "pessoas"}
+          icone={<Users size={13} />}
+          contagem={dados.pessoas.length}
+          onClick={() => onSelecionar({ tipo: "pessoas" })}
+        >
+          Pessoas
+        </BotaoRodape>
+        <BotaoRodape
+          ativo={selecao?.tipo === "planos"}
+          icone={<CreditCard size={13} />}
+          contagem={dados.planos.length}
+          onClick={() => onSelecionar({ tipo: "planos" })}
+        >
+          Planos de saúde
+        </BotaoRodape>
         <BotaoRodape ativo={selecao?.tipo === "lixeira"} icone={<Trash2 size={13} />} contagem={0} onClick={() => onSelecionar({ tipo: "lixeira" })}>
           Lixeira
         </BotaoRodape>
@@ -672,21 +798,26 @@ function ListaEventos({
   especialidade,
   eventos,
   dados,
+  mostrarPessoa,
   eventoAtivoId,
   onSelecionar,
   onNovo,
   onAgirEspecialidade,
+  onExportar,
 }: {
   especialidade: EspecialidadeSaude;
   eventos: EventoSaude[];
   dados: DadosSaude;
+  mostrarPessoa: boolean;
   eventoAtivoId: string | null;
   onSelecionar: (id: string) => void;
   onNovo: () => void;
   onAgirEspecialidade: (tipo: "renomear" | "icone" | "cor" | "alerta" | "excluir") => void;
+  onExportar: () => void;
 }) {
   const profissionais = useMemo(() => new Map(dados.profissionais.map((item) => [item.id, item.nome])), [dados.profissionais]);
   const locais = useMemo(() => new Map(dados.locais.map((item) => [item.id, item.nome])), [dados.locais]);
+  const pessoas = useMemo(() => new Map(dados.pessoas.map((item) => [item.id, item.nome])), [dados.pessoas]);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col" style={{ "--realce": especialidade.cor } as React.CSSProperties}>
@@ -711,6 +842,10 @@ function ListaEventos({
                 <ItemMenu icone={<span className="size-3 rounded-full" style={{ background: especialidade.cor }} />} onClick={() => { fechar(); onAgirEspecialidade("cor"); }}>Cor</ItemMenu>
                 <ItemMenu icone={<BellRing size={14} />} onClick={() => { fechar(); onAgirEspecialidade("alerta"); }}>
                   {especialidade.mesesAlerta === null ? "Alerta…" : `Alerta: ${especialidade.mesesAlerta} meses`}
+                </ItemMenu>
+                <SeparadorMenu />
+                <ItemMenu icone={<Download size={14} />} onClick={() => { fechar(); onExportar(); }} disabled={eventos.length === 0}>
+                  Exportar histórico…
                 </ItemMenu>
                 <SeparadorMenu />
                 <ItemMenu icone={<Trash2 size={14} />} perigo onClick={() => { fechar(); onAgirEspecialidade("excluir"); }}>Excluir</ItemMenu>
@@ -743,6 +878,7 @@ function ListaEventos({
                 evento={evento}
                 profissional={evento.profissionalId ? (profissionais.get(evento.profissionalId) ?? null) : null}
                 local={evento.localId ? (locais.get(evento.localId) ?? null) : null}
+                pessoa={mostrarPessoa ? (pessoas.get(evento.pessoaId) ?? null) : null}
                 ativa={evento.id === eventoAtivoId}
                 onSelecionar={onSelecionar}
               />
@@ -759,14 +895,17 @@ const LinhaEvento = memo(function LinhaEvento({
   profissional,
   local,
   especialidade,
+  pessoa,
   ativa,
   onSelecionar,
 }: {
   evento: EventoSaude;
   profissional: string | null;
   local: string | null;
-  /** Nas visões que misturam especialidades (Próximos, linha do tempo), a linha diz de qual é. */
+  /** Nas visões que misturam especialidades (Início, linha do tempo), a linha diz de qual é. */
   especialidade?: EspecialidadeSaude | null;
+  /** Com mais de uma pessoa e o filtro em "todas", a linha diz de quem é. */
+  pessoa?: string | null;
   ativa: boolean;
   onSelecionar: (id: string) => void;
 }) {
@@ -794,9 +933,11 @@ const LinhaEvento = memo(function LinhaEvento({
             <span className="shrink-0 text-[10.5px] text-tinta-3">{ROTULO_TIPO[evento.tipo]}</span>
           ) : null}
         </span>
-        {profissional || local || especialidade ? (
+        {profissional || local || especialidade || pessoa ? (
           <span className="block truncate text-[11.5px] text-tinta-3">
-            {[especialidade ? `${especialidade.icone} ${especialidade.nome}` : null, profissional, local].filter(Boolean).join(" · ")}
+            {[pessoa ? `👤 ${pessoa}` : null, especialidade ? `${especialidade.icone} ${especialidade.nome}` : null, profissional, local]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         ) : null}
       </span>
@@ -835,6 +976,8 @@ function DetalheEvento({
   const profissional = evento.profissionalId ? (dados.profissionais.find((item) => item.id === evento.profissionalId) ?? null) : null;
   const local = evento.localId ? (dados.locais.find((item) => item.id === evento.localId) ?? null) : null;
   const pedidoPor = evento.pedidoPorId ? (dados.eventos.find((item) => item.id === evento.pedidoPorId) ?? null) : null;
+  const pessoa = dados.pessoas.length > 1 ? (dados.pessoas.find((item) => item.id === evento.pessoaId) ?? null) : null;
+  const plano = evento.planoId ? (dados.planos.find((item) => item.id === evento.planoId) ?? null) : null;
   const derivados = useMemo(
     () => ordenarEventos(dados.eventos.filter((item) => item.pedidoPorId === evento.id)),
     [dados.eventos, evento.id],
@@ -891,6 +1034,8 @@ function DetalheEvento({
           <p className="mt-0.5 text-[12.5px] text-tinta-2">
             {formatarDataSaude(evento.data)}
             {evento.hora ? ` às ${evento.hora}` : ""}
+            {pessoa ? ` · ${pessoa.nome}` : ""}
+            {plano ? ` · ${plano.nome}` : ""}
           </p>
         </div>
         <BotaoIcone rotulo="Editar" onClick={onEditar}>
@@ -1040,12 +1185,14 @@ function DetalheEvento({
 function DialogoEvento({
   evento,
   especialidadeInicial,
+  pessoaInicial,
   dados,
   aoFechar,
   aoSalvar,
 }: {
   evento: EventoSaude | null;
   especialidadeInicial: string;
+  pessoaInicial: string;
   dados: DadosSaude;
   aoFechar: () => void;
   aoSalvar: (id: string | null, campos: CamposEvento, extras: ExtrasEvento) => Promise<string | null>;
@@ -1053,6 +1200,8 @@ function DialogoEvento({
   const [tipo, definirTipo] = useState<TipoEventoSaude>(evento?.tipo ?? "consulta");
   const [titulo, definirTitulo] = useState(evento?.titulo ?? "");
   const [especialidadeId, definirEspecialidadeId] = useState(evento?.especialidadeId ?? especialidadeInicial);
+  const [pessoaId, definirPessoaId] = useState(evento?.pessoaId ?? pessoaInicial);
+  const [planoId, definirPlanoId] = useState<string | null>(evento?.planoId ?? null);
   const [data, definirData] = useState(evento?.data ?? "");
   const [hora, definirHora] = useState(evento?.hora ?? "");
   const [profissionalId, definirProfissionalId] = useState<string | null>(evento?.profissionalId ?? null);
@@ -1097,6 +1246,8 @@ function DialogoEvento({
       {
         tipo,
         especialidadeId,
+        pessoaId,
+        planoId,
         titulo: tituloFinal,
         data: data || null,
         hora: hora || null,
@@ -1186,6 +1337,30 @@ function DialogoEvento({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
+            <Rotulo>Pessoa</Rotulo>
+            <select value={pessoaId} onChange={(e) => definirPessoaId(e.target.value)} className={CLASSE_SELECT}>
+              {dados.pessoas.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Rotulo>Plano de saúde</Rotulo>
+            <select value={planoId ?? ""} onChange={(e) => definirPlanoId(e.target.value || null)} className={CLASSE_SELECT}>
+              <option value="">—</option>
+              {dados.planos.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
             <Rotulo>Profissional</Rotulo>
             <select value={profissionalId ?? ""} onChange={(e) => mudarProfissional(e.target.value || null)} className={CLASSE_SELECT}>
               <option value="">—</option>
@@ -1263,6 +1438,7 @@ function useMapas(dados: DadosSaude) {
       profissionais: new Map(dados.profissionais.map((item) => [item.id, item.nome])),
       locais: new Map(dados.locais.map((item) => [item.id, item.nome])),
       especialidades: new Map(dados.especialidades.map((item) => [item.id, item])),
+      pessoas: new Map(dados.pessoas.map((item) => [item.id, item.nome])),
     }),
     [dados],
   );
@@ -1286,7 +1462,9 @@ function VisaoProximos({
   agendados,
   aguardando,
   solicitados,
+  ultimos,
   hoje,
+  mostrarPessoa,
   eventoAtivoId,
   onSelecionar,
   onNovo,
@@ -1297,14 +1475,16 @@ function VisaoProximos({
   agendados: EventoSaude[];
   aguardando: EventoSaude[];
   solicitados: EventoSaude[];
+  ultimos: EventoSaude[];
   hoje: string;
+  mostrarPessoa: boolean;
   eventoAtivoId: string | null;
   onSelecionar: (id: string) => void;
-  onNovo: (especialidadeId?: string) => void;
+  onNovo: (especialidadeId?: string, pessoaId?: string) => void;
   onConfigurarAlerta: (especialidade: EspecialidadeSaude) => void;
 }) {
   const mapas = useMapas(dados);
-  const vazio = alertas.length === 0 && agendados.length === 0 && aguardando.length === 0 && solicitados.length === 0;
+  const vazio = alertas.length === 0 && agendados.length === 0 && aguardando.length === 0 && solicitados.length === 0 && ultimos.length === 0;
   const semAlertaConfigurado = dados.especialidades.length > 0 && dados.especialidades.every((item) => item.mesesAlerta === null);
 
   const linha = (evento: EventoSaude) => (
@@ -1314,6 +1494,7 @@ function VisaoProximos({
       profissional={evento.profissionalId ? (mapas.profissionais.get(evento.profissionalId) ?? null) : null}
       local={evento.localId ? (mapas.locais.get(evento.localId) ?? null) : null}
       especialidade={mapas.especialidades.get(evento.especialidadeId) ?? null}
+      pessoa={mostrarPessoa ? (mapas.pessoas.get(evento.pessoaId) ?? null) : null}
       ativa={evento.id === eventoAtivoId}
       onSelecionar={onSelecionar}
     />
@@ -1323,7 +1504,7 @@ function VisaoProximos({
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
         <CalendarClock size={15} className="text-tinta-3" />
-        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Próximos</h2>
+        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Início</h2>
         <Botao variante="primario" onClick={() => onNovo()} className="ml-auto" disabled={dados.especialidades.length === 0}>
           <Plus size={13} />
           Novo registro
@@ -1336,8 +1517,8 @@ function VisaoProximos({
             titulo="Nada esperando"
             descricao={
               semAlertaConfigurado
-                ? "Nenhum agendamento, nenhum pedido em aberto. Dica: nas opções de uma especialidade, defina um alerta — “6 meses sem consulta” — e ela aparece aqui quando passar."
-                : "Nenhum agendamento, nenhum pedido em aberto, nenhuma especialidade atrasada."
+                ? "Nenhum agendamento, nenhum pedido em aberto, nada registrado. Dica: nas opções de uma especialidade, defina um alerta — “6 meses sem consulta” — e ela aparece aqui quando passar."
+                : "Nenhum agendamento, nenhum pedido em aberto, nenhuma especialidade atrasada, nada registrado ainda."
             }
           />
         ) : null}
@@ -1350,14 +1531,17 @@ function VisaoProximos({
             <div className="space-y-0.5">
               {alertas.map((alerta) => (
                 <div
-                  key={alerta.especialidade.id}
+                  key={`${alerta.pessoa.id}:${alerta.especialidade.id}`}
                   className="flex items-center gap-3 rounded-lg border border-[color-mix(in_srgb,#F5822C_35%,transparent)] bg-[color-mix(in_srgb,#F5822C_7%,transparent)] px-3 py-2"
                 >
                   <span aria-hidden className="text-[16px]">
                     {alerta.especialidade.icone}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium text-tinta">{alerta.especialidade.nome}</span>
+                    <span className="block text-[13px] font-medium text-tinta">
+                      {alerta.especialidade.nome}
+                      {mostrarPessoa ? <span className="font-normal text-tinta-2"> · {alerta.pessoa.nome}</span> : null}
+                    </span>
                     <span className="block text-[11.5px] text-tinta-3">
                       {alerta.ultimaConsulta
                         ? `Última consulta em ${formatarDataSaude(alerta.ultimaConsulta)} — há ${alerta.mesesDesde} ${alerta.mesesDesde === 1 ? "mês" : "meses"}; o alerta é de ${alerta.especialidade.mesesAlerta}.`
@@ -1368,7 +1552,7 @@ function VisaoProximos({
                     <BellRing size={12} />
                     Ajustar
                   </Botao>
-                  <Botao variante="primario" className="h-7 px-2 text-[11.5px]" onClick={() => onNovo(alerta.especialidade.id)}>
+                  <Botao variante="primario" className="h-7 px-2 text-[11.5px]" onClick={() => onNovo(alerta.especialidade.id, alerta.pessoa.id)}>
                     <Plus size={12} />
                     Agendar
                   </Botao>
@@ -1391,6 +1575,9 @@ function VisaoProximos({
         <SecaoDeLista titulo="Solicitados, sem data" contagem={solicitados.length}>
           {solicitados.map(linha)}
         </SecaoDeLista>
+        <SecaoDeLista titulo="Últimos registros" contagem={ultimos.length}>
+          {ultimos.map(linha)}
+        </SecaoDeLista>
       </div>
     </div>
   );
@@ -1398,19 +1585,25 @@ function VisaoProximos({
 
 function VisaoLinhaDoTempo({
   dados,
+  eventos,
+  mostrarPessoa,
   eventoAtivoId,
   onSelecionar,
   onNovo,
+  onExportar,
 }: {
   dados: DadosSaude;
+  eventos: EventoSaude[];
+  mostrarPessoa: boolean;
   eventoAtivoId: string | null;
   onSelecionar: (id: string) => void;
   onNovo: () => void;
+  onExportar: () => void;
 }) {
   const mapas = useMapas(dados);
   // Por mês, do mais recente pro mais antigo; o que não tem data vai num grupo próprio no topo.
   const grupos = useMemo(() => {
-    const ordenados = ordenarEventos(dados.eventos);
+    const ordenados = ordenarEventos(eventos);
     const lista: { chave: string; rotulo: string; eventos: EventoSaude[] }[] = [];
     for (const evento of ordenados) {
       const chave = evento.data ? evento.data.slice(0, 7) : "sem-data";
@@ -1419,15 +1612,19 @@ function VisaoLinhaDoTempo({
       else lista.push({ chave, rotulo: evento.data ? rotuloDoMes(evento.data) : "Sem data", eventos: [evento] });
     }
     return lista;
-  }, [dados.eventos]);
+  }, [eventos]);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
         <History size={15} className="text-tinta-3" />
         <h2 className="text-[14px] font-bold tracking-[-0.02em]">Linha do tempo</h2>
-        <span className="text-[11.5px] text-tinta-3">{dados.eventos.length ? `${dados.eventos.length} registros` : ""}</span>
-        <Botao variante="primario" onClick={onNovo} className="ml-auto" disabled={dados.especialidades.length === 0}>
+        <span className="text-[11.5px] text-tinta-3">{eventos.length ? `${eventos.length} registros` : ""}</span>
+        <Botao onClick={onExportar} className="ml-auto" disabled={eventos.length === 0}>
+          <Download size={13} />
+          Exportar tudo
+        </Botao>
+        <Botao variante="primario" onClick={onNovo} disabled={dados.especialidades.length === 0}>
           <Plus size={13} />
           Novo registro
         </Botao>
@@ -1445,6 +1642,7 @@ function VisaoLinhaDoTempo({
                 profissional={evento.profissionalId ? (mapas.profissionais.get(evento.profissionalId) ?? null) : null}
                 local={evento.localId ? (mapas.locais.get(evento.localId) ?? null) : null}
                 especialidade={mapas.especialidades.get(evento.especialidadeId) ?? null}
+                pessoa={mostrarPessoa ? (mapas.pessoas.get(evento.pessoaId) ?? null) : null}
                 ativa={evento.id === eventoAtivoId}
                 onSelecionar={onSelecionar}
               />
@@ -1652,6 +1850,365 @@ function LixeiraSaude({ aplicar }: { aplicar: (resposta: RespostaSaude) => boole
         />
       ) : null}
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Pessoas                                                                  */
+/* ---------------------------------------------------------------------- */
+
+/** "Todos · Eu · Maria · +" no cabeçalho — o que filtra o subapp inteiro. */
+function SeletorPessoa({
+  pessoas,
+  ativa,
+  onMudar,
+  onNova,
+  onGerenciar,
+}: {
+  pessoas: PessoaSaude[];
+  ativa: string | null;
+  onMudar: (id: string | null) => void;
+  onNova: () => void;
+  onGerenciar: () => void;
+}) {
+  const classe = (selecionada: boolean) =>
+    clsx(
+      "rounded-md px-2.5 py-1 text-[12px] whitespace-nowrap transition-colors",
+      selecionada ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
+    );
+  return (
+    <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-linha p-0.5" role="group" aria-label="Pessoa">
+      <button type="button" onClick={() => onMudar(null)} aria-pressed={ativa === null} className={classe(ativa === null)}>
+        Todos
+      </button>
+      {pessoas.map((pessoa) => (
+        <button
+          key={pessoa.id}
+          type="button"
+          onClick={() => onMudar(pessoa.id)}
+          onDoubleClick={onGerenciar}
+          aria-pressed={ativa === pessoa.id}
+          className={classe(ativa === pessoa.id)}
+        >
+          {pessoa.nome}
+        </button>
+      ))}
+      <BotaoIcone rotulo="Nova pessoa" onClick={onNova} className="size-6">
+        <Plus size={13} />
+      </BotaoIcone>
+    </div>
+  );
+}
+
+function CadastroPessoas({ dados, aplicar }: { dados: DadosSaude; aplicar: (resposta: RespostaSaude) => boolean }) {
+  const [emEdicao, definirEmEdicao] = useState<PessoaSaude | "nova" | null>(null);
+  const [excluindo, definirExcluindo] = useState<PessoaSaude | null>(null);
+  const registrosPorPessoa = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const evento of dados.eventos) mapa.set(evento.pessoaId, (mapa.get(evento.pessoaId) ?? 0) + 1);
+    return mapa;
+  }, [dados.eventos]);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <CabecalhoCadastro icone={<Users size={15} />} titulo="Pessoas" contagem={dados.pessoas.length} onNovo={() => definirEmEdicao("nova")} textoNovo="Nova pessoa" />
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        <div className="mx-auto max-w-3xl space-y-0.5">
+          {dados.pessoas.map((pessoa) => {
+            const idade = idadeEmAnos(pessoa.nascimento);
+            const registros = registrosPorPessoa.get(pessoa.id) ?? 0;
+            return (
+              <div key={pessoa.id} className="group flex items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-realce-fraco">
+                <button type="button" onClick={() => definirEmEdicao(pessoa)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate text-[13px] font-medium text-tinta">{pessoa.nome}</span>
+                  <span className="block truncate text-[11.5px] text-tinta-3">
+                    {[
+                      pessoa.nascimento ? `${formatarDataSaude(pessoa.nascimento)}${idade !== null ? ` · ${idade} ${idade === 1 ? "ano" : "anos"}` : ""}` : null,
+                      registros ? `${registros} ${registros === 1 ? "registro" : "registros"}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Sem data de nascimento"}
+                  </span>
+                </button>
+                <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                  <BotaoIcone rotulo="Editar" onClick={() => definirEmEdicao(pessoa)} className="size-7">
+                    <Pencil size={13} />
+                  </BotaoIcone>
+                  <BotaoIcone rotulo="Excluir" onClick={() => definirExcluindo(pessoa)} className="size-7" disabled={dados.pessoas.length <= 1}>
+                    <Trash2 size={13} />
+                  </BotaoIcone>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {emEdicao ? (
+        <DialogoPessoa
+          pessoa={emEdicao === "nova" ? null : emEdicao}
+          aoFechar={() => definirEmEdicao(null)}
+          aoSalvar={async (id, campos) => {
+            const resposta = id ? await acaoAtualizarPessoa(id, campos) : await acaoCriarPessoa(campos);
+            if (!resposta.ok) return resposta.erro;
+            aplicar(resposta);
+            definirEmEdicao(null);
+            return null;
+          }}
+        />
+      ) : null}
+
+      {excluindo ? (
+        <DialogoConfirmar
+          aberto
+          titulo={`Excluir ${excluindo.nome}?`}
+          descricao={
+            registrosPorPessoa.get(excluindo.id)
+              ? `Não dá: ${registrosPorPessoa.get(excluindo.id)} registros são dela. Mova ou exclua os registros antes.`
+              : "Sem registros — pode excluir."
+          }
+          textoBotao="Excluir"
+          aoFechar={() => definirExcluindo(null)}
+          aoConfirmar={async () => {
+            const resposta = await acaoExcluirPessoa(excluindo.id);
+            if (!resposta.ok) return resposta.erro;
+            aplicar(resposta);
+            definirExcluindo(null);
+            return null;
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function DialogoPessoa({
+  pessoa,
+  aoFechar,
+  aoSalvar,
+}: {
+  pessoa: PessoaSaude | null;
+  aoFechar: () => void;
+  aoSalvar: (id: string | null, campos: CamposPessoa) => Promise<string | null>;
+}) {
+  const [nome, definirNome] = useState(pessoa?.nome ?? "");
+  const [nascimento, definirNascimento] = useState(pessoa?.nascimento ?? "");
+  const [salvando, definirSalvando] = useState(false);
+  const [erro, definirErro] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    definirSalvando(true);
+    const falha = await aoSalvar(pessoa?.id ?? null, { nome, nascimento: nascimento || null });
+    definirSalvando(false);
+    if (falha) definirErro(falha);
+  }
+
+  return (
+    <Dialogo titulo={pessoa ? "Editar pessoa" : "Nova pessoa"} descricao="Só o registro é da pessoa — especialidades, locais e profissionais valem pra todos." aberto aoFechar={aoFechar}>
+      <form onSubmit={enviar} className="space-y-3">
+        <div>
+          <Rotulo>Nome</Rotulo>
+          <Campo autoFocus value={nome} onChange={(e) => definirNome(e.target.value)} placeholder="Maria, João…" />
+        </div>
+        <div>
+          <Rotulo>Data de nascimento (opcional)</Rotulo>
+          <Campo type="date" value={nascimento} onChange={(e) => definirNascimento(e.target.value)} className="w-48" />
+        </div>
+        <Aviso>{erro}</Aviso>
+        <div className="flex justify-end gap-2 pt-1">
+          <Botao onClick={aoFechar}>Cancelar</Botao>
+          <Botao type="submit" variante="primario" disabled={salvando || !nome.trim()}>
+            {pessoa ? "Salvar" : "Criar"}
+          </Botao>
+        </div>
+      </form>
+    </Dialogo>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Planos de saúde                                                          */
+/* ---------------------------------------------------------------------- */
+
+function CadastroPlanos({ dados, aplicar }: { dados: DadosSaude; aplicar: (resposta: RespostaSaude) => boolean }) {
+  const [novo, definirNovo] = useState("");
+  const [erro, definirErro] = useState<string | null>(null);
+  const [renomeando, definirRenomeando] = useState<PlanoSaude | null>(null);
+  const [excluindo, definirExcluindo] = useState<PlanoSaude | null>(null);
+  const usoPorPlano = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const evento of dados.eventos) if (evento.planoId) mapa.set(evento.planoId, (mapa.get(evento.planoId) ?? 0) + 1);
+    return mapa;
+  }, [dados.eventos]);
+
+  async function criar() {
+    if (!novo.trim()) return;
+    const resposta = await acaoCriarPlano(novo);
+    if (!resposta.ok) {
+      definirErro(resposta.erro);
+      return;
+    }
+    aplicar(resposta);
+    definirNovo("");
+    definirErro(null);
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
+        <CreditCard size={15} className="text-tinta-3" />
+        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Planos de saúde</h2>
+        <span className="text-[11.5px] text-tinta-3">{dados.planos.length || ""}</span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex gap-1.5">
+            <Campo
+              value={novo}
+              placeholder="Novo plano (Unimed, Bradesco Saúde…)"
+              onChange={(e) => definirNovo(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  criar();
+                }
+              }}
+            />
+            <Botao variante="primario" onClick={criar} disabled={!novo.trim()}>
+              <Plus size={13} />
+              Criar
+            </Botao>
+          </div>
+          <Aviso>{erro}</Aviso>
+          <p className="mt-2 text-[11.5px] text-tinta-3">O plano é escolhido em cada registro, sempre à mão — a lista aqui só evita digitar o nome de novo.</p>
+          <div className="mt-3 space-y-0.5">
+            {dados.planos.length === 0 ? <p className="px-2 py-3 text-[12px] text-tinta-3">Nenhum plano cadastrado.</p> : null}
+            {dados.planos.map((plano) => (
+              <div key={plano.id} className="group flex items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-realce-fraco">
+                <span className="min-w-0 flex-1 truncate text-[13px] text-tinta">{plano.nome}</span>
+                <span className="text-[11px] text-tinta-3 tabular-nums">{usoPorPlano.get(plano.id) ? `${usoPorPlano.get(plano.id)} registros` : ""}</span>
+                <div className="flex shrink-0 items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                  <BotaoIcone rotulo="Renomear" onClick={() => definirRenomeando(plano)} className="size-7">
+                    <Pencil size={13} />
+                  </BotaoIcone>
+                  <BotaoIcone rotulo="Excluir" onClick={() => definirExcluindo(plano)} className="size-7">
+                    <Trash2 size={13} />
+                  </BotaoIcone>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {renomeando ? (
+        <DialogoNome
+          aberto
+          titulo="Renomear plano"
+          rotulo="Nome"
+          valorInicial={renomeando.nome}
+          textoBotao="Salvar"
+          aoFechar={() => definirRenomeando(null)}
+          aoConfirmar={async (nome) => {
+            const resposta = await acaoRenomearPlano(renomeando.id, nome);
+            if (!resposta.ok) return resposta.erro;
+            aplicar(resposta);
+            definirRenomeando(null);
+            return null;
+          }}
+        />
+      ) : null}
+
+      {excluindo ? (
+        <DialogoConfirmar
+          aberto
+          titulo={`Excluir o plano ${excluindo.nome}?`}
+          descricao={
+            usoPorPlano.get(excluindo.id)
+              ? `${usoPorPlano.get(excluindo.id)} registros ficam sem plano — nenhum é apagado.`
+              : "Nenhum registro usa este plano."
+          }
+          textoBotao="Excluir"
+          aoFechar={() => definirExcluindo(null)}
+          aoConfirmar={async () => {
+            const resposta = await acaoExcluirPlano(excluindo.id);
+            if (!resposta.ok) return resposta.erro;
+            aplicar(resposta);
+            definirExcluindo(null);
+            return null;
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Exportar                                                                 */
+/* ---------------------------------------------------------------------- */
+
+function DialogoExportar({
+  especialidade,
+  pessoa,
+  quantidade,
+  aoFechar,
+}: {
+  especialidade: EspecialidadeSaude | null;
+  pessoa: PessoaSaude | null;
+  quantidade: number;
+  aoFechar: () => void;
+}) {
+  const consulta = new URLSearchParams();
+  if (especialidade) consulta.set("especialidade", especialidade.id);
+  if (pessoa) consulta.set("pessoa", pessoa.id);
+  const base = consulta.toString();
+  const escopo = `${especialidade ? especialidade.nome : "todas as especialidades"} · ${pessoa ? pessoa.nome : "todas as pessoas"}`;
+
+  function baixar(formato: "md" | "zip") {
+    const link = document.createElement("a");
+    link.href = `/saude/exportar?${base}${base ? "&" : ""}formato=${formato}`;
+    link.click();
+    aoFechar();
+  }
+
+  return (
+    <Dialogo
+      titulo="Exportar histórico"
+      descricao={`${escopo} — ${quantidade} ${quantidade === 1 ? "registro" : "registros"}, do mais antigo ao mais recente, com tudo que cada um guarda.`}
+      aberto
+      aoFechar={aoFechar}
+    >
+      <div className="space-y-1.5">
+        <OpcaoExportar icone={<Printer size={15} />} titulo="Abrir para imprimir" descricao="Página limpa; Ctrl+P salva em PDF pra levar ao médico." onClick={() => {
+          window.open(`/saude-imprimir?${base}`, "_blank", "noopener");
+          aoFechar();
+        }} />
+        <OpcaoExportar icone={<Download size={15} />} titulo="Baixar .md" descricao="Texto puro, abre em qualquer lugar; os anexos aparecem pelo nome." onClick={() => baixar("md")} />
+        <OpcaoExportar icone={<FileArchive size={15} />} titulo="Baixar .zip com anexos" descricao="O .md mais os laudos e receitas, numa pasta por registro." onClick={() => baixar("zip")} />
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Botao variante="sutil" onClick={aoFechar}>
+          Cancelar
+        </Botao>
+      </div>
+    </Dialogo>
+  );
+}
+
+function OpcaoExportar({ icone, titulo, descricao, onClick }: { icone: React.ReactNode; titulo: string; descricao: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-3 rounded-lg border border-linha px-3 py-2.5 text-left transition-colors hover:bg-realce-fraco"
+    >
+      <span className="mt-0.5 shrink-0 text-tinta-3">{icone}</span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-tinta">{titulo}</span>
+        <span className="block text-[11.5px] text-tinta-2">{descricao}</span>
+      </span>
+    </button>
   );
 }
 

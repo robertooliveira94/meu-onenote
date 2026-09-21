@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import * as saudeApp from "@/lib/saude-app";
-import type { CamposEvento, CamposLocal, CamposProfissional, EventoAchado, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
+import type { CamposEvento, CamposLocal, CamposPessoa, CamposProfissional, EventoAchado, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
 import type { DadosSaude, EspecialidadeSaude, StatusEventoSaude } from "@/lib/tipos";
 
 /** Ações da app de Saúde — tudo devolve os dados inteiros, como Links e Compras. Os dados só aparecem em `/saude`. */
@@ -125,4 +125,36 @@ export async function acaoApagarDeVezDaLixeiraSaude(id: string): Promise<{ ok: t
 export async function acaoEsvaziarLixeiraSaude(): Promise<{ ok: true }> {
   await saudeApp.esvaziarLixeira();
   return { ok: true };
+}
+
+// pessoas
+export async function acaoCriarPessoa(campos: CamposPessoa): Promise<{ ok: true; dados: DadosSaude; id: string } | { ok: false; erro: string }> {
+  try {
+    const { dados, id } = await saudeApp.criarPessoa(campos);
+    revalidatePath("/saude", "layout");
+    return { ok: true, dados, id };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu certo." };
+  }
+}
+
+export async function acaoAtualizarPessoa(id: string, campos: CamposPessoa): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.atualizarPessoa(id, campos));
+}
+
+export async function acaoExcluirPessoa(id: string): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.excluirPessoa(id));
+}
+
+// planos
+export async function acaoCriarPlano(nome: string): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.criarPlano(nome));
+}
+
+export async function acaoRenomearPlano(id: string, nome: string): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.renomearPlano(id, nome));
+}
+
+export async function acaoExcluirPlano(id: string): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.excluirPlano(id));
 }

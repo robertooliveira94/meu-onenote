@@ -795,6 +795,7 @@ textarea:focus {
   dependência nenhuma. Em edição, imprime a prévia; sem prévia, o texto cru.
 */
 @media print {
+  .esconde-na-impressao,
   .esconde-no-foco:not(header),
   [role="tablist"],
   [role="search"],

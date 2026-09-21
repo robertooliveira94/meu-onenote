@@ -567,6 +567,30 @@ limpas e abríveis em qualquer editor.
     uma especialidade com registros) manda pra lá com os anexos ainda em
     disco; restaurar volta pra especialidade de origem (ou por nome, se
     ela foi recriada); apagar de vez / esvaziar é o que apaga os arquivos.
+  - **Pessoas**: o app cria "Eu" sozinho (renomeável) e adota o que já
+    existia; a família entra em "Pessoas" (nome e data de nascimento —
+    mostra a idade) ou pelo "+" do seletor. Só o **registro** é de uma
+    pessoa; especialidades, locais e profissionais valem pra todos. O
+    **seletor no cabeçalho** ("Todos · Eu · Maria"), lembrado no
+    navegador, filtra tudo — árvore, Início, linha do tempo, alertas,
+    exportação — e o registro novo já nasce da pessoa escolhida. Em
+    "Todos" com mais de uma pessoa, cada linha diz de quem é. O alerta
+    "está na hora" é **por pessoa** (Maria atrasada, você em dia), e só
+    numa especialidade em que a pessoa tenha algum registro — o filho não
+    está atrasado no cardiologista. Pessoa com registros não se exclui.
+  - **Plano de saúde**: lista editável ("Planos de saúde" no rodapé),
+    nascendo com Sulamérica, IPM e Particular. É campo do **registro**,
+    sempre em branco até ser escolhido — a pessoa não tem plano: cada
+    consulta diz por qual foi. Aparece no detalhe e no exportado; sem
+    filtro por plano por enquanto.
+  - **Exportar histórico** ("Exportar histórico…" nas opções da
+    especialidade, "Exportar tudo" na linha do tempo), sempre da pessoa
+    do filtro: **página para imprimir** (`/saude-imprimir`, Ctrl+P → PDF
+    pra levar ao médico), **.md** (rota `/saude/exportar`) ou **.zip**
+    com o .md e os anexos numa pasta por registro. Ordem cronológica
+    crescente, como um prontuário se lê; cada registro com tipo, pessoa,
+    status, profissional, local, plano, observações e anexos pelo nome.
+    "Início" (o antigo Próximos) ganhou "Últimos registros" embaixo.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de

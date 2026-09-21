@@ -9,6 +9,7 @@ import type {
   EspecialidadeSaude,
   EventoSaude,
   LocalSaude,
+  PessoaSaude,
   ProfissionalSaude,
   StatusEventoSaude,
   TipoEventoSaude,
@@ -37,17 +38,41 @@ function gerarId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Id fixo da pessoa que o app cria sozinho — os registros de antes de existir "pessoa" são dela. */
+export const ID_PESSOA_EU = "eu";
+
+const PLANOS_INICIAIS = ["Sulamérica", "IPM", "Particular"];
+
+/**
+ * Dados de antes de pessoas/planos existirem ganham o padrão na leitura:
+ * a pessoa "Eu" (renomeável), os três planos iniciais (só quando a lista
+ * nunca existiu — esvaziar de propósito é respeitado) e `pessoaId`/`planoId`
+ * em cada registro.
+ */
+function normalizar(bruto: Partial<DadosSaude>): DadosSaude {
+  const pessoas = bruto.pessoas?.length ? bruto.pessoas : [{ id: ID_PESSOA_EU, nome: "Eu", nascimento: null }];
+  const planos = bruto.planos ?? PLANOS_INICIAIS.map((nome, i) => ({ id: `plano${i + 1}`, nome }));
+  const idsPessoas = new Set(pessoas.map((pessoa) => pessoa.id));
+  const eventos = (bruto.eventos ?? []).map((evento) => ({
+    ...evento,
+    pessoaId: evento.pessoaId && idsPessoas.has(evento.pessoaId) ? evento.pessoaId : pessoas[0].id,
+    planoId: evento.planoId ?? null,
+  }));
+  return {
+    especialidades: bruto.especialidades ?? [],
+    locais: bruto.locais ?? [],
+    profissionais: bruto.profissionais ?? [],
+    pessoas,
+    planos,
+    eventos,
+  };
+}
+
 async function lerDados(): Promise<DadosSaude> {
   try {
-    const dados = JSON.parse(await fs.readFile(ARQUIVO_DADOS, "utf8")) as Partial<DadosSaude>;
-    return {
-      especialidades: dados.especialidades ?? [],
-      locais: dados.locais ?? [],
-      profissionais: dados.profissionais ?? [],
-      eventos: dados.eventos ?? [],
-    };
+    return normalizar(JSON.parse(await fs.readFile(ARQUIVO_DADOS, "utf8")) as Partial<DadosSaude>);
   } catch {
-    return { especialidades: [], locais: [], profissionais: [], eventos: [] };
+    return normalizar({});
   }
 }
 
@@ -235,11 +260,83 @@ export async function excluirProfissional(id: string): Promise<DadosSaude> {
   });
 }
 
+// ----------------------------------------------------------------- pessoas
+
+export type CamposPessoa = Omit<PessoaSaude, "id">;
+
+function limparPessoa(campos: CamposPessoa): CamposPessoa {
+  return {
+    nome: nomeLimpo(campos.nome, "a pessoa"),
+    nascimento: campos.nascimento && DATA_ISO.test(campos.nascimento) ? campos.nascimento : null,
+  };
+}
+
+export async function criarPessoa(campos: CamposPessoa): Promise<{ dados: DadosSaude; id: string }> {
+  return alterar((dados) => {
+    const id = gerarId();
+    dados.pessoas.push({ id, ...limparPessoa(campos) });
+    return { dados, id };
+  });
+}
+
+export async function atualizarPessoa(id: string, campos: CamposPessoa): Promise<DadosSaude> {
+  return alterar((dados) => {
+    const pessoa = dados.pessoas.find((item) => item.id === id);
+    if (!pessoa) throw new Error("Pessoa não encontrada.");
+    Object.assign(pessoa, limparPessoa(campos));
+    return dados;
+  });
+}
+
+/** Não apaga registros por tabela: com registros, a pessoa fica; e a última pessoa nunca sai. */
+export async function excluirPessoa(id: string): Promise<DadosSaude> {
+  return alterar((dados) => {
+    if (dados.pessoas.length <= 1) throw new Error("Precisa existir pelo menos uma pessoa.");
+    const registros = dados.eventos.filter((evento) => evento.pessoaId === id).length;
+    if (registros) {
+      throw new Error(`${registros} ${registros === 1 ? "registro é" : "registros são"} dessa pessoa — mova ou exclua antes.`);
+    }
+    dados.pessoas = dados.pessoas.filter((item) => item.id !== id);
+    return dados;
+  });
+}
+
+// ------------------------------------------------------------------ planos
+
+export async function criarPlano(nome: string): Promise<DadosSaude> {
+  return alterar((dados) => {
+    const limpo = nomeLimpo(nome, "o plano", 60);
+    if (dados.planos.some((plano) => plano.nome.toLowerCase() === limpo.toLowerCase())) throw new Error("Já existe um plano com esse nome.");
+    dados.planos.push({ id: gerarId(), nome: limpo });
+    return dados;
+  });
+}
+
+export async function renomearPlano(id: string, nome: string): Promise<DadosSaude> {
+  return alterar((dados) => {
+    const plano = dados.planos.find((item) => item.id === id);
+    if (!plano) throw new Error("Plano não encontrado.");
+    plano.nome = nomeLimpo(nome, "o plano", 60);
+    return dados;
+  });
+}
+
+/** Registros que usavam o plano ficam sem plano — nada some. */
+export async function excluirPlano(id: string): Promise<DadosSaude> {
+  return alterar((dados) => {
+    dados.planos = dados.planos.filter((item) => item.id !== id);
+    for (const evento of dados.eventos) if (evento.planoId === id) evento.planoId = null;
+    return dados;
+  });
+}
+
 // ----------------------------------------------------------------- eventos
 
 export type CamposEvento = {
   tipo: TipoEventoSaude;
   especialidadeId: string;
+  pessoaId: string;
+  planoId: string | null;
   titulo: string;
   data: string | null;
   hora: string | null;
@@ -265,6 +362,8 @@ function limparEvento(dados: DadosSaude, campos: CamposEvento): CamposEvento {
   if (!STATUS_EVENTO.includes(campos.status)) throw new Error("Status inválido.");
   if (campos.status === "aguardando-resultado" && campos.tipo !== "exame") throw new Error("Só exame aguarda resultado.");
   exigirEspecialidade(dados, campos.especialidadeId);
+  if (!dados.pessoas.some((item) => item.id === campos.pessoaId)) throw new Error("Pessoa não encontrada.");
+  if (campos.planoId && !dados.planos.some((item) => item.id === campos.planoId)) throw new Error("Plano não encontrado.");
   if (campos.profissionalId && !dados.profissionais.some((item) => item.id === campos.profissionalId)) {
     throw new Error("Profissional não encontrado.");
   }
@@ -274,6 +373,8 @@ function limparEvento(dados: DadosSaude, campos: CamposEvento): CamposEvento {
   return {
     tipo: campos.tipo,
     especialidadeId: campos.especialidadeId,
+    pessoaId: campos.pessoaId,
+    planoId: campos.planoId,
     titulo: nomeLimpo(campos.titulo, "o evento", 120),
     data,
     hora,
@@ -298,6 +399,8 @@ function criarDerivados(dados: DadosSaude, origem: EventoSaude, extras: ExtrasEv
         {
           tipo: "consulta",
           especialidadeId: origem.especialidadeId,
+          pessoaId: origem.pessoaId,
+          planoId: null,
           titulo: "Retorno",
           data,
           hora: null,
@@ -318,6 +421,8 @@ function criarDerivados(dados: DadosSaude, origem: EventoSaude, extras: ExtrasEv
         {
           tipo: "exame",
           especialidadeId: origem.especialidadeId,
+          pessoaId: origem.pessoaId,
+          planoId: null,
           titulo,
           data: null,
           hora: null,
@@ -457,6 +562,8 @@ export async function restaurarDaLixeira(id: string): Promise<DadosSaude> {
       throw new Error(`A especialidade "${especialidadeNome}" não existe mais — crie uma com esse nome e restaure de novo.`);
     }
     evento.especialidadeId = destino.id;
+    if (!dados.pessoas.some((item) => item.id === evento.pessoaId)) evento.pessoaId = dados.pessoas[0].id;
+    if (evento.planoId && !dados.planos.some((item) => item.id === evento.planoId)) evento.planoId = null;
     if (evento.profissionalId && !dados.profissionais.some((item) => item.id === evento.profissionalId)) evento.profissionalId = null;
     if (evento.localId && !dados.locais.some((item) => item.id === evento.localId)) evento.localId = null;
     if (evento.pedidoPorId && !dados.eventos.some((item) => item.id === evento.pedidoPorId)) evento.pedidoPorId = null;
@@ -539,6 +646,8 @@ export async function caminhoDoAnexo(idEvento: string, arquivo: string): Promise
 export type EventoAchado = Pick<EventoSaude, "id" | "tipo" | "titulo" | "data" | "status"> & {
   especialidade: string;
   profissional: string | null;
+  /** Só quando há mais de uma pessoa — com uma só, dizer "Eu" em toda linha é ruído. */
+  pessoa: string | null;
 };
 
 export async function buscarEventos(termo: string): Promise<EventoAchado[]> {
@@ -547,11 +656,14 @@ export async function buscarEventos(termo: string): Promise<EventoAchado[]> {
   const dados = await lerDados();
   const especialidades = new Map(dados.especialidades.map((item) => [item.id, item.nome]));
   const profissionais = new Map(dados.profissionais.map((item) => [item.id, item.nome]));
+  const pessoas = new Map(dados.pessoas.map((item) => [item.id, item.nome]));
+  const variasPessoas = dados.pessoas.length > 1;
   return dados.eventos
     .filter((evento) => {
       const profissional = evento.profissionalId ? (profissionais.get(evento.profissionalId) ?? "") : "";
       const especialidade = especialidades.get(evento.especialidadeId) ?? "";
-      return [evento.titulo, evento.observacoes, profissional, especialidade].some((texto) => texto.toLowerCase().includes(alvo));
+      const pessoa = pessoas.get(evento.pessoaId) ?? "";
+      return [evento.titulo, evento.observacoes, profissional, especialidade, pessoa].some((texto) => texto.toLowerCase().includes(alvo));
     })
     .sort((a, b) => (b.data ?? "9999").localeCompare(a.data ?? "9999"))
     .slice(0, 8)
@@ -563,5 +675,107 @@ export async function buscarEventos(termo: string): Promise<EventoAchado[]> {
       status: evento.status,
       especialidade: especialidades.get(evento.especialidadeId) ?? "",
       profissional: evento.profissionalId ? (profissionais.get(evento.profissionalId) ?? null) : null,
+      pessoa: variasPessoas ? (pessoas.get(evento.pessoaId) ?? null) : null,
     }));
+}
+
+// --------------------------------------------------------------- exportar
+
+export type HistoricoExportado = {
+  /** Nome-base do arquivo, sem extensão: "saude-cardiologia-maria". */
+  nomeDoArquivo: string;
+  titulo: string;
+  markdown: string;
+  /** Os anexos dos registros incluídos, com o caminho no zip já montado. */
+  anexos: { caminhoEmDisco: string; caminhoNoZip: string }[];
+};
+
+function nomeParaArquivo(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function dataLegivel(iso: string | null): string {
+  if (!iso) return "sem data";
+  const [ano, mes, dia] = iso.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+/**
+ * O histórico em markdown, do mais antigo pro mais recente (como um
+ * prontuário se lê), com tudo que o registro guarda. Sem especialidade =
+ * todas; sem pessoa = todas as pessoas (cada registro diz de quem é).
+ */
+export async function exportarHistorico(filtro: { especialidadeId?: string | null; pessoaId?: string | null }): Promise<HistoricoExportado> {
+  const dados = await lerDados();
+  const especialidade = filtro.especialidadeId ? exigirEspecialidade(dados, filtro.especialidadeId) : null;
+  const pessoa = filtro.pessoaId ? (dados.pessoas.find((item) => item.id === filtro.pessoaId) ?? null) : null;
+  if (filtro.pessoaId && !pessoa) throw new Error("Pessoa não encontrada.");
+
+  const nomes = {
+    especialidades: new Map(dados.especialidades.map((item) => [item.id, item])),
+    profissionais: new Map(dados.profissionais.map((item) => [item.id, item])),
+    locais: new Map(dados.locais.map((item) => [item.id, item])),
+    pessoas: new Map(dados.pessoas.map((item) => [item.id, item.nome])),
+    planos: new Map(dados.planos.map((item) => [item.id, item.nome])),
+  };
+  const rotuloTipo: Record<TipoEventoSaude, string> = { consulta: "Consulta", exame: "Exame", procedimento: "Procedimento", vacina: "Vacina" };
+  const rotuloStatus: Record<StatusEventoSaude, string> = {
+    solicitado: "Solicitado",
+    agendado: "Agendado",
+    "aguardando-resultado": "Aguardando resultado",
+    realizado: "Realizado",
+    cancelado: "Cancelado",
+  };
+
+  const eventos = dados.eventos
+    .filter((evento) => (!especialidade || evento.especialidadeId === especialidade.id) && (!pessoa || evento.pessoaId === pessoa.id))
+    .sort((a, b) => (a.data ?? "9999").localeCompare(b.data ?? "9999") || (a.hora ?? "").localeCompare(b.hora ?? "") || a.criadoEm.localeCompare(b.criadoEm));
+
+  const titulo = `Histórico de saúde${especialidade ? ` — ${especialidade.nome}` : ""}${pessoa ? ` — ${pessoa.nome}` : ""}`;
+  const linhas: string[] = [`# ${titulo}`, "", `Gerado em ${dataLegivel(new Date().toISOString().slice(0, 10))} · ${eventos.length} ${eventos.length === 1 ? "registro" : "registros"}`, ""];
+  const anexos: HistoricoExportado["anexos"] = [];
+  const variasPessoas = !pessoa && dados.pessoas.length > 1;
+
+  for (const evento of eventos) {
+    const esp = nomes.especialidades.get(evento.especialidadeId);
+    const profissional = evento.profissionalId ? nomes.profissionais.get(evento.profissionalId) : null;
+    const local = evento.localId ? nomes.locais.get(evento.localId) : null;
+    linhas.push(`## ${dataLegivel(evento.data)}${evento.hora ? ` ${evento.hora}` : ""} — ${evento.titulo}`, "");
+    const campos: [string, string | null | undefined][] = [
+      ["Tipo", rotuloTipo[evento.tipo]],
+      ["Especialidade", especialidade ? null : esp ? `${esp.icone} ${esp.nome}` : null],
+      ["Pessoa", variasPessoas ? nomes.pessoas.get(evento.pessoaId) : null],
+      ["Status", rotuloStatus[evento.status]],
+      ["Profissional", profissional ? [profissional.nome, profissional.contato].filter(Boolean).join(" · ") : null],
+      ["Local", local ? [local.nome, local.endereco, local.telefone].filter(Boolean).join(" · ") : null],
+      ["Plano", evento.planoId ? nomes.planos.get(evento.planoId) : null],
+    ];
+    for (const [rotulo, valor] of campos) if (valor) linhas.push(`- **${rotulo}:** ${valor}`);
+    if (evento.pedidoPorId) {
+      const origem = dados.eventos.find((item) => item.id === evento.pedidoPorId);
+      if (origem) linhas.push(`- **Pedido em:** ${origem.titulo} (${dataLegivel(origem.data)})`);
+    }
+    if (evento.observacoes.trim()) linhas.push("", evento.observacoes.trim());
+    if (evento.anexos.length) {
+      linhas.push("", "Anexos:");
+      const pastaNoZip = `anexos/${nomeParaArquivo(`${evento.data ?? "sem-data"}-${evento.titulo}`) || evento.id}`;
+      for (const anexo of evento.anexos) {
+        const caminhoNoZip = `${pastaNoZip}/${anexo.nome}`;
+        linhas.push(`- [${anexo.nome}](${caminhoNoZip})`);
+        anexos.push({ caminhoEmDisco: path.join(pastaDoEvento(evento.id), anexo.arquivo), caminhoNoZip });
+      }
+    }
+    linhas.push("");
+  }
+
+  const nomeDoArquivo = ["saude", especialidade ? nomeParaArquivo(especialidade.nome) : "tudo", pessoa ? nomeParaArquivo(pessoa.nome) : null]
+    .filter(Boolean)
+    .join("-");
+  return { nomeDoArquivo, titulo, markdown: linhas.join("\n"), anexos };
 }

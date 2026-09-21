@@ -545,6 +545,20 @@ export type ProfissionalSaude = {
   contato: string;
 };
 
+/** Quem é o paciente — o app cria "Eu" sozinho; o resto é família. */
+export type PessoaSaude = {
+  id: string;
+  nome: string;
+  /** "AAAA-MM-DD", ou `null`. */
+  nascimento: string | null;
+};
+
+/** Sulamérica, IPM, Particular… — lista editável; "Particular" é item como outro qualquer. */
+export type PlanoSaude = {
+  id: string;
+  nome: string;
+};
+
 export type AnexoSaude = {
   id: string;
   /** Nome original do arquivo, pra lista. */
@@ -559,6 +573,9 @@ export type EventoSaude = {
   id: string;
   tipo: TipoEventoSaude;
   especialidadeId: string;
+  pessoaId: string;
+  /** Sempre escolhido à mão — nasce em branco, mesmo que a pessoa "tenha" plano. */
+  planoId: string | null;
   titulo: string;
   /** "AAAA-MM-DD", ou `null` quando ainda só foi solicitado. */
   data: string | null;
@@ -580,5 +597,7 @@ export type DadosSaude = {
   especialidades: EspecialidadeSaude[];
   locais: LocalSaude[];
   profissionais: ProfissionalSaude[];
+  pessoas: PessoaSaude[];
+  planos: PlanoSaude[];
   eventos: EventoSaude[];
 };

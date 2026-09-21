@@ -1,4 +1,4 @@
-import type { DadosSaude, EspecialidadeSaude, EventoSaude, StatusEventoSaude, TipoEventoSaude } from "./tipos";
+import type { DadosSaude, EspecialidadeSaude, EventoSaude, PessoaSaude, StatusEventoSaude, TipoEventoSaude } from "./tipos";
 
 /** Rótulos e ordenações de Saúde que a tela usa — sem disco, importável do cliente. */
 
@@ -68,30 +68,45 @@ export function mesesEntre(de: string, ate: string): number {
 
 export type AlertaSaude = {
   especialidade: EspecialidadeSaude;
+  pessoa: PessoaSaude;
   /** Data da última consulta realizada, ou `null` se nunca houve. */
   ultimaConsulta: string | null;
   mesesDesde: number | null;
 };
 
 /**
- * "Está na hora": especialidades com alerta configurado cuja última
- * consulta realizada passou do prazo (ou nunca aconteceu), e que não têm
- * consulta agendada pra frente — agendou, o alerta se cala.
+ * "Está na hora", por pessoa: cada pessoa × especialidade com alerta em
+ * que a pessoa tem algum registro, cuja última consulta realizada passou
+ * do prazo (ou nunca aconteceu), e sem consulta agendada pra frente —
+ * agendou, o alerta se cala. Um alerta que se calasse porque *outra*
+ * pessoa foi ao dentista não serviria pra nada.
  */
-export function alertasDeSaude(dados: DadosSaude, hoje = hojeIso()): AlertaSaude[] {
+export function alertasDeSaude(dados: DadosSaude, pessoaId: string | null = null, hoje = hojeIso()): AlertaSaude[] {
   const alertas: AlertaSaude[] = [];
-  for (const especialidade of dados.especialidades) {
-    if (especialidade.mesesAlerta === null) continue;
-    const consultas = dados.eventos.filter((evento) => evento.especialidadeId === especialidade.id && evento.tipo === "consulta");
-    const agendadaAdiante = consultas.some((evento) => evento.status === "agendado" && evento.data !== null && evento.data >= hoje);
-    if (agendadaAdiante) continue;
-    const realizadas = consultas.filter((evento) => evento.status === "realizado" && evento.data !== null).map((evento) => evento.data!);
-    const ultima = realizadas.length ? realizadas.sort().at(-1)! : null;
-    const mesesDesde = ultima ? mesesEntre(ultima, hoje) : null;
-    if (ultima && mesesDesde !== null && mesesDesde < especialidade.mesesAlerta) continue;
-    alertas.push({ especialidade, ultimaConsulta: ultima, mesesDesde });
+  const pessoas = pessoaId ? dados.pessoas.filter((pessoa) => pessoa.id === pessoaId) : dados.pessoas;
+  for (const pessoa of pessoas) {
+    for (const especialidade of dados.especialidades) {
+      if (especialidade.mesesAlerta === null) continue;
+      const registros = dados.eventos.filter((evento) => evento.especialidadeId === especialidade.id && evento.pessoaId === pessoa.id);
+      // Especialidade em que a pessoa nunca teve nada não é "dela" — o filho não está atrasado no cardiologista.
+      if (registros.length === 0) continue;
+      const consultas = registros.filter((evento) => evento.tipo === "consulta");
+      const agendadaAdiante = consultas.some((evento) => evento.status === "agendado" && evento.data !== null && evento.data >= hoje);
+      if (agendadaAdiante) continue;
+      const realizadas = consultas.filter((evento) => evento.status === "realizado" && evento.data !== null).map((evento) => evento.data!);
+      const ultima = realizadas.length ? realizadas.sort().at(-1)! : null;
+      const mesesDesde = ultima ? mesesEntre(ultima, hoje) : null;
+      if (ultima && mesesDesde !== null && mesesDesde < especialidade.mesesAlerta) continue;
+      alertas.push({ especialidade, pessoa, ultimaConsulta: ultima, mesesDesde });
+    }
   }
   return alertas;
+}
+
+/** Idade em anos a partir do nascimento ISO, ou `null`. */
+export function idadeEmAnos(nascimento: string | null, hoje = hojeIso()): number | null {
+  if (!nascimento) return null;
+  return Math.max(0, Math.floor(mesesEntre(nascimento, hoje) / 12));
 }
 
 /** Cabeçalho de mês da linha do tempo: "setembro de 2026". */

@@ -363,7 +363,7 @@ export function PaletaComandos({
         secao: "Saúde",
         icone: <HeartPulse size={14} />,
         titulo: destacar(evento.titulo, termoLimpo),
-        detalhe: [ROTULO_TIPO[evento.tipo], evento.especialidade, evento.profissional, formatarDataSaude(evento.data), ROTULO_STATUS[evento.status]]
+        detalhe: [ROTULO_TIPO[evento.tipo], evento.pessoa, evento.especialidade, evento.profissional, formatarDataSaude(evento.data), ROTULO_STATUS[evento.status]]
           .filter(Boolean)
           .join(" · "),
         executar: () => roteador.push(`/saude?evento=${encodeURIComponent(evento.id)}`),
