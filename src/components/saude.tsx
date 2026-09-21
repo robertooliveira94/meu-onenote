@@ -2,18 +2,22 @@
 
 import clsx from "clsx";
 import {
+  BellRing,
   Building2,
+  CalendarClock,
   CalendarDays,
   ChevronDown,
   ChevronUp,
   ExternalLink,
   FolderPlus,
   HeartPulse,
+  History,
   Link2,
   MoreHorizontal,
   Paperclip,
   Pencil,
   Plus,
+  RotateCcw,
   Stethoscope,
   Trash2,
   Upload,
@@ -24,6 +28,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  acaoApagarDeVezDaLixeiraSaude,
   acaoAtualizarEspecialidade,
   acaoAtualizarEvento,
   acaoAtualizarLocal,
@@ -36,23 +41,29 @@ import {
   acaoExcluirEvento,
   acaoExcluirLocal,
   acaoExcluirProfissional,
+  acaoEsvaziarLixeiraSaude,
+  acaoListarLixeiraSaude,
   acaoMudarStatusEvento,
   acaoRemoverAnexo,
   acaoReordenarEspecialidades,
+  acaoRestaurarDaLixeiraSaude,
   type RespostaSaude,
 } from "@/app/acoes-saude";
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
-import type { CamposEvento, CamposLocal, CamposProfissional, ExtrasEvento } from "@/lib/saude-app";
+import type { CamposEvento, CamposLocal, CamposProfissional, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
 import {
   ROTULO_STATUS,
   ROTULO_TIPO,
   TIPOS_EVENTO,
+  alertasDeSaude,
   formatarDataSaude,
   formatarTamanho,
   hojeIso,
   ordenarEventos,
+  rotuloDoMes,
   statusDisponiveis,
+  type AlertaSaude,
 } from "@/lib/saude-comum";
 import type {
   DadosSaude,
@@ -68,7 +79,18 @@ import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoCor, DialogoIcone, D
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMenu, Vazio } from "./ui";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
-type Selecao = { tipo: "especialidade"; id: string } | { tipo: "locais" } | { tipo: "profissionais" };
+type Selecao =
+  | { tipo: "proximos" }
+  | { tipo: "linha" }
+  | { tipo: "especialidade"; id: string }
+  | { tipo: "locais" }
+  | { tipo: "profissionais" }
+  | { tipo: "lixeira" };
+
+/** As visões em que clicar num registro abre o painel de detalhe ao lado. */
+function mostraDetalhe(selecao: Selecao | null): boolean {
+  return selecao?.tipo === "proximos" || selecao?.tipo === "linha" || selecao?.tipo === "especialidade";
+}
 
 const CLASSE_SELECT =
   "h-9.5 w-full rounded-lg border border-linha bg-superficie-alta px-3 text-[13px] text-tinta focus:border-[var(--realce)] focus:shadow-[0_0_0_3px_var(--realce-medio)] focus:outline-none";
@@ -105,14 +127,22 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
   const roteador = useRouter();
   const parametros = useSearchParams();
   const [dados, definirDados] = useState(dadosIniciais);
+  // Com registros, abre em Próximos (é o que se olha antes de ligar pra
+  // clínica); sem nenhum, na primeira especialidade; sem nenhuma, o vazio.
   const [selecao, definirSelecao] = useState<Selecao | null>(
-    dadosIniciais.especialidades[0] ? { tipo: "especialidade", id: dadosIniciais.especialidades[0].id } : null,
+    dadosIniciais.eventos.length
+      ? { tipo: "proximos" }
+      : dadosIniciais.especialidades[0]
+        ? { tipo: "especialidade", id: dadosIniciais.especialidades[0].id }
+        : null,
   );
+  // Especialidade pré-escolhida ao abrir "novo registro" fora de uma especialidade (Próximos, "está na hora").
+  const [especialidadeParaNovo, definirEspecialidadeParaNovo] = useState<string | null>(null);
   const [eventoAtivoId, definirEventoAtivoId] = useState<string | null>(null);
   const [eventoEmEdicao, definirEventoEmEdicao] = useState<EventoSaude | "novo" | null>(null);
   const [excluindoEvento, definirExcluindoEvento] = useState<EventoSaude | null>(null);
   const [acaoEspecialidade, definirAcaoEspecialidade] = useState<
-    { tipo: "nova" } | { tipo: "renomear" | "icone" | "cor" | "excluir"; especialidade: EspecialidadeSaude } | null
+    { tipo: "nova" } | { tipo: "renomear" | "icone" | "cor" | "alerta" | "excluir"; especialidade: EspecialidadeSaude } | null
   >(null);
 
   // `?evento=<id>` (resultado da busca global) abre o evento já na chegada.
@@ -161,10 +191,37 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
 
   useAtalho("n", {
     grupo: "Saúde",
-    descricao: "Novo evento",
-    ativo: !!especialidadeAtiva,
+    descricao: "Novo registro",
+    ativo: dados.especialidades.length > 0 && mostraDetalhe(selecao),
     acao: () => definirEventoEmEdicao("novo"),
   });
+
+  const alertas = useMemo(() => alertasDeSaude(dados), [dados]);
+  const hoje = hojeIso();
+  const proximos = useMemo(() => {
+    const agendados = dados.eventos
+      .filter((evento) => evento.status === "agendado" && evento.data !== null)
+      .sort((a, b) => a.data!.localeCompare(b.data!) || (a.hora ?? "").localeCompare(b.hora ?? ""));
+    const aguardando = ordenarEventos(dados.eventos.filter((evento) => evento.status === "aguardando-resultado"));
+    const solicitados = ordenarEventos(dados.eventos.filter((evento) => evento.status === "solicitado"));
+    return { agendados, aguardando, solicitados };
+  }, [dados.eventos]);
+  const totalProximos = alertas.length + proximos.agendados.length + proximos.aguardando.length + proximos.solicitados.length;
+
+  const abrirNovo = useCallback((especialidadeId?: string) => {
+    definirEspecialidadeParaNovo(especialidadeId ?? null);
+    definirEventoEmEdicao("novo");
+  }, []);
+
+  const irParaEvento = useCallback(
+    (id: string) => {
+      const alvo = dados.eventos.find((item) => item.id === id);
+      if (!alvo) return;
+      if (!mostraDetalhe(selecao)) definirSelecao({ tipo: "especialidade", id: alvo.especialidadeId });
+      definirEventoAtivoId(id);
+    },
+    [dados.eventos, selecao],
+  );
 
   const contagemPorEspecialidade = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -187,6 +244,8 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
           dados={dados}
           selecao={selecao}
           contagem={contagemPorEspecialidade}
+          totalProximos={totalProximos}
+          temAlerta={alertas.length > 0}
           onSelecionar={(nova) => {
             definirSelecao(nova);
             definirEventoAtivoId(null);
@@ -200,34 +259,33 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
           <CadastroLocais dados={dados} aplicar={aplicar} />
         ) : selecao?.tipo === "profissionais" ? (
           <CadastroProfissionais dados={dados} aplicar={aplicar} />
+        ) : selecao?.tipo === "lixeira" ? (
+          <LixeiraSaude aplicar={aplicar} />
+        ) : selecao?.tipo === "proximos" ? (
+          <VisaoProximos
+            dados={dados}
+            alertas={alertas}
+            agendados={proximos.agendados}
+            aguardando={proximos.aguardando}
+            solicitados={proximos.solicitados}
+            hoje={hoje}
+            eventoAtivoId={eventoAtivoId}
+            onSelecionar={definirEventoAtivoId}
+            onNovo={abrirNovo}
+            onConfigurarAlerta={(especialidade) => definirAcaoEspecialidade({ tipo: "alerta", especialidade })}
+          />
+        ) : selecao?.tipo === "linha" ? (
+          <VisaoLinhaDoTempo dados={dados} eventoAtivoId={eventoAtivoId} onSelecionar={definirEventoAtivoId} onNovo={() => abrirNovo()} />
         ) : especialidadeAtiva ? (
-          <>
-            <ListaEventos
-              especialidade={especialidadeAtiva}
-              eventos={eventosDaEspecialidade}
-              dados={dados}
-              eventoAtivoId={eventoAtivoId}
-              onSelecionar={definirEventoAtivoId}
-              onNovo={() => definirEventoEmEdicao("novo")}
-              onAgirEspecialidade={(tipo) => definirAcaoEspecialidade({ tipo, especialidade: especialidadeAtiva })}
-            />
-            {eventoAtivo ? (
-              <DetalheEvento
-                evento={eventoAtivo}
-                dados={dados}
-                aplicar={aplicar}
-                onFechar={() => definirEventoAtivoId(null)}
-                onEditar={() => definirEventoEmEdicao(eventoAtivo)}
-                onExcluir={() => definirExcluindoEvento(eventoAtivo)}
-                onIrPara={(id) => {
-                  const alvo = dados.eventos.find((item) => item.id === id);
-                  if (!alvo) return;
-                  definirSelecao({ tipo: "especialidade", id: alvo.especialidadeId });
-                  definirEventoAtivoId(id);
-                }}
-              />
-            ) : null}
-          </>
+          <ListaEventos
+            especialidade={especialidadeAtiva}
+            eventos={eventosDaEspecialidade}
+            dados={dados}
+            eventoAtivoId={eventoAtivoId}
+            onSelecionar={definirEventoAtivoId}
+            onNovo={() => abrirNovo(especialidadeAtiva.id)}
+            onAgirEspecialidade={(tipo) => definirAcaoEspecialidade({ tipo, especialidade: especialidadeAtiva })}
+          />
         ) : (
           <div className="flex min-w-0 flex-1 items-center justify-center">
             <Vazio
@@ -242,12 +300,23 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
             </Vazio>
           </div>
         )}
+        {eventoAtivo && mostraDetalhe(selecao) ? (
+          <DetalheEvento
+            evento={eventoAtivo}
+            dados={dados}
+            aplicar={aplicar}
+            onFechar={() => definirEventoAtivoId(null)}
+            onEditar={() => definirEventoEmEdicao(eventoAtivo)}
+            onExcluir={() => definirExcluindoEvento(eventoAtivo)}
+            onIrPara={irParaEvento}
+          />
+        ) : null}
       </div>
 
-      {eventoEmEdicao && especialidadeAtiva ? (
+      {eventoEmEdicao && dados.especialidades.length > 0 ? (
         <DialogoEvento
           evento={eventoEmEdicao === "novo" ? null : eventoEmEdicao}
-          especialidadeInicial={especialidadeAtiva.id}
+          especialidadeInicial={especialidadeParaNovo ?? especialidadeAtiva?.id ?? dados.especialidades[0].id}
           dados={dados}
           aoFechar={() => definirEventoEmEdicao(null)}
           aoSalvar={async (id, campos, extras) => {
@@ -261,7 +330,9 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
               definirDados(resposta.dados);
               definirEventoAtivoId(resposta.id);
             }
-            if (campos.especialidadeId !== especialidadeAtiva.id) definirSelecao({ tipo: "especialidade", id: campos.especialidadeId });
+            if (selecao?.tipo === "especialidade" && campos.especialidadeId !== selecao.id) {
+              definirSelecao({ tipo: "especialidade", id: campos.especialidadeId });
+            }
             definirEventoEmEdicao(null);
             return null;
           }}
@@ -274,10 +345,10 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
           titulo={`Excluir "${excluindoEvento.titulo}"?`}
           descricao={
             excluindoEvento.anexos.length
-              ? `Os ${excluindoEvento.anexos.length} ${excluindoEvento.anexos.length === 1 ? "anexo vai" : "anexos vão"} junto. Não dá para desfazer.`
-              : "Não dá para desfazer."
+              ? `Vai para a lixeira com ${excluindoEvento.anexos.length === 1 ? "o anexo" : `os ${excluindoEvento.anexos.length} anexos`} — dá para restaurar depois.`
+              : "Vai para a lixeira — dá para restaurar depois."
           }
-          textoBotao="Excluir"
+          textoBotao="Mandar para a lixeira"
           aoFechar={() => definirExcluindoEvento(null)}
           aoConfirmar={async () => {
             const resposta = await acaoExcluirEvento(excluindoEvento.id);
@@ -351,12 +422,26 @@ export function AppSaude({ dadosIniciais }: { dadosIniciais: DadosSaude }) {
         }}
       />
 
+      {acaoEspecialidade?.tipo === "alerta" ? (
+        <DialogoAlerta
+          especialidade={acaoEspecialidade.especialidade}
+          aoFechar={() => definirAcaoEspecialidade(null)}
+          aoSalvar={async (meses) => {
+            const resposta = await acaoAtualizarEspecialidade(acaoEspecialidade.especialidade.id, { mesesAlerta: meses });
+            if (!resposta.ok) return resposta.erro;
+            definirDados(resposta.dados);
+            definirAcaoEspecialidade(null);
+            return null;
+          }}
+        />
+      ) : null}
+
       {acaoEspecialidade?.tipo === "excluir" ? (
         (contagemPorEspecialidade.get(acaoEspecialidade.especialidade.id) ?? 0) > 0 ? (
           <DialogoConfirmarComTexto
             aberto
             titulo={`Excluir ${acaoEspecialidade.especialidade.nome}?`}
-            descricao={`Os ${contagemPorEspecialidade.get(acaoEspecialidade.especialidade.id)} registros dela — e os anexos — vão junto. Não dá para desfazer.`}
+            descricao={`Os ${contagemPorEspecialidade.get(acaoEspecialidade.especialidade.id)} registros dela vão para a lixeira (com os anexos). A especialidade em si não volta.`}
             palavra={acaoEspecialidade.especialidade.nome}
             rotulo={
               <>
@@ -402,6 +487,8 @@ function ColunaSaude({
   dados,
   selecao,
   contagem,
+  totalProximos,
+  temAlerta,
   onSelecionar,
   onNovaEspecialidade,
   onAgirEspecialidade,
@@ -410,9 +497,11 @@ function ColunaSaude({
   dados: DadosSaude;
   selecao: Selecao | null;
   contagem: Map<string, number>;
+  totalProximos: number;
+  temAlerta: boolean;
   onSelecionar: (selecao: Selecao) => void;
   onNovaEspecialidade: () => void;
-  onAgirEspecialidade: (tipo: "renomear" | "icone" | "cor" | "excluir", especialidade: EspecialidadeSaude) => void;
+  onAgirEspecialidade: (tipo: "renomear" | "icone" | "cor" | "alerta" | "excluir", especialidade: EspecialidadeSaude) => void;
   onReordenar: (ordem: string[]) => void;
 }) {
   function mover(indice: number, direcao: -1 | 1) {
@@ -425,7 +514,21 @@ function ColunaSaude({
 
   return (
     <div className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-linha bg-papel">
-      <div className="flex items-center justify-between px-3.5 pt-3 pb-1.5">
+      <div className="space-y-0.5 px-2 pt-3">
+        <BotaoRodape
+          ativo={selecao?.tipo === "proximos"}
+          icone={<CalendarClock size={13} />}
+          contagem={totalProximos}
+          alerta={temAlerta}
+          onClick={() => onSelecionar({ tipo: "proximos" })}
+        >
+          Próximos
+        </BotaoRodape>
+        <BotaoRodape ativo={selecao?.tipo === "linha"} icone={<History size={13} />} contagem={0} onClick={() => onSelecionar({ tipo: "linha" })}>
+          Linha do tempo
+        </BotaoRodape>
+      </div>
+      <div className="flex items-center justify-between px-3.5 pt-4 pb-1.5">
         <p className="text-[11px] font-medium tracking-wide text-tinta-3 uppercase">Especialidades</p>
         <BotaoIcone rotulo="Nova especialidade" onClick={onNovaEspecialidade} className="size-6">
           <FolderPlus size={13} />
@@ -481,6 +584,9 @@ function ColunaSaude({
                     >
                       Cor
                     </ItemMenu>
+                    <ItemMenu icone={<BellRing size={14} />} onClick={() => { fechar(); onAgirEspecialidade("alerta", especialidade); }}>
+                      {especialidade.mesesAlerta === null ? "Alerta…" : `Alerta: ${especialidade.mesesAlerta} meses`}
+                    </ItemMenu>
                     <SeparadorMenu />
                     <ItemMenu icone={<ChevronUp size={14} />} onClick={() => { fechar(); mover(indice, -1); }} disabled={indice === 0}>
                       Subir
@@ -516,6 +622,9 @@ function ColunaSaude({
         >
           Profissionais
         </BotaoRodape>
+        <BotaoRodape ativo={selecao?.tipo === "lixeira"} icone={<Trash2 size={13} />} contagem={0} onClick={() => onSelecionar({ tipo: "lixeira" })}>
+          Lixeira
+        </BotaoRodape>
       </div>
     </div>
   );
@@ -525,12 +634,15 @@ function BotaoRodape({
   ativo,
   icone,
   contagem,
+  alerta = false,
   onClick,
   children,
 }: {
   ativo: boolean;
   icone: React.ReactNode;
   contagem: number;
+  /** Bolinha laranja: tem "está na hora" esperando lá dentro. */
+  alerta?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -546,6 +658,7 @@ function BotaoRodape({
     >
       <span className="shrink-0 text-tinta-3">{icone}</span>
       <span className="flex-1 truncate">{children}</span>
+      {alerta ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[#F5822C]" /> : null}
       <span className="text-[10.5px] text-tinta-3 tabular-nums">{contagem || ""}</span>
     </button>
   );
@@ -570,7 +683,7 @@ function ListaEventos({
   eventoAtivoId: string | null;
   onSelecionar: (id: string) => void;
   onNovo: () => void;
-  onAgirEspecialidade: (tipo: "renomear" | "icone" | "cor" | "excluir") => void;
+  onAgirEspecialidade: (tipo: "renomear" | "icone" | "cor" | "alerta" | "excluir") => void;
 }) {
   const profissionais = useMemo(() => new Map(dados.profissionais.map((item) => [item.id, item.nome])), [dados.profissionais]);
   const locais = useMemo(() => new Map(dados.locais.map((item) => [item.id, item.nome])), [dados.locais]);
@@ -596,6 +709,9 @@ function ListaEventos({
                 <ItemMenu icone={<Pencil size={14} />} onClick={() => { fechar(); onAgirEspecialidade("renomear"); }}>Renomear</ItemMenu>
                 <ItemMenu icone={<span className="text-[13px]">{especialidade.icone}</span>} onClick={() => { fechar(); onAgirEspecialidade("icone"); }}>Ícone</ItemMenu>
                 <ItemMenu icone={<span className="size-3 rounded-full" style={{ background: especialidade.cor }} />} onClick={() => { fechar(); onAgirEspecialidade("cor"); }}>Cor</ItemMenu>
+                <ItemMenu icone={<BellRing size={14} />} onClick={() => { fechar(); onAgirEspecialidade("alerta"); }}>
+                  {especialidade.mesesAlerta === null ? "Alerta…" : `Alerta: ${especialidade.mesesAlerta} meses`}
+                </ItemMenu>
                 <SeparadorMenu />
                 <ItemMenu icone={<Trash2 size={14} />} perigo onClick={() => { fechar(); onAgirEspecialidade("excluir"); }}>Excluir</ItemMenu>
               </>
@@ -642,12 +758,15 @@ const LinhaEvento = memo(function LinhaEvento({
   evento,
   profissional,
   local,
+  especialidade,
   ativa,
   onSelecionar,
 }: {
   evento: EventoSaude;
   profissional: string | null;
   local: string | null;
+  /** Nas visões que misturam especialidades (Próximos, linha do tempo), a linha diz de qual é. */
+  especialidade?: EspecialidadeSaude | null;
   ativa: boolean;
   onSelecionar: (id: string) => void;
 }) {
@@ -675,8 +794,10 @@ const LinhaEvento = memo(function LinhaEvento({
             <span className="shrink-0 text-[10.5px] text-tinta-3">{ROTULO_TIPO[evento.tipo]}</span>
           ) : null}
         </span>
-        {profissional || local ? (
-          <span className="block truncate text-[11.5px] text-tinta-3">{[profissional, local].filter(Boolean).join(" · ")}</span>
+        {profissional || local || especialidade ? (
+          <span className="block truncate text-[11.5px] text-tinta-3">
+            {[especialidade ? `${especialidade.icone} ${especialidade.nome}` : null, profissional, local].filter(Boolean).join(" · ")}
+          </span>
         ) : null}
       </span>
       {evento.anexos.length ? (
@@ -1129,6 +1250,408 @@ function DialogoEvento({
         </div>
       </form>
     </Dialogo>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Próximos e linha do tempo                                                */
+/* ---------------------------------------------------------------------- */
+
+function useMapas(dados: DadosSaude) {
+  return useMemo(
+    () => ({
+      profissionais: new Map(dados.profissionais.map((item) => [item.id, item.nome])),
+      locais: new Map(dados.locais.map((item) => [item.id, item.nome])),
+      especialidades: new Map(dados.especialidades.map((item) => [item.id, item])),
+    }),
+    [dados],
+  );
+}
+
+function SecaoDeLista({ titulo, contagem, children }: { titulo: string; contagem: number; children: React.ReactNode }) {
+  if (contagem === 0) return null;
+  return (
+    <section>
+      <h3 className="mb-1 px-2.5 text-[11px] font-bold tracking-[0.08em] text-tinta-3 uppercase">
+        {titulo} <span className="font-medium tabular-nums">{contagem}</span>
+      </h3>
+      <div className="space-y-0.5">{children}</div>
+    </section>
+  );
+}
+
+function VisaoProximos({
+  dados,
+  alertas,
+  agendados,
+  aguardando,
+  solicitados,
+  hoje,
+  eventoAtivoId,
+  onSelecionar,
+  onNovo,
+  onConfigurarAlerta,
+}: {
+  dados: DadosSaude;
+  alertas: AlertaSaude[];
+  agendados: EventoSaude[];
+  aguardando: EventoSaude[];
+  solicitados: EventoSaude[];
+  hoje: string;
+  eventoAtivoId: string | null;
+  onSelecionar: (id: string) => void;
+  onNovo: (especialidadeId?: string) => void;
+  onConfigurarAlerta: (especialidade: EspecialidadeSaude) => void;
+}) {
+  const mapas = useMapas(dados);
+  const vazio = alertas.length === 0 && agendados.length === 0 && aguardando.length === 0 && solicitados.length === 0;
+  const semAlertaConfigurado = dados.especialidades.length > 0 && dados.especialidades.every((item) => item.mesesAlerta === null);
+
+  const linha = (evento: EventoSaude) => (
+    <LinhaEvento
+      key={evento.id}
+      evento={evento}
+      profissional={evento.profissionalId ? (mapas.profissionais.get(evento.profissionalId) ?? null) : null}
+      local={evento.localId ? (mapas.locais.get(evento.localId) ?? null) : null}
+      especialidade={mapas.especialidades.get(evento.especialidadeId) ?? null}
+      ativa={evento.id === eventoAtivoId}
+      onSelecionar={onSelecionar}
+    />
+  );
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
+        <CalendarClock size={15} className="text-tinta-3" />
+        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Próximos</h2>
+        <Botao variante="primario" onClick={() => onNovo()} className="ml-auto" disabled={dados.especialidades.length === 0}>
+          <Plus size={13} />
+          Novo registro
+        </Botao>
+      </div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
+        {vazio ? (
+          <Vazio
+            icone={<CalendarClock size={22} />}
+            titulo="Nada esperando"
+            descricao={
+              semAlertaConfigurado
+                ? "Nenhum agendamento, nenhum pedido em aberto. Dica: nas opções de uma especialidade, defina um alerta — “6 meses sem consulta” — e ela aparece aqui quando passar."
+                : "Nenhum agendamento, nenhum pedido em aberto, nenhuma especialidade atrasada."
+            }
+          />
+        ) : null}
+
+        {alertas.length ? (
+          <section>
+            <h3 className="mb-1 px-2.5 text-[11px] font-bold tracking-[0.08em] text-[#F5822C] uppercase">
+              Está na hora <span className="font-medium tabular-nums">{alertas.length}</span>
+            </h3>
+            <div className="space-y-0.5">
+              {alertas.map((alerta) => (
+                <div
+                  key={alerta.especialidade.id}
+                  className="flex items-center gap-3 rounded-lg border border-[color-mix(in_srgb,#F5822C_35%,transparent)] bg-[color-mix(in_srgb,#F5822C_7%,transparent)] px-3 py-2"
+                >
+                  <span aria-hidden className="text-[16px]">
+                    {alerta.especialidade.icone}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium text-tinta">{alerta.especialidade.nome}</span>
+                    <span className="block text-[11.5px] text-tinta-3">
+                      {alerta.ultimaConsulta
+                        ? `Última consulta em ${formatarDataSaude(alerta.ultimaConsulta)} — há ${alerta.mesesDesde} ${alerta.mesesDesde === 1 ? "mês" : "meses"}; o alerta é de ${alerta.especialidade.mesesAlerta}.`
+                        : `Nenhuma consulta registrada; o alerta é de ${alerta.especialidade.mesesAlerta} meses.`}
+                    </span>
+                  </span>
+                  <Botao variante="sutil" className="h-7 px-2 text-[11.5px]" onClick={() => onConfigurarAlerta(alerta.especialidade)}>
+                    <BellRing size={12} />
+                    Ajustar
+                  </Botao>
+                  <Botao variante="primario" className="h-7 px-2 text-[11.5px]" onClick={() => onNovo(alerta.especialidade.id)}>
+                    <Plus size={12} />
+                    Agendar
+                  </Botao>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <SecaoDeLista titulo="Agendados" contagem={agendados.length}>
+          {agendados.map((evento) => (
+            <div key={evento.id} className={clsx(evento.data! < hoje && "opacity-80")}>
+              {linha(evento)}
+            </div>
+          ))}
+        </SecaoDeLista>
+        <SecaoDeLista titulo="Aguardando resultado" contagem={aguardando.length}>
+          {aguardando.map(linha)}
+        </SecaoDeLista>
+        <SecaoDeLista titulo="Solicitados, sem data" contagem={solicitados.length}>
+          {solicitados.map(linha)}
+        </SecaoDeLista>
+      </div>
+    </div>
+  );
+}
+
+function VisaoLinhaDoTempo({
+  dados,
+  eventoAtivoId,
+  onSelecionar,
+  onNovo,
+}: {
+  dados: DadosSaude;
+  eventoAtivoId: string | null;
+  onSelecionar: (id: string) => void;
+  onNovo: () => void;
+}) {
+  const mapas = useMapas(dados);
+  // Por mês, do mais recente pro mais antigo; o que não tem data vai num grupo próprio no topo.
+  const grupos = useMemo(() => {
+    const ordenados = ordenarEventos(dados.eventos);
+    const lista: { chave: string; rotulo: string; eventos: EventoSaude[] }[] = [];
+    for (const evento of ordenados) {
+      const chave = evento.data ? evento.data.slice(0, 7) : "sem-data";
+      const ultimo = lista.at(-1);
+      if (ultimo && ultimo.chave === chave) ultimo.eventos.push(evento);
+      else lista.push({ chave, rotulo: evento.data ? rotuloDoMes(evento.data) : "Sem data", eventos: [evento] });
+    }
+    return lista;
+  }, [dados.eventos]);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
+        <History size={15} className="text-tinta-3" />
+        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Linha do tempo</h2>
+        <span className="text-[11.5px] text-tinta-3">{dados.eventos.length ? `${dados.eventos.length} registros` : ""}</span>
+        <Botao variante="primario" onClick={onNovo} className="ml-auto" disabled={dados.especialidades.length === 0}>
+          <Plus size={13} />
+          Novo registro
+        </Botao>
+      </div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
+        {grupos.length === 0 ? (
+          <Vazio icone={<History size={22} />} titulo="Nada registrado ainda" descricao="Tudo o que você registrar em qualquer especialidade aparece aqui, por mês." />
+        ) : null}
+        {grupos.map((grupo) => (
+          <SecaoDeLista key={grupo.chave} titulo={grupo.rotulo} contagem={grupo.eventos.length}>
+            {grupo.eventos.map((evento) => (
+              <LinhaEvento
+                key={evento.id}
+                evento={evento}
+                profissional={evento.profissionalId ? (mapas.profissionais.get(evento.profissionalId) ?? null) : null}
+                local={evento.localId ? (mapas.locais.get(evento.localId) ?? null) : null}
+                especialidade={mapas.especialidades.get(evento.especialidadeId) ?? null}
+                ativa={evento.id === eventoAtivoId}
+                onSelecionar={onSelecionar}
+              />
+            ))}
+          </SecaoDeLista>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Alerta por especialidade                                                 */
+/* ---------------------------------------------------------------------- */
+
+const OPCOES_ALERTA = [3, 6, 12, 24];
+
+function DialogoAlerta({
+  especialidade,
+  aoFechar,
+  aoSalvar,
+}: {
+  especialidade: EspecialidadeSaude;
+  aoFechar: () => void;
+  aoSalvar: (meses: number | null) => Promise<string | null>;
+}) {
+  const [texto, definirTexto] = useState(especialidade.mesesAlerta === null ? "" : String(especialidade.mesesAlerta));
+  const [salvando, definirSalvando] = useState(false);
+  const [erro, definirErro] = useState<string | null>(null);
+
+  async function salvar(valor: number | null) {
+    definirSalvando(true);
+    const falha = await aoSalvar(valor);
+    definirSalvando(false);
+    if (falha) definirErro(falha);
+  }
+
+  return (
+    <Dialogo
+      titulo={`Alerta de ${especialidade.nome}`}
+      descricao="Quantos meses sem consulta realizada até aparecer em “está na hora”. Uma consulta agendada pra frente silencia o alerta."
+      aberto
+      aoFechar={aoFechar}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const numero = Number(texto);
+          if (!texto.trim() || !Number.isFinite(numero) || numero < 1) {
+            definirErro("Informe um número de meses (1 ou mais), ou desligue o alerta.");
+            return;
+          }
+          salvar(Math.round(numero));
+        }}
+        className="space-y-3"
+      >
+        <div className="flex gap-1">
+          {OPCOES_ALERTA.map((meses) => (
+            <button
+              key={meses}
+              type="button"
+              onClick={() => definirTexto(String(meses))}
+              aria-pressed={texto === String(meses)}
+              className={clsx(
+                "flex-1 rounded-md border border-linha px-2 py-1.5 text-[12px] transition-colors",
+                texto === String(meses) ? "bg-realce-medio font-medium text-tinta" : "text-tinta-2 hover:bg-realce-fraco",
+              )}
+            >
+              {meses} meses
+            </button>
+          ))}
+        </div>
+        <div>
+          <Rotulo>Ou outro valor (meses)</Rotulo>
+          <Campo type="number" min={1} max={120} value={texto} onChange={(e) => definirTexto(e.target.value)} placeholder="Ex.: 18" />
+        </div>
+        <Aviso>{erro}</Aviso>
+        <div className="flex justify-between gap-2 pt-1">
+          <Botao variante="sutil" onClick={() => salvar(null)} disabled={salvando || especialidade.mesesAlerta === null}>
+            Desligar alerta
+          </Botao>
+          <div className="flex gap-2">
+            <Botao onClick={aoFechar}>Cancelar</Botao>
+            <Botao type="submit" variante="primario" disabled={salvando}>
+              Salvar
+            </Botao>
+          </div>
+        </div>
+      </form>
+    </Dialogo>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Lixeira                                                                  */
+/* ---------------------------------------------------------------------- */
+
+function LixeiraSaude({ aplicar }: { aplicar: (resposta: RespostaSaude) => boolean }) {
+  const [itens, definirItens] = useState<ItemLixeiraSaude[] | null>(null);
+  const [processando, definirProcessando] = useState<string | null>(null);
+  const [confirmandoEsvaziar, definirConfirmandoEsvaziar] = useState(false);
+  const [apagando, definirApagando] = useState<ItemLixeiraSaude | null>(null);
+  const [erro, definirErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    acaoListarLixeiraSaude().then((lista) => {
+      if (!cancelado) definirItens(lista);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  async function restaurar(item: ItemLixeiraSaude) {
+    definirProcessando(item.id);
+    definirErro(null);
+    const resposta = await acaoRestaurarDaLixeiraSaude(item.id);
+    definirProcessando(null);
+    if (!resposta.ok) {
+      definirErro(resposta.erro);
+      return;
+    }
+    aplicar(resposta);
+    definirItens((atuais) => atuais?.filter((outro) => outro.id !== item.id) ?? null);
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-linha px-5 py-2.5">
+        <Trash2 size={15} className="text-tinta-3" />
+        <h2 className="text-[14px] font-bold tracking-[-0.02em]">Lixeira</h2>
+        <span className="text-[11.5px] text-tinta-3">{itens?.length ? `${itens.length} ${itens.length === 1 ? "registro" : "registros"}` : ""}</span>
+        {itens?.length ? (
+          <Botao variante="perigo" onClick={() => definirConfirmandoEsvaziar(true)} className="ml-auto">
+            Esvaziar lixeira
+          </Botao>
+        ) : null}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        {itens === null ? (
+          <p className="px-2 py-3 text-[12px] text-tinta-3">Carregando…</p>
+        ) : itens.length === 0 ? (
+          <Vazio icone={<Trash2 size={22} />} titulo="Lixeira vazia" descricao="Registros excluídos ficam aqui, com os anexos, até você restaurar ou apagar de vez." />
+        ) : (
+          <div className="mx-auto max-w-3xl space-y-0.5">
+            {itens.map((item) => (
+              <div key={item.id} className="group flex items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-realce-fraco">
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[13px] font-medium text-tinta">{item.titulo}</span>
+                    <span className="shrink-0 text-[10.5px] text-tinta-3">{ROTULO_TIPO[item.tipo]}</span>
+                  </span>
+                  <span className="block truncate text-[11.5px] text-tinta-3">
+                    {[item.especialidadeNome, formatarDataSaude(item.data), item.anexos ? `${item.anexos} ${item.anexos === 1 ? "anexo" : "anexos"}` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    {" · excluído em "}
+                    {new Date(item.excluidoEm).toLocaleDateString("pt-BR")}
+                  </span>
+                </span>
+                <Botao variante="sutil" className="h-7 px-2 text-[11.5px]" disabled={processando === item.id} onClick={() => restaurar(item)}>
+                  <RotateCcw size={12} />
+                  Restaurar
+                </Botao>
+                <BotaoIcone rotulo="Apagar de vez" onClick={() => definirApagando(item)} className="size-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
+                  <X size={13} />
+                </BotaoIcone>
+              </div>
+            ))}
+          </div>
+        )}
+        <Aviso>{erro}</Aviso>
+      </div>
+
+      {apagando ? (
+        <DialogoConfirmar
+          aberto
+          titulo={`Apagar "${apagando.titulo}" de vez?`}
+          descricao={apagando.anexos ? "Os anexos são apagados do disco junto. Não dá para desfazer." : "Não dá para desfazer."}
+          textoBotao="Apagar de vez"
+          aoFechar={() => definirApagando(null)}
+          aoConfirmar={async () => {
+            await acaoApagarDeVezDaLixeiraSaude(apagando.id);
+            definirItens((atuais) => atuais?.filter((outro) => outro.id !== apagando.id) ?? null);
+            definirApagando(null);
+            return null;
+          }}
+        />
+      ) : null}
+
+      {confirmandoEsvaziar ? (
+        <DialogoConfirmar
+          aberto
+          titulo="Esvaziar a lixeira?"
+          descricao="Todos os registros e anexos aqui são apagados do disco. Não dá para desfazer."
+          textoBotao="Esvaziar"
+          aoFechar={() => definirConfirmandoEsvaziar(false)}
+          aoConfirmar={async () => {
+            await acaoEsvaziarLixeiraSaude();
+            definirItens([]);
+            definirConfirmandoEsvaziar(false);
+            return null;
+          }}
+        />
+      ) : null}
+    </div>
   );
 }
 

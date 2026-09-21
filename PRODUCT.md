@@ -550,8 +550,23 @@ limpas e abríveis em qualquer editor.
     sugere "agendado", vazia "solicitado". Título vazio vira o nome do
     tipo. Busca global (`Ctrl K`, prefixo `+`) acha por título,
     observações, profissional ou especialidade e abre o registro; `n`
-    cria dentro da tela; `Alt+6` vai pra Saúde. Fases seguintes: Próximos
-    e linha do tempo, lixeira, alerta "está na hora" por especialidade.
+    cria dentro da tela; `Alt+6` vai pra Saúde.
+  - **Próximos** (a tela que abre por padrão quando há registros — é o
+    que se olha antes de ligar pra clínica): "Está na hora", agendados
+    por data (os já passados esmaecidos), aguardando resultado e
+    solicitados sem data. **Linha do tempo**: tudo, de todas as
+    especialidades, por mês. Nas duas, a linha diz de qual especialidade
+    é o registro.
+  - **Alerta por especialidade** ("Alerta…" nas opções dela): N meses sem
+    consulta *realizada* — exame não zera o relógio — e a especialidade
+    aparece em "Está na hora" com a data da última consulta (ou "nenhuma
+    registrada"), botão "Agendar" já com ela pré-escolhida e "Ajustar".
+    Uma consulta agendada pra frente silencia o alerta. Só dentro do
+    subapp: bolinha laranja no nó Próximos, nada no trilho.
+  - **Lixeira** própria (`_saude/lixeira.json`): excluir um registro (ou
+    uma especialidade com registros) manda pra lá com os anexos ainda em
+    disco; restaurar volta pra especialidade de origem (ou por nome, se
+    ela foi recriada); apagar de vez / esvaziar é o que apaga os arquivos.
 - **Cadernos e quadros reordenáveis arrastando** — mesmo gesto de arrastar
   seção/página, na lista da coluna esquerda. O primeiro da lista é o que
   abre quando se clica na aba da aplicação (Anotações ou Kanban) vindo de

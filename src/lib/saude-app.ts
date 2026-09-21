@@ -25,6 +25,7 @@ import type {
  */
 const PASTA_SAUDE = "_saude";
 const ARQUIVO_DADOS = path.join(RAIZ, PASTA_SAUDE, "saude.json");
+const ARQUIVO_LIXEIRA = path.join(RAIZ, PASTA_SAUDE, "lixeira.json");
 const PASTA_ANEXOS = path.join(RAIZ, PASTA_SAUDE, "anexos");
 
 export const LIMITE_ANEXO_BYTES = 25 * 1024 * 1024;
@@ -127,12 +128,12 @@ export async function atualizarEspecialidade(
   });
 }
 
-/** Leva os eventos junto — inclusive os anexos em disco. Quem quer guardar move os eventos antes. */
+/** Os registros dela vão pra lixeira (anexos ficam no disco até apagar de vez); a especialidade em si some. */
 export async function excluirEspecialidade(id: string): Promise<DadosSaude> {
   return alterar(async (dados) => {
-    exigirEspecialidade(dados, id);
+    const especialidade = exigirEspecialidade(dados, id);
     const seus = dados.eventos.filter((evento) => evento.especialidadeId === id);
-    for (const evento of seus) await apagarAnexosDoEvento(evento.id);
+    if (seus.length) await enviarParaLixeira(seus, especialidade.nome);
     dados.eventos = dados.eventos.filter((evento) => evento.especialidadeId !== id);
     dados.especialidades = dados.especialidades.filter((item) => item.id !== id);
     for (const profissional of dados.profissionais) if (profissional.especialidadeId === id) profissional.especialidadeId = null;
@@ -371,14 +372,113 @@ export async function moverEvento(id: string, especialidadeId: string): Promise<
   });
 }
 
-/** Apaga de vez, anexos junto — a lixeira entra na fase 2. */
+/** Manda pra lixeira. Os anexos continuam no disco — só somem ao apagar de vez ou esvaziar. */
 export async function excluirEvento(id: string): Promise<DadosSaude> {
   return alterar(async (dados) => {
-    exigirEvento(dados, id);
-    await apagarAnexosDoEvento(id);
+    const evento = exigirEvento(dados, id);
+    const especialidade = dados.especialidades.find((item) => item.id === evento.especialidadeId);
+    await enviarParaLixeira([evento], especialidade?.nome ?? "");
     dados.eventos = dados.eventos.filter((item) => item.id !== id);
     return dados;
   });
+}
+
+// ----------------------------------------------------------------- lixeira
+
+/**
+ * Lixeira própria, como a de Links: o registro sai do JSON vivo e fica
+ * aqui até ser restaurado ou apagado de vez. Guarda o nome da
+ * especialidade porque ela pode ter sido excluída junto — na hora de
+ * restaurar, se não existir mais, a pessoa precisa criar uma antes.
+ */
+type RegistroLixeiraSaude = {
+  evento: EventoSaude;
+  especialidadeNome: string;
+  excluidoEm: string;
+};
+
+export type ItemLixeiraSaude = {
+  id: string;
+  titulo: string;
+  tipo: TipoEventoSaude;
+  data: string | null;
+  especialidadeNome: string;
+  anexos: number;
+  excluidoEm: string;
+};
+
+async function lerLixeira(): Promise<RegistroLixeiraSaude[]> {
+  try {
+    return JSON.parse(await fs.readFile(ARQUIVO_LIXEIRA, "utf8")) as RegistroLixeiraSaude[];
+  } catch {
+    return [];
+  }
+}
+
+async function gravarLixeira(itens: RegistroLixeiraSaude[]): Promise<void> {
+  await fs.mkdir(path.dirname(ARQUIVO_LIXEIRA), { recursive: true });
+  await fs.writeFile(ARQUIVO_LIXEIRA, JSON.stringify(itens, null, 2), "utf8");
+}
+
+/** Chamado de dentro de `alterar` — a fila dos dados já serializa, não precisa de outra. */
+async function enviarParaLixeira(eventos: EventoSaude[], especialidadeNome: string): Promise<void> {
+  const itens = await lerLixeira();
+  const agora = new Date().toISOString();
+  for (const evento of eventos) itens.push({ evento, especialidadeNome, excluidoEm: agora });
+  await gravarLixeira(itens);
+}
+
+export async function listarLixeira(): Promise<ItemLixeiraSaude[]> {
+  const itens = await lerLixeira();
+  return itens
+    .map(({ evento, especialidadeNome, excluidoEm }) => ({
+      id: evento.id,
+      titulo: evento.titulo,
+      tipo: evento.tipo,
+      data: evento.data,
+      especialidadeNome,
+      anexos: evento.anexos.length,
+      excluidoEm,
+    }))
+    .sort((a, b) => b.excluidoEm.localeCompare(a.excluidoEm));
+}
+
+/** Volta pra especialidade de origem; se ela foi excluída, tenta pelo nome; sem nenhuma, avisa. */
+export async function restaurarDaLixeira(id: string): Promise<DadosSaude> {
+  return alterar(async (dados) => {
+    const itens = await lerLixeira();
+    const posicao = itens.findIndex((item) => item.evento.id === id);
+    if (posicao === -1) throw new Error("Registro não encontrado na lixeira.");
+    const { evento, especialidadeNome } = itens[posicao];
+    const destino =
+      dados.especialidades.find((item) => item.id === evento.especialidadeId) ??
+      dados.especialidades.find((item) => item.nome.toLowerCase() === especialidadeNome.toLowerCase());
+    if (!destino) {
+      throw new Error(`A especialidade "${especialidadeNome}" não existe mais — crie uma com esse nome e restaure de novo.`);
+    }
+    evento.especialidadeId = destino.id;
+    if (evento.profissionalId && !dados.profissionais.some((item) => item.id === evento.profissionalId)) evento.profissionalId = null;
+    if (evento.localId && !dados.locais.some((item) => item.id === evento.localId)) evento.localId = null;
+    if (evento.pedidoPorId && !dados.eventos.some((item) => item.id === evento.pedidoPorId)) evento.pedidoPorId = null;
+    dados.eventos.push(evento);
+    itens.splice(posicao, 1);
+    await gravarLixeira(itens);
+    return dados;
+  });
+}
+
+export async function apagarDeVezDaLixeira(id: string): Promise<void> {
+  const itens = await lerLixeira();
+  const restantes = itens.filter((item) => item.evento.id !== id);
+  if (restantes.length === itens.length) return;
+  await apagarAnexosDoEvento(id);
+  await gravarLixeira(restantes);
+}
+
+export async function esvaziarLixeira(): Promise<void> {
+  const itens = await lerLixeira();
+  for (const item of itens) await apagarAnexosDoEvento(item.evento.id);
+  await gravarLixeira([]);
 }
 
 // ------------------------------------------------------------------ anexos

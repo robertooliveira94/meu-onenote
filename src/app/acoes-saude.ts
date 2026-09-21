@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import * as saudeApp from "@/lib/saude-app";
-import type { CamposEvento, CamposLocal, CamposProfissional, EventoAchado, ExtrasEvento } from "@/lib/saude-app";
+import type { CamposEvento, CamposLocal, CamposProfissional, EventoAchado, ExtrasEvento, ItemLixeiraSaude } from "@/lib/saude-app";
 import type { DadosSaude, EspecialidadeSaude, StatusEventoSaude } from "@/lib/tipos";
 
 /** Ações da app de Saúde — tudo devolve os dados inteiros, como Links e Compras. Os dados só aparecem em `/saude`. */
@@ -106,4 +106,23 @@ export async function acaoRemoverAnexo(idEvento: string, idAnexo: string): Promi
 
 export async function acaoBuscarEventosSaude(termo: string): Promise<EventoAchado[]> {
   return saudeApp.buscarEventos(termo);
+}
+
+// lixeira
+export async function acaoListarLixeiraSaude(): Promise<ItemLixeiraSaude[]> {
+  return saudeApp.listarLixeira();
+}
+
+export async function acaoRestaurarDaLixeiraSaude(id: string): Promise<RespostaSaude> {
+  return comTratamento(() => saudeApp.restaurarDaLixeira(id));
+}
+
+export async function acaoApagarDeVezDaLixeiraSaude(id: string): Promise<{ ok: true }> {
+  await saudeApp.apagarDeVezDaLixeira(id);
+  return { ok: true };
+}
+
+export async function acaoEsvaziarLixeiraSaude(): Promise<{ ok: true }> {
+  await saudeApp.esvaziarLixeira();
+  return { ok: true };
 }

@@ -1,4 +1,4 @@
-import type { EventoSaude, StatusEventoSaude, TipoEventoSaude } from "./tipos";
+import type { DadosSaude, EspecialidadeSaude, EventoSaude, StatusEventoSaude, TipoEventoSaude } from "./tipos";
 
 /** Rótulos e ordenações de Saúde que a tela usa — sem disco, importável do cliente. */
 
@@ -55,4 +55,47 @@ export function formatarTamanho(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Diferença em meses inteiros entre duas datas ISO (`ate` − `de`). */
+export function mesesEntre(de: string, ate: string): number {
+  const [anoDe, mesDe, diaDe] = de.split("-").map(Number);
+  const [anoAte, mesAte, diaAte] = ate.split("-").map(Number);
+  let meses = (anoAte - anoDe) * 12 + (mesAte - mesDe);
+  if (diaAte < diaDe) meses -= 1;
+  return meses;
+}
+
+export type AlertaSaude = {
+  especialidade: EspecialidadeSaude;
+  /** Data da última consulta realizada, ou `null` se nunca houve. */
+  ultimaConsulta: string | null;
+  mesesDesde: number | null;
+};
+
+/**
+ * "Está na hora": especialidades com alerta configurado cuja última
+ * consulta realizada passou do prazo (ou nunca aconteceu), e que não têm
+ * consulta agendada pra frente — agendou, o alerta se cala.
+ */
+export function alertasDeSaude(dados: DadosSaude, hoje = hojeIso()): AlertaSaude[] {
+  const alertas: AlertaSaude[] = [];
+  for (const especialidade of dados.especialidades) {
+    if (especialidade.mesesAlerta === null) continue;
+    const consultas = dados.eventos.filter((evento) => evento.especialidadeId === especialidade.id && evento.tipo === "consulta");
+    const agendadaAdiante = consultas.some((evento) => evento.status === "agendado" && evento.data !== null && evento.data >= hoje);
+    if (agendadaAdiante) continue;
+    const realizadas = consultas.filter((evento) => evento.status === "realizado" && evento.data !== null).map((evento) => evento.data!);
+    const ultima = realizadas.length ? realizadas.sort().at(-1)! : null;
+    const mesesDesde = ultima ? mesesEntre(ultima, hoje) : null;
+    if (ultima && mesesDesde !== null && mesesDesde < especialidade.mesesAlerta) continue;
+    alertas.push({ especialidade, ultimaConsulta: ultima, mesesDesde });
+  }
+  return alertas;
+}
+
+/** Cabeçalho de mês da linha do tempo: "setembro de 2026". */
+export function rotuloDoMes(iso: string): string {
+  const [ano, mes] = iso.split("-").map(Number);
+  return new Date(ano, mes - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
