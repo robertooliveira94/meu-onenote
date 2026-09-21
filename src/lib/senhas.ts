@@ -5,7 +5,6 @@ import argon2 from "argon2";
 import * as kdbxweb from "kdbxweb";
 
 import { RAIZ } from "./caminhos";
-import { gravarAtomico, gravarJson } from "./gravacao";
 import type {
   AnexoSenha,
   CampoExtraSenha,
@@ -53,7 +52,8 @@ export async function obterConfig(): Promise<ConfigSenhas> {
 export async function definirConfig(mudanca: Partial<ConfigSenhas>): Promise<ConfigSenhas> {
   const atual = await obterConfig();
   const nova: ConfigSenhas = { ...atual, ...mudanca };
-  await gravarJson(CAMINHO_CONFIG, nova);
+  await fs.mkdir(path.dirname(CAMINHO_CONFIG), { recursive: true });
+  await fs.writeFile(CAMINHO_CONFIG, JSON.stringify(nova, null, 2));
   const sessao = guardaGlobal.__cofreSessao;
   if (sessao) {
     sessao.esperaTravamentoMs = nova.minutosTrava === null ? null : nova.minutosTrava * 60_000;
@@ -168,16 +168,10 @@ async function descarregar(sessao: Sessao): Promise<void> {
   }
   if (sessao.salvando) await sessao.salvando;
   if (!sessao.sujo) return;
-  // `sujo` só cai depois da gravação dar certo: se ela falhar, a mudança
-  // continua marcada e a próxima tentativa (ou o trancar) grava de novo, em
-  // vez de a alteração em memória sumir sem aviso.
-  sessao.salvando = salvarNoDisco(sessao.db)
-    .then(() => {
-      sessao.sujo = false;
-    })
-    .finally(() => {
-      sessao.salvando = null;
-    });
+  sessao.sujo = false;
+  sessao.salvando = salvarNoDisco(sessao.db).finally(() => {
+    sessao.salvando = null;
+  });
   await sessao.salvando;
 }
 
@@ -262,7 +256,8 @@ export async function excluirCofre(): Promise<void> {
  */
 async function salvarNoDisco(db: kdbxweb.Kdbx): Promise<void> {
   const bytes = await db.save();
-  await gravarAtomico(CAMINHO_COFRE, new Uint8Array(bytes), { manterCopia: true });
+  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
+  await fs.writeFile(CAMINHO_COFRE, Buffer.from(bytes));
 }
 
 /** Cria um cofre novo — nasce já com um grupo "Geral" para as primeiras senhas. */
@@ -295,7 +290,8 @@ export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise
   } catch {
     return false;
   }
-  await gravarAtomico(CAMINHO_COFRE, bytes, { manterCopia: true });
+  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
+  await fs.writeFile(CAMINHO_COFRE, bytes);
   await abrirSessao(db);
   return true;
 }
@@ -338,8 +334,8 @@ export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): 
   // save leva junto qualquer mudança de conteúdo que estivesse pendente.
   if (sessao.timerSalvar) clearTimeout(sessao.timerSalvar);
   sessao.timerSalvar = null;
-  await salvarNoDisco(sessao.db);
   sessao.sujo = false;
+  await salvarNoDisco(sessao.db);
   tocarSessao(sessao);
   return "ok";
 }

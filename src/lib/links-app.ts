@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
-import { gravarJson } from "./gravacao";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
 import type { NoImportado } from "./importar-favoritos";
 import {
@@ -72,7 +71,8 @@ async function lerArvore(): Promise<PastaLink> {
 }
 
 async function gravarArvore(raiz: PastaLink): Promise<void> {
-  await gravarJson(ARQUIVO_ARVORE, raiz);
+  await fs.mkdir(path.dirname(ARQUIVO_ARVORE), { recursive: true });
+  await fs.writeFile(ARQUIVO_ARVORE, JSON.stringify(raiz, null, 2), "utf8");
 }
 
 let fila: Promise<unknown> = Promise.resolve();
