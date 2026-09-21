@@ -498,9 +498,11 @@ limpas e abríveis em qualquer editor.
     Clipper das Anotações): dois botões pra barra de favoritos — "Salvar
     como link" abre uma janela pop-up pequena por cima da página atual
     (escolhe a pasta, salva, fecha sozinha, sem trocar de aba nem virar
-    nota) e "Abrir meus links" — este um endereço comum pra `/links-popup`
-    (favorito `javascript:` não recebe ícone em navegador nenhum; um
-    endereço normal ganha o ícone do app). A janelinha é a árvore de
+    nota) e "Abrir meus links" (janelinha pequena de `/links-popup`), mais
+    uma variante "em aba, com ícone": endereço comum, porque favorito
+    `javascript:` não recebe ícone em navegador nenhum e um endereço
+    normal ganha o ícone do app — mas abre em aba, não em janelinha; não
+    dá pra ter os dois num favorito só. A janelinha é a árvore de
     pastas toda fechada, sem favoritos nem recentes na frente: clicar numa
     pasta abre ela ali mesmo; clicar num link abre e fecha a janela
     sozinha. A extensão de navegador (ver Senhas, mesma pasta

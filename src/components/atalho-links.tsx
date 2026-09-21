@@ -77,11 +77,14 @@ export function AtalhoDeLinks() {
   const salvarLink = origem
     ? `javascript:void(window.open('${origem}/salvar-link?url='+encodeURIComponent(location.href)+'&titulo='+encodeURIComponent(document.title),'_blank','width=420,height=520'))`
     : "";
-  // Endereço comum, não bookmarklet: um favorito `javascript:` nunca ganha
-  // ícone na barra do navegador (não há página por trás dele), e um
-  // favorito pra `/links-popup` ganha o ícone do app. Abre numa aba, com a
-  // mesma janelinha de pastas.
-  const abrirLinks = origem ? `${origem}/links-popup` : "";
+  const abrirLinks = origem
+    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=340,height=560'))`
+    : "";
+  // Variante de endereço comum: um favorito `javascript:` nunca ganha ícone
+  // na barra do navegador (não há página por trás dele); um favorito pra
+  // `/links-popup` ganha o ícone do app — mas abre numa aba, não numa
+  // janelinha. Não existe jeito de ter os dois num favorito só.
+  const abrirLinksEmAba = origem ? `${origem}/links-popup` : "";
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -114,10 +117,15 @@ export function AtalhoDeLinks() {
             <div>
               <h2 className="mb-2 text-[12px] font-semibold text-tinta">Abrir meus links</h2>
               <BlocoBookmarklet rotulo="Abrir meus links" icone={<FolderOpen size={14} />} codigo={abrirLinks} />
+            </div>
+            <div>
+              <h2 className="mb-2 text-[12px] font-semibold text-tinta">Abrir meus links — em aba, com ícone</h2>
+              <BlocoBookmarklet rotulo="Meus links (aba)" icone={<FolderOpen size={14} />} codigo={abrirLinksEmAba} />
               <p className="mt-2 text-[11.5px] leading-relaxed text-tinta-3">
-                Este é um endereço normal, então o favorito fica com o ícone do app. O “Salvar como link” não
-                tem como: ele precisa ser código (pega a página aberta), e favorito de código não recebe ícone
-                em nenhum navegador — a extensão do Chrome faz a mesma coisa com ícone.
+                Os botões de cima são código (<span className="font-mono">javascript:</span>) — é o que abre a
+                janelinha pequena e pega a página aberta, mas favorito de código não recebe ícone em nenhum
+                navegador. Este aqui é um endereço comum: ganha o ícone do app, só que abre numa aba. Não dá para
+                ter os dois num favorito só; a extensão do Chrome tem ícone e faz tudo isso.
               </p>
             </div>
           </div>
