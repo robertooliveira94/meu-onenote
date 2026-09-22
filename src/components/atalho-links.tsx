@@ -77,14 +77,13 @@ export function AtalhoDeLinks() {
   const salvarLink = origem
     ? `javascript:void(window.open('${origem}/salvar-link?url='+encodeURIComponent(location.href)+'&titulo='+encodeURIComponent(document.title),'_blank','width=420,height=520'))`
     : "";
+  // Janelinha larga e baixa: os grupos ficam em colunas lado a lado, com
+  // todos os links à vista (ver `popup-links.tsx`). Favorito `javascript:`
+  // não ganha ícone em navegador nenhum — é o preço de abrir em janelinha
+  // em vez de aba; não existe jeito de ter os dois num favorito só.
   const abrirLinks = origem
-    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=340,height=560'))`
+    ? `javascript:void(window.open('${origem}/links-popup','_blank','width=820,height=520'))`
     : "";
-  // Variante de endereço comum: um favorito `javascript:` nunca ganha ícone
-  // na barra do navegador (não há página por trás dele); um favorito pra
-  // `/links-popup` ganha o ícone do app — mas abre numa aba, não numa
-  // janelinha. Não existe jeito de ter os dois num favorito só.
-  const abrirLinksEmAba = origem ? `${origem}/links-popup` : "";
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -117,15 +116,11 @@ export function AtalhoDeLinks() {
             <div>
               <h2 className="mb-2 text-[12px] font-semibold text-tinta">Abrir meus links</h2>
               <BlocoBookmarklet rotulo="Abrir meus links" icone={<FolderOpen size={14} />} codigo={abrirLinks} />
-            </div>
-            <div>
-              <h2 className="mb-2 text-[12px] font-semibold text-tinta">Abrir meus links — em aba, com ícone</h2>
-              <BlocoBookmarklet rotulo="Meus links (aba)" icone={<FolderOpen size={14} />} codigo={abrirLinksEmAba} />
               <p className="mt-2 text-[11.5px] leading-relaxed text-tinta-3">
-                Os botões de cima são código (<span className="font-mono">javascript:</span>) — é o que abre a
-                janelinha pequena e pega a página aberta, mas favorito de código não recebe ícone em nenhum
-                navegador. Este aqui é um endereço comum: ganha o ícone do app, só que abre numa aba. Não dá para
-                ter os dois num favorito só; a extensão do Chrome tem ícone e faz tudo isso.
+                Abre uma janelinha larga com os grupos em colunas e todos os links à vista. Os dois botões são
+                código (<span className="font-mono">javascript:</span>) — é o que consegue abrir janelinha e pegar
+                a página aberta — e favorito de código não recebe ícone em nenhum navegador; a extensão do Chrome
+                tem ícone e faz o mesmo.
               </p>
             </div>
           </div>

@@ -498,14 +498,15 @@ limpas e abríveis em qualquer editor.
     Clipper das Anotações): dois botões pra barra de favoritos — "Salvar
     como link" abre uma janela pop-up pequena por cima da página atual
     (escolhe a pasta, salva, fecha sozinha, sem trocar de aba nem virar
-    nota) e "Abrir meus links" (janelinha pequena de `/links-popup`), mais
-    uma variante "em aba, com ícone": endereço comum, porque favorito
-    `javascript:` não recebe ícone em navegador nenhum e um endereço
-    normal ganha o ícone do app — mas abre em aba, não em janelinha; não
-    dá pra ter os dois num favorito só. A janelinha é a árvore de
-    pastas toda fechada, sem favoritos nem recentes na frente: clicar numa
-    pasta abre ela ali mesmo; clicar num link abre e fecha a janela
-    sozinha. A extensão de navegador (ver Senhas, mesma pasta
+    nota) e "Abrir meus links", que abre `/links-popup` numa janelinha
+    larga (820×520): uma grade de cartões, um por pasta de primeiro nível,
+    lado a lado, quebrando pra linha de baixo — dentro, os links da pasta
+    e as subpastas com os seus, tudo à vista, sem favoritos nem recentes;
+    "Geral" (links soltos da raiz) é o primeiro cartão. Clicar num link
+    abre em aba nova e fecha a janelinha sozinha. Os dois favoritos são
+    `javascript:` (é o que abre janelinha e pega a página aberta), e
+    favorito de código não recebe ícone em navegador nenhum — a extensão
+    tem ícone. A extensão de navegador (ver Senhas, mesma pasta
     `extensao/`) ganhou uma aba "Links" no popup da barra e um painel
     lateral (`chrome.sidePanel`) com o mesmo `/links-popup` embutido —
     útil pra manter os favoritos à mão numa coluna fixa ao lado da aba.
