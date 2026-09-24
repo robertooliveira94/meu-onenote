@@ -7,8 +7,13 @@ import { createContext, useContext, useEffect, useState } from "react";
  * botão de recolher mora dentro da própria coluna, mas o estado precisa
  * sobreviver a essa coluna trocando de conteúdo (de caderno pra caderno, de
  * quadro pra quadro) sem se perder.
+ *
+ * `atalhos` não é uma coluna: é a lista fixa (Início, Etiquetas, Grafo…)
+ * no rodapé da coluna de Anotações. Mora aqui porque é o mesmo
+ * "recolhido, e lembrado entre sessões" — em tela pequena, fechar essa
+ * lista é o que dá altura pra árvore de cadernos.
  */
-export type Coluna = "secoes" | "quadros";
+export type Coluna = "secoes" | "quadros" | "atalhos";
 
 const ColunasContexto = createContext<{
   recolhida: (coluna: Coluna) => boolean;
@@ -18,12 +23,14 @@ const ColunasContexto = createContext<{
 const CHAVES: Record<Coluna, string> = {
   secoes: "coluna-secoes-recolhida",
   quadros: "coluna-quadros-recolhida",
+  atalhos: "atalhos-notas-recolhidos",
 };
 
 export function ColunasProvedor({ children }: { children: React.ReactNode }) {
   const [estado, definirEstado] = useState<Record<Coluna, boolean>>({
     secoes: false,
     quadros: false,
+    atalhos: false,
   });
 
   useEffect(() => {
@@ -31,6 +38,7 @@ export function ColunasProvedor({ children }: { children: React.ReactNode }) {
       definirEstado({
         secoes: localStorage.getItem(CHAVES.secoes) === "1",
         quadros: localStorage.getItem(CHAVES.quadros) === "1",
+        atalhos: localStorage.getItem(CHAVES.atalhos) === "1",
       });
     } catch {
       // Sem armazenamento: começam sempre abertas.

@@ -2,6 +2,8 @@
 
 import clsx from "clsx";
 import {
+  ChevronDown,
+  ChevronRight,
   Download,
   GitBranch,
   House,
@@ -59,6 +61,7 @@ export function ColunaSecoes({
     maxima: 460,
   });
   const colunas = useColunas();
+  const atalhosRecolhidos = colunas.recolhida("atalhos");
 
   const secaoAtiva = caderno?.secoes.find((secao) =>
     decodeURIComponent(caminhoAtual).startsWith(`/nota/${secao.caminho}/`) ||
@@ -110,7 +113,24 @@ export function ColunaSecoes({
 
       <div className="mx-3 h-px bg-linha" />
 
-      <nav className="shrink-0 overflow-y-auto p-2" aria-label="Atalhos">
+      {/* A lista fixa recolhe: em tela pequena, é a altura dela que falta
+          pra árvore de cadernos. O estado fica no mesmo lugar do recolher
+          das colunas, e é lembrado entre sessões. */}
+      <button
+        type="button"
+        onClick={() => colunas.alternar("atalhos")}
+        aria-expanded={!atalhosRecolhidos}
+        title={atalhosRecolhidos ? "Mostrar Início, Etiquetas, Grafo…" : "Esconder Início, Etiquetas, Grafo…"}
+        className="flex shrink-0 items-center gap-1 px-3 py-1.5 text-[10.5px] font-medium tracking-wide text-tinta-3 uppercase transition-colors hover:text-tinta-2"
+      >
+        {atalhosRecolhidos ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        Atalhos
+      </button>
+
+      <nav
+        className={clsx("shrink-0 overflow-y-auto px-2 pb-2", atalhosRecolhidos && "hidden")}
+        aria-label="Atalhos"
+      >
         <Atalho href="/" icone={<House size={14} />} ativo={caminhoAtual === "/"}>
           Início
         </Atalho>

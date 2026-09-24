@@ -126,7 +126,11 @@ limpas e abríveis em qualquer editor.
   nenhum: página nova é sempre markdown.
 - A coluna da árvore se recolhe numa faixa fina (`[`), e a faixa continua
   dizendo onde a pessoa está: caderno › seção, escritos de cima para
-  baixo. Clicar no nome abre a coluna de volta.
+  baixo. Clicar no nome abre a coluna de volta. A lista fixa do rodapé
+  (Início, Etiquetas, Grafo, Tarefas, Modelos, Web Clipper, Exportar
+  tudo, Lixeira) também recolhe, pelo próprio título "Atalhos", e fica
+  lembrada entre sessões — em tela baixa é a altura dela que falta para
+  os cadernos.
 - **O editor se comporta como um editor**, mesmo sendo um campo de texto:
   Enter continua a lista (numerada com o número seguinte, tarefa como
   tarefa) e um item vazio encerra a lista; Tab/Shift+Tab indentam; Alt+↑/↓
