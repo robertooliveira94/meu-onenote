@@ -20,6 +20,11 @@ npm-debug.log*
 .env
 .env.example
 
-# scripts do serviço do Windows não fazem sentido dentro do container
-scripts
+# scripts do serviço do Windows não fazem sentido dentro do container; o
+# `copiar-fontes-excalidraw.mjs` permanece porque o `prebuild` precisa dele
+scripts/*.ps1
 *.bat
+
+# artefatos locais do mapa do código não participam da aplicação e tornam o
+# contexto do Docker desnecessariamente grande
+graphify-out

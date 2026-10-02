@@ -2584,13 +2584,13 @@
       "degree": 62
     },
     {
-      "id": "src_components_nota_paginanota",
-      "label": "PaginaNota()",
+      "id": "src_lib_indice_atualizarindice",
+      "label": "atualizarIndice()",
       "degree": 59
     },
     {
-      "id": "src_lib_indice_atualizarindice",
-      "label": "atualizarIndice()",
+      "id": "src_components_nota_paginanota",
+      "label": "PaginaNota()",
       "degree": 59
     },
     {
@@ -2604,13 +2604,13 @@
       "degree": 47
     },
     {
-      "id": "src_app_acoes_kanban_tentar",
-      "label": "tentar()",
+      "id": "src_components_arvore_notas_arvorenotas",
+      "label": "ArvoreNotas()",
       "degree": 39
     },
     {
-      "id": "src_components_arvore_notas_arvorenotas",
-      "label": "ArvoreNotas()",
+      "id": "src_app_acoes_kanban_tentar",
+      "label": "tentar()",
       "degree": 39
     }
   ],
