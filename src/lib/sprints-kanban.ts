@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { PASTA_KANBAN, PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { atualizarIndice } from "./indice";
 import { PASTA_ARQUIVO, garantirQuadro } from "./kanban";
 import type { SprintKanban } from "./tipos";
@@ -25,8 +26,7 @@ async function lerBruto(): Promise<SprintKanban[]> {
 }
 
 async function gravar(sprints: SprintKanban[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_SPRINTS), { recursive: true });
-  await fs.writeFile(ARQUIVO_SPRINTS, JSON.stringify(sprints, null, 2), "utf8");
+  await gravarJson(ARQUIVO_SPRINTS, sprints);
 }
 
 async function alterar<T>(mudanca: (sprints: SprintKanban[]) => T | Promise<T>): Promise<T> {

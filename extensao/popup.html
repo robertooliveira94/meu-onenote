@@ -6,7 +6,7 @@
     <style>
       body {
         margin: 0;
-        width: 300px;
+        width: 340px;
         font: 13px/1.4 -apple-system, system-ui, sans-serif;
         background: #151d2b;
         color: #e9eef6;
@@ -45,6 +45,217 @@
         padding: 10px 12px;
         border-radius: 10px;
         background: #1b2434;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .cofre-corpo {
+        padding: 0 12px 12px;
+      }
+      .cofre-corpo .status {
+        margin: 0 4px 10px;
+      }
+      .versao-extensao {
+        margin-left: auto;
+        color: #7a8ba1;
+        font-size: 10px;
+      }
+      .campo-cofre,
+      .seletor-cofre {
+        box-sizing: border-box;
+        width: 100%;
+        height: 34px;
+        border: 1px solid #2d3a4d;
+        border-radius: 7px;
+        padding: 0 10px;
+        outline: none;
+        background: #111927;
+        color: #e9eef6;
+        font: inherit;
+      }
+      .campo-cofre:focus,
+      .seletor-cofre:focus {
+        border-color: #0ea47c;
+      }
+      .campo-cofre::placeholder {
+        color: #6f7e92;
+      }
+      .botao-cofre {
+        border: 0;
+        border-radius: 7px;
+        padding: 8px 10px;
+        cursor: pointer;
+        background: #0ea47c;
+        color: white;
+        font: inherit;
+        font-weight: 650;
+      }
+      .botao-cofre:disabled {
+        cursor: default;
+        opacity: 0.55;
+      }
+      .botao-cofre.secundario {
+        border: 1px solid #2d3a4d;
+        background: #1b2434;
+        color: #c4cfdd;
+      }
+      .linha-formulario {
+        display: flex;
+        gap: 7px;
+      }
+      .form-entrada {
+        display: grid;
+        gap: 8px;
+        padding: 2px 4px 4px;
+      }
+      .mensagem-cofre {
+        min-height: 17px;
+        margin: 7px 4px 0;
+        color: #9fadc0;
+        font-size: 11px;
+      }
+      .mensagem-cofre.erro {
+        color: #ff8388;
+      }
+      .barra-cofre {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 34px 34px;
+        gap: 6px;
+        margin-bottom: 7px;
+      }
+      .botao-icone-cofre {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #2d3a4d;
+        border-radius: 7px;
+        cursor: pointer;
+        background: #1b2434;
+        color: #c4cfdd;
+        font: inherit;
+      }
+      .botao-icone-cofre:hover,
+      .botao-linha:hover,
+      .grupo-senha > button:hover {
+        background: #253146;
+        color: #fff;
+      }
+      .lista-senhas {
+        height: 330px;
+        overflow-y: auto;
+        border: 1px solid #263347;
+        border-radius: 8px;
+        background: #111927;
+      }
+      .grupo-senha > button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        box-sizing: border-box;
+        width: 100%;
+        height: 32px;
+        border: 0;
+        padding-right: 8px;
+        cursor: pointer;
+        background: transparent;
+        color: #c4cfdd;
+        text-align: left;
+        font: inherit;
+      }
+      .grupo-nome {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .grupo-total {
+        color: #6f7e92;
+        font-size: 10px;
+      }
+      .linha-senha {
+        display: flex;
+        min-width: 0;
+        height: 36px;
+        align-items: center;
+        gap: 5px;
+        padding-right: 5px;
+        border-radius: 4px;
+      }
+      .linha-senha:hover {
+        background: #1b2434;
+      }
+      .icone-senha {
+        display: inline-flex;
+        width: 17px;
+        height: 17px;
+        flex: 0 0 17px;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 3px;
+        font-size: 11px;
+      }
+      .icone-senha img {
+        width: 16px;
+        height: 16px;
+        object-fit: contain;
+      }
+      .dados-senha {
+        min-width: 0;
+        flex: 1;
+      }
+      .titulo-senha,
+      .usuario-senha {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .titulo-senha {
+        color: #e9eef6;
+        font-size: 12px;
+      }
+      .usuario-senha {
+        color: #7f8ea3;
+        font-size: 10px;
+      }
+      .botao-linha {
+        display: inline-flex;
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 5px;
+        cursor: pointer;
+        background: transparent;
+        color: #7f8ea3;
+        font: 11px/1 -apple-system, system-ui, sans-serif;
+      }
+      .vazio-cofre {
+        padding: 28px 14px;
+        color: #7f8ea3;
+        text-align: center;
+        font-size: 12px;
+      }
+      .acoes-formulario {
+        display: flex;
+        gap: 7px;
+        margin-top: 2px;
+      }
+      .acoes-formulario .botao-cofre {
+        flex: 1;
+      }
+      .rotulo-cofre {
+        margin-bottom: -4px;
+        color: #8f9db0;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
       }
       .bolinha {
         width: 8px;
@@ -103,21 +314,71 @@
   </head>
   <body>
     <div class="abas">
-      <button type="button" class="aba ativa" id="abaSenhas">🔑 Senhas</button>
-      <button type="button" class="aba" id="abaLinks">🔖 Links</button>
+      <button type="button" class="aba ativa" id="abaLinks">🔖 Links</button>
+      <button type="button" class="aba" id="abaSenhas">🔑 Senhas</button>
       <button type="button" class="aba" id="abaCompras">🛒 Compras</button>
     </div>
 
-    <div class="painel ativo" id="painelSenhas">
-      <div class="status" id="status">
-        <span class="bolinha" id="bolinha"></span>
-        <span id="texto">Verificando…</span>
+    <div class="painel" id="painelSenhas">
+      <div class="cofre-corpo">
+        <div class="status" id="status">
+          <span class="bolinha" id="bolinha"></span>
+          <span id="texto">Verificando…</span>
+          <span class="versao-extensao" id="versaoExtensao"></span>
+        </div>
+
+        <form class="form-entrada" id="formDestrancar" hidden>
+          <input class="campo-cofre" id="senhaMestra" type="password" autocomplete="current-password" placeholder="Senha mestra" />
+          <label class="rotulo-cofre" for="manterCofreAberto">Manter aberto por</label>
+          <select class="seletor-cofre" id="manterCofreAberto">
+            <option value="5">5 minutos</option>
+            <option value="15" selected>15 minutos</option>
+            <option value="30">30 minutos</option>
+            <option value="60">1 hora</option>
+            <option value="120">2 horas</option>
+            <option value="480">8 horas</option>
+          </select>
+          <button class="botao-cofre" id="destrancar" type="submit">Destrancar neste popup</button>
+        </form>
+
+        <div id="cofreAberto" hidden>
+          <div class="barra-cofre">
+            <input class="campo-cofre" id="buscarSenhas" type="search" placeholder="Buscar senhas…" autocomplete="off" />
+            <button class="botao-icone-cofre" id="novaSenha" type="button" title="Nova senha">＋</button>
+            <button class="botao-icone-cofre" id="trancarCofre" type="button" title="Trancar cofre">🔒</button>
+          </div>
+          <div class="lista-senhas" id="listaSenhas"></div>
+        </div>
+
+        <form class="form-entrada" id="formNovaSenha" hidden>
+          <label class="rotulo-cofre" for="grupoNovaSenha">Grupo</label>
+          <select class="seletor-cofre" id="grupoNovaSenha"></select>
+          <label class="rotulo-cofre" for="tituloNovaSenha">Título</label>
+          <input class="campo-cofre" id="tituloNovaSenha" required maxlength="200" autocomplete="off" />
+          <label class="rotulo-cofre" for="usuarioNovaSenha">Usuário</label>
+          <input class="campo-cofre" id="usuarioNovaSenha" autocomplete="off" />
+          <label class="rotulo-cofre" for="senhaNovaSenha">Senha</label>
+          <div class="linha-formulario">
+            <input class="campo-cofre" id="senhaNovaSenha" type="password" autocomplete="new-password" />
+            <button class="botao-cofre secundario" id="gerarSenha" type="button" title="Gerar senha forte">Gerar</button>
+          </div>
+          <label class="rotulo-cofre" for="urlNovaSenha">Site</label>
+          <input class="campo-cofre" id="urlNovaSenha" type="url" placeholder="https://" autocomplete="off" />
+          <div class="acoes-formulario">
+            <button class="botao-cofre secundario" id="cancelarNovaSenha" type="button">Cancelar</button>
+            <button class="botao-cofre" id="salvarNovaSenha" type="submit">Guardar</button>
+          </div>
+        </form>
+
+        <p class="mensagem-cofre" id="mensagemCofre"></p>
+        <div class="linha-formulario">
+          <button type="button" class="botao-cofre secundario" id="abrir">Abrir cofre completo</button>
+          <a class="botao-cofre secundario" href="opcoes.html" target="_blank" style="text-decoration: none">Opções</a>
+        </div>
       </div>
-      <button type="button" class="acao" id="abrir">Abrir o cofre</button>
-      <p class="rodape">Preenche e captura senhas em qualquer site — <a href="opcoes.html" target="_blank">preferências</a>.</p>
     </div>
 
-    <div class="painel" id="painelLinks">
+    <div class="painel ativo" id="painelLinks">
       <p id="linksCarregando">Carregando…</p>
       <iframe id="quadroLinks" title="Seus links" hidden></iframe>
       <p class="rodape">Painel maior e mais confortável: clique com o botão direito no ícone da extensão → <strong>Abrir painel lateral</strong>.</p>

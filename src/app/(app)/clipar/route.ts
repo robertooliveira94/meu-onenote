@@ -41,6 +41,14 @@ async function resolverDestino(destinoDaUrl: string | null): Promise<string | nu
 }
 
 export async function GET(requisicao: Request) {
+  // Esta rota cria uma página a partir da URL. Ela é aberta como navegação
+  // (o favorito-script faz `window.open`) — nunca como <img> ou <script>
+  // de outra página, que é como um site qualquer conseguiria criar notas
+  // aqui sem ninguém pedir. O navegador diz qual é o caso em `Sec-Fetch-Dest`.
+  const destinoDaRequisicao = requisicao.headers.get("sec-fetch-dest");
+  if (destinoDaRequisicao && destinoDaRequisicao !== "document") {
+    return new NextResponse(null, { status: 403 });
+  }
   const params = new URL(requisicao.url).searchParams;
   const titulo = z.string().max(200).catch("").parse(params.get("titulo") ?? "");
   const url = z.string().max(2000).catch("").parse(params.get("url") ?? "");

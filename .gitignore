@@ -33,3 +33,7 @@ npm-debug.log*
 # modelo de embeddings baixado uma vez (busca inteligente) — ~90MB,
 # artefato binário, se baixa sozinho na primeira busca.
 /.cache/
+
+# fontes do editor de desenho, copiadas de node_modules antes de dev/build
+# (scripts/copiar-fontes-excalidraw.mjs).
+/public/excalidraw/

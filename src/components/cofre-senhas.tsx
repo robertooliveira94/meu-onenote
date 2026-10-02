@@ -115,7 +115,7 @@ import { Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMen
 const INTERVALO_VERIFICAR_TRANCA = 30_000;
 
 /** Mesmos tempos de `OPCOES_MANTER_ABERTO` em `senhas.ts` — duplicado porque aquele módulo não entra no cliente. */
-const OPCOES_MANTER_ABERTO: number[] = [15, 30, 60, 120, 240, 480];
+const OPCOES_MANTER_ABERTO: number[] = [5, 15, 30, 60, 120, 240, 480];
 
 /** Quantas entradas "Recentes" mostra. */
 const LIMITE_RECENTES = 30;

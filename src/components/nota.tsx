@@ -37,12 +37,14 @@ import {
   acaoExcluir,
   acaoRenomear,
   acaoSalvarAnexoDaNota,
+  acaoSalvarDesenho,
   acaoSalvarNota,
   acaoTitulosDeNotas,
 } from "@/app/acoes";
-import { pastaDe } from "@/lib/caminho-texto";
+import { juntar, pastaDe } from "@/lib/caminho-texto";
 import { contarCaracteres, contarPalavras, tempoDeLeituraEmMinutos } from "@/lib/contagem";
 import { ROTULO_FUNDO, useFundoEditor } from "@/lib/fundo-editor";
+import { publicarMudancaNasNotas } from "@/lib/eventos-notas";
 import { coordenadasDoCursor, offsetDaLinha } from "@/lib/cursor-editor";
 import { continuarLista, duplicarLinha, indentar, moverLinha } from "@/lib/editor-teclado";
 import { alternarTarefa, envolver, inserirBloco } from "@/lib/formatacao";
@@ -52,6 +54,7 @@ import { useLarguraLeitura } from "@/lib/largura-leitura";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import {
+  COMANDO_DESENHO,
   COMANDO_IMAGEM,
   aplicarComando,
   aplicarLink,
@@ -66,13 +69,14 @@ import {
   type TituloParaLink,
 } from "@/lib/sugestoes-editor";
 import { extrairTitulos } from "@/lib/sumario";
-import { formatarDataHora, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
+import { formatarDataHora, urlDaMidia, urlDaNota, urlDaNotaFlutuante } from "@/lib/rotas";
 import type { Etiqueta, Modelo, Nota } from "@/lib/tipos";
 import { useAtalho } from "@/lib/atalhos";
 import { useZoomTexto } from "@/lib/zoom";
 
 import { BarraFormatacao, atalhoDeFormatacao } from "./barra-formatacao";
 import { DialogoConfirmar } from "./dialogos";
+import { EditorDesenho } from "./editor-desenho";
 import { PainelHistorico } from "./painel-historico";
 import { LocalizarNota } from "./localizar-nota";
 import { SeletorEtiquetas } from "./seletor-etiquetas";
@@ -84,7 +88,7 @@ import { VisualizadorMarkdown } from "./visualizador-markdown";
 
 type Estado = "salvo" | "pendente" | "salvando" | "erro";
 
-const ESPERA_SALVAMENTO = 800;
+const ESPERA_SALVAMENTO = 350;
 
 const EXTENSAO_POR_TIPO: Record<string, string> = {
   "image/png": "png",
@@ -94,7 +98,7 @@ const EXTENSAO_POR_TIPO: Record<string, string> = {
 };
 
 /** Base64 puro, sem o prefixo "data:...;base64," — é só isso que o servidor precisa. */
-function arquivoParaBase64(arquivo: File): Promise<string> {
+function arquivoParaBase64(arquivo: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const leitor = new FileReader();
     leitor.onload = () => resolve(String(leitor.result).split(",")[1] ?? "");
@@ -200,6 +204,12 @@ export function PaginaNota({
   const [favorita, definirFavorita] = useState(nota.favorita);
   const [excluindo, definirExcluindo] = useState(false);
   const [avisoImagem, definirAvisoImagem] = useState<string | null>(null);
+  // O desenho aberto no editor: `destino` é o caminho dele no markdown (null
+  // = desenho novo, que entra no texto em `inicio`–`fim` quando salvo).
+  const [desenhoAberto, definirDesenhoAberto] = useState<{ destino: string | null; inicio: number; fim: number } | null>(
+    null,
+  );
+  const [versaoDesenhos, definirVersaoDesenhos] = useState(0);
   // As etiquetas da nota, em estado: o `#` do editor aplica uma sem passar
   // pelo seletor do cabeçalho, e o seletor precisa acompanhar.
   const [etiquetasAtuais, definirEtiquetasAtuais] = useState(nota.etiquetas);
@@ -244,11 +254,27 @@ export function PaginaNota({
     maxima: 1400,
   });
 
+  // O que está gravado em disco agora. Começa como o conteúdo com que a nota
+  // abriu e avança a cada salvamento bem-sucedido. É contra isto — e não
+  // contra `nota.conteudo`, que não muda porque o salvamento não revalida a
+  // página — que o autosave decide se há algo por gravar. Comparar com o
+  // original deixava um caso sem gravação: digitar, salvar, e voltar ao texto
+  // de abertura (Ctrl+Z, apagar o que digitou) — o disco ficava com a versão
+  // intermediária e a tela dizia "salvo".
+  const conteudoGravado = useRef(nota.conteudo);
+  const conteudoAtual = useRef(nota.conteudo);
+  useEffect(() => {
+    conteudoAtual.current = conteudo;
+  }, [conteudo]);
   const salvar = useCallback(
     async (texto: string) => {
       definirEstado("salvando");
       try {
         const resposta = await acaoSalvarNota(nota.caminho, texto);
+        if (resposta.ok) {
+          conteudoGravado.current = texto;
+          publicarMudancaNasNotas(nota.caminho);
+        }
         definirEstado(resposta.ok ? "salvo" : "erro");
       } catch {
         // Uma exceção (rede caiu, servidor fora do ar) não vem como
@@ -262,22 +288,25 @@ export function PaginaNota({
 
   // Salvamento automático: espera a digitação dar uma pausa antes de gravar.
   useEffect(() => {
-    if (conteudo === nota.conteudo) return;
+    if (conteudo === conteudoGravado.current) {
+      definirEstado((atual) => (atual === "pendente" ? "salvo" : atual));
+      return;
+    }
     definirEstado("pendente");
     const espera = setTimeout(() => salvar(conteudo), ESPERA_SALVAMENTO);
     return () => clearTimeout(espera);
-  }, [conteudo, nota.conteudo, salvar]);
+  }, [conteudo, salvar]);
 
   const concluirEdicao = useCallback(() => {
     if (!ehMarkdown) return;
     definirEditando(false);
     definirLocalizar(null);
-    if (conteudo === nota.conteudo) return;
+    if (conteudo === conteudoGravado.current) return;
     // Só aqui a casca se atualiza: o salvamento automático não revalida nada
     // (ver `acaoSalvarNota`), então é ao sair da edição que a lista de
     // páginas pega o trecho novo e a data nova.
     salvar(conteudo).then(() => roteador.refresh());
-  }, [conteudo, ehMarkdown, nota.conteudo, roteador, salvar]);
+  }, [conteudo, ehMarkdown, roteador, salvar]);
 
   /** Manda para a lixeira e sai desta página — não há mais nada para mostrar aqui. */
   const excluirAgora = useCallback(async () => {
@@ -394,6 +423,28 @@ export function PaginaNota({
     return () => window.removeEventListener("beforeunload", aoFechar);
   }, [estado]);
 
+  // Ao minimizar/fechar, tenta enviar o texto mais novo mesmo que o debounce
+  // ainda não tenha terminado. `sendBeacon` sobrevive ao descarregamento.
+  useEffect(() => {
+    const enviarPendente = () => {
+      if (conteudoAtual.current === conteudoGravado.current) return;
+      const corpo = new Blob(
+        [JSON.stringify({ caminho: nota.caminho, conteudo: conteudoAtual.current })],
+        { type: "application/json" },
+      );
+      navigator.sendBeacon("/api/notas/salvar", corpo);
+    };
+    const aoOcultar = () => {
+      if (document.visibilityState === "hidden") enviarPendente();
+    };
+    document.addEventListener("visibilitychange", aoOcultar);
+    window.addEventListener("pagehide", enviarPendente);
+    return () => {
+      document.removeEventListener("visibilitychange", aoOcultar);
+      window.removeEventListener("pagehide", enviarPendente);
+    };
+  }, [nota.caminho]);
+
   /**
    * Escreve no campo e no estado de uma vez.
    *
@@ -508,6 +559,13 @@ export function PaginaNota({
         const proximas = [...etiquetasAtuais, item.id];
         definirEtiquetasAtuais(proximas);
         await acaoDefinirEtiquetasDaNota(nota.caminho, proximas);
+        return;
+      }
+
+      if (item.id === COMANDO_DESENHO) {
+        const resultado = limparGatilho(selecao, gatilho);
+        aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+        definirDesenhoAberto({ destino: null, inicio: resultado.inicio, fim: resultado.fim });
         return;
       }
 
@@ -644,6 +702,40 @@ export function PaginaNota({
     void anexarArquivos(evento.dataTransfer.files);
   }
 
+  /** Botão "Desenho" da barra: quadro em branco, que entra no texto onde o cursor está. */
+  const abrirNovoDesenho = useCallback(() => {
+    const campo = area.current;
+    const inicio = campo?.selectionStart ?? conteudo.length;
+    definirDesenhoAberto({ destino: null, inicio, fim: campo?.selectionEnd ?? inicio });
+  }, [conteudo.length]);
+
+  const editarDesenho = useCallback((caminho: string) => {
+    definirDesenhoAberto({ destino: caminho, inicio: 0, fim: 0 });
+  }, []);
+
+  /** Grava o PNG do editor; desenho novo ainda ganha a linha `![Desenho](...)` no texto. Devolve o erro, ou null. */
+  async function salvarDesenho(png: Blob): Promise<string | null> {
+    const aberto = desenhoAberto;
+    if (!aberto) return null;
+    let resposta: Awaited<ReturnType<typeof acaoSalvarDesenho>>;
+    try {
+      resposta = await acaoSalvarDesenho(nota.caminho, aberto.destino, await arquivoParaBase64(png));
+    } catch {
+      return "Não deu para enviar o desenho — o servidor não respondeu.";
+    }
+    if (!resposta.ok) return resposta.erro;
+    if (aberto.destino === null && resposta.mensagem) {
+      const campo = area.current;
+      const trecho = `![Desenho](${encodeURI(resposta.mensagem)})`;
+      const resultado = inserirBloco({ texto: campo?.value ?? conteudo, inicio: aberto.inicio, fim: aberto.fim }, trecho);
+      if (campo) aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim });
+      else definirConteudo(resultado.texto);
+    }
+    definirVersaoDesenhos((versao) => versao + 1);
+    definirDesenhoAberto(null);
+    return null;
+  }
+
   /** Clicar numa tarefa em modo leitura já grava — sem precisar entrar em edição. */
   const aoAlternarTarefa = useCallback(
     (indiceDaTarefa: number) => definirConteudo((atual) => alternarTarefa(atual, indiceDaTarefa)),
@@ -670,8 +762,17 @@ export function PaginaNota({
     }
 
     definirAvisoImagem(null);
-    const base64 = await arquivoParaBase64(arquivo);
-    const resposta = await acaoColarImagem(nota.caminho, extensao, base64);
+    let resposta: Awaited<ReturnType<typeof acaoColarImagem>>;
+    try {
+      const base64 = await arquivoParaBase64(arquivo);
+      resposta = await acaoColarImagem(nota.caminho, extensao, base64);
+    } catch {
+      // Falha antes de chegar ao servidor (imagem acima do limite de corpo,
+      // servidor fora do ar): sem isto a promessa rejeitava em silêncio e a
+      // colagem simplesmente não acontecia, sem nenhum aviso.
+      definirAvisoImagem("Não deu para enviar a imagem — ela é grande demais ou o servidor não respondeu.");
+      return;
+    }
     if (!resposta.ok || !resposta.mensagem) {
       definirAvisoImagem(resposta.ok ? "Não deu para colar a imagem." : resposta.erro);
       return;
@@ -898,6 +999,7 @@ export function PaginaNota({
                 aoAplicar={(resultado) => aplicarNoCampo(resultado.texto, { inicio: resultado.inicio, fim: resultado.fim })}
                 modelos={modelos}
                 aoInserirModelo={inserirModelo}
+                aoNovoDesenho={ehMarkdown ? abrirNovoDesenho : undefined}
                 extra={
                   ehMarkdown ? (
                     <div className="flex items-center gap-0.5">
@@ -1032,6 +1134,8 @@ export function PaginaNota({
                     conteudo={conteudoPreVisualizado}
                     pastaBase={pastaDaNota}
                     mapaDeLinks={mapaDeLinks}
+                    aoEditarDesenho={editarDesenho}
+                    versaoDesenhos={versaoDesenhos}
                     aoClicarNaLinha={(linha) => {
                       const offset = offsetDaLinha(conteudo, linha);
                       aplicarNoCampo(conteudo, { inicio: offset, fim: offset });
@@ -1065,6 +1169,8 @@ export function PaginaNota({
                   pastaBase={pastaDaNota}
                   aoAlternarTarefa={aoAlternarTarefa}
                   mapaDeLinks={mapaDeLinks}
+                  aoEditarDesenho={editarDesenho}
+                  versaoDesenhos={versaoDesenhos}
                 />
 
                 {backlinks.length > 0 ? (
@@ -1124,6 +1230,14 @@ export function PaginaNota({
         aoFechar={() => definirExcluindo(false)}
         aoConfirmar={excluirAgora}
       />
+
+      {desenhoAberto ? (
+        <EditorDesenho
+          url={desenhoAberto.destino ? urlDaMidia(juntar(pastaDaNota, desenhoAberto.destino)) : null}
+          aoSalvar={salvarDesenho}
+          aoFechar={() => definirDesenhoAberto(null)}
+        />
+      ) : null}
     </section>
   );
 }

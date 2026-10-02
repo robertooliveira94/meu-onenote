@@ -12,6 +12,7 @@ import {
   limparNome,
   resolverCaminho,
 } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
 import { excluirEtiquetasDoQuadro } from "./etiquetas-kanban";
 import { atualizarIndice, reapontar } from "./indice";
@@ -45,8 +46,7 @@ async function lerMetas(): Promise<MetaQuadro[]> {
 }
 
 async function gravarMetas(metas: MetaQuadro[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_QUADROS), { recursive: true });
-  await fs.writeFile(ARQUIVO_QUADROS, JSON.stringify(metas, null, 2), "utf8");
+  await gravarJson(ARQUIVO_QUADROS, metas);
 }
 
 async function alterarMetas<T>(mudanca: (metas: MetaQuadro[]) => T | Promise<T>): Promise<T> {

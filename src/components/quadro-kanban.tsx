@@ -77,10 +77,13 @@ import {
 } from "@/app/acoes-kanban";
 import {
   calcularNovaOrdem,
+  iniciarArrastoDeColunaKanban,
   iniciarArrastoDeSubtarefa,
   iniciarArrastoDeTarefa,
   lerCaminhoDeTarefa,
   lerIdDeSubtarefa,
+  lerNomeDeColunaKanban,
+  trazColunaKanban,
   trazSubtarefa,
   trazTarefa,
 } from "@/lib/arrastar";
@@ -182,7 +185,14 @@ export function QuadroKanban({
   tarefaInicial?: string | null;
 }) {
   const roteador = useRouter();
-  const colunas = conteudo.config.colunas;
+  // Ordem otimista das colunas: arrastar uma coluna muda a tela na hora, e a
+  // ordem do servidor volta a valer assim que ele devolver a nova.
+  const [ordemColunasLocal, definirOrdemColunasLocal] = useState<string[] | null>(null);
+  const assinaturaColunas = conteudo.config.colunas.join("|");
+  useEffect(() => definirOrdemColunasLocal(null), [assinaturaColunas]);
+  const colunas = ordemColunasLocal ?? conteudo.config.colunas;
+  const [colunaArrastada, definirColunaArrastada] = useState<string | null>(null);
+  const [alvoDeColuna, definirAlvoDeColuna] = useState<{ coluna: string; antes: boolean } | null>(null);
   const assinaturaTarefas = colunas.map((coluna) => (conteudo.tarefas[coluna] ?? []).map((t) => t.caminho).join(",")).join("|");
 
   const [ordemLocal, definirOrdemLocal] = useState<Record<string, string[]>>(() =>
@@ -592,14 +602,90 @@ export function QuadroKanban({
     await acaoExcluirComentario(caminho, id);
   }
 
-  async function moverColuna(nome: string, direcao: -1 | 1) {
+  async function reordenarColunas(nova: string[]) {
+    definirOrdemColunasLocal(nova);
+    const resposta = await acaoReordenarColunas(quadro.nome, nova);
+    if (resposta.ok) roteador.refresh();
+    else {
+      definirOrdemColunasLocal(null);
+      definirAviso(resposta.erro);
+    }
+  }
+
+  function moverColuna(nome: string, direcao: -1 | 1) {
     const indice = colunas.indexOf(nome);
     const alvo = indice + direcao;
     if (alvo < 0 || alvo >= colunas.length) return;
     const nova = [...colunas];
     [nova[indice], nova[alvo]] = [nova[alvo], nova[indice]];
-    const resposta = await acaoReordenarColunas(quadro.nome, nova);
-    if (resposta.ok) roteador.refresh();
+    reordenarColunas(nova);
+  }
+
+  /**
+   * Soltura numa coluna (aberta ou recolhida): um cartão muda de coluna; uma
+   * coluna arrastada pelo cabeçalho entra antes ou depois desta, conforme a
+   * metade em que o cursor está.
+   */
+  function soltarNaColuna(coluna: string) {
+    return {
+      onDragOver: (evento: React.DragEvent<HTMLDivElement>) => {
+        if (trazTarefa(evento)) {
+          evento.preventDefault();
+          evento.dataTransfer.dropEffect = "move";
+        } else if (trazColunaKanban(evento)) {
+          evento.preventDefault();
+          evento.dataTransfer.dropEffect = "move";
+          const caixa = evento.currentTarget.getBoundingClientRect();
+          const antes = evento.clientX < caixa.left + caixa.width / 2;
+          if (alvoDeColuna?.coluna !== coluna || alvoDeColuna.antes !== antes) definirAlvoDeColuna({ coluna, antes });
+        }
+      },
+      onDragLeave: (evento: React.DragEvent<HTMLDivElement>) => {
+        if (evento.currentTarget.contains(evento.relatedTarget as Node | null)) return;
+        definirAlvoDeColuna((atual) => (atual?.coluna === coluna ? null : atual));
+      },
+      onDrop: (evento: React.DragEvent<HTMLDivElement>) => {
+        if (trazTarefa(evento)) {
+          evento.preventDefault();
+          moverTarefaPara(lerCaminhoDeTarefa(evento), coluna);
+        } else if (trazColunaKanban(evento)) {
+          evento.preventDefault();
+          const antes = alvoDeColuna?.coluna === coluna ? alvoDeColuna.antes : true;
+          definirAlvoDeColuna(null);
+          const nova = calcularNovaOrdem(colunas, lerNomeDeColunaKanban(evento), coluna, antes);
+          if (nova && nova.join("|") !== colunas.join("|")) reordenarColunas(nova);
+        }
+      },
+    };
+  }
+
+  /** O cabeçalho (ou a faixa recolhida) é a alça por onde a coluna é arrastada. */
+  function arrastarColuna(coluna: string) {
+    return {
+      draggable: true,
+      onDragStart: (evento: React.DragEvent) => {
+        iniciarArrastoDeColunaKanban(evento, coluna);
+        definirColunaArrastada(coluna);
+      },
+      onDragEnd: () => {
+        definirColunaArrastada(null);
+        definirAlvoDeColuna(null);
+      },
+    };
+  }
+
+  /** A barrinha que mostra onde a coluna arrastada vai entrar. */
+  function marcaDeSoltura(coluna: string) {
+    if (alvoDeColuna?.coluna !== coluna || colunaArrastada === coluna) return null;
+    return (
+      <span
+        aria-hidden
+        className={clsx(
+          "pointer-events-none absolute inset-y-0 z-10 w-[3px] rounded-full bg-[var(--realce)]",
+          alvoDeColuna.antes ? "left-0" : "right-0",
+        )}
+      />
+    );
   }
 
   const sigla = siglaDoQuadro(quadro.nome);
@@ -870,19 +956,15 @@ export function QuadroKanban({
             return (
               <div
                 key={coluna}
-                onDragOver={(evento) => {
-                  if (!trazTarefa(evento)) return;
-                  evento.preventDefault();
-                  evento.dataTransfer.dropEffect = "move";
-                }}
-                onDrop={(evento) => {
-                  if (!trazTarefa(evento)) return;
-                  evento.preventDefault();
-                  moverTarefaPara(lerCaminhoDeTarefa(evento), coluna);
-                }}
-                className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-xl border border-linha bg-superficie pt-2 pb-3"
+                {...soltarNaColuna(coluna)}
+                {...arrastarColuna(coluna)}
+                className={clsx(
+                  "relative flex w-10 shrink-0 cursor-grab flex-col items-center gap-2 rounded-xl border border-linha bg-superficie pt-2 pb-3 active:cursor-grabbing",
+                  colunaArrastada === coluna && "opacity-40",
+                )}
                 style={{ boxShadow: `inset 0 2px 0 ${cor}` }}
               >
+                {marcaDeSoltura(coluna)}
                 <BotaoIcone rotulo={`Mostrar a coluna ${coluna}`} onClick={() => alternarRecolhida(coluna)} className="size-6">
                   <ChevronsLeftRight size={13} />
                 </BotaoIcone>
@@ -904,23 +986,18 @@ export function QuadroKanban({
           return (
             <div
               key={coluna}
-              onDragOver={(evento) => {
-                if (!trazTarefa(evento)) return;
-                evento.preventDefault();
-                evento.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(evento) => {
-                if (!trazTarefa(evento)) return;
-                evento.preventDefault();
-                moverTarefaPara(lerCaminhoDeTarefa(evento), coluna);
-              }}
+              {...soltarNaColuna(coluna)}
               className={clsx(
-                "flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-superficie",
+                "relative flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border bg-superficie transition-opacity",
                 acimaDoWip ? "border-[color-mix(in_srgb,var(--perigo)_45%,var(--linha))]" : "border-linha",
+                colunaArrastada === coluna && "opacity-40",
               )}
             >
+              {marcaDeSoltura(coluna)}
               <div
-                className="flex shrink-0 items-center gap-1 px-3 pt-2.5 pb-2"
+                {...arrastarColuna(coluna)}
+                title="Arraste para mudar a coluna de lugar"
+                className="flex shrink-0 cursor-grab items-center gap-1 px-3 pt-2.5 pb-2 active:cursor-grabbing"
                 style={{ boxShadow: `inset 0 2px 0 ${cor}` }}
               >
                 <span className="truncate text-[12.5px] font-bold tracking-[-0.01em]">{coluna}</span>

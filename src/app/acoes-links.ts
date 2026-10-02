@@ -88,6 +88,22 @@ export async function acaoVerificarLinks(ids: string[]): Promise<Record<string, 
   return linksApp.verificarLinks(ids);
 }
 
+export type RespostaAtualizarFavicons =
+  | { ok: true; arvore: PastaLink; atualizados: number; falhas: number }
+  | { ok: false; erro: string };
+
+/** Atualiza um lote pequeno por chamada para coleções grandes não estourarem o tempo da Server Action. */
+export async function acaoAtualizarFavicons(ids: string[]): Promise<RespostaAtualizarFavicons> {
+  const idsValidos = [...new Set(ids)].filter((id) => typeof id === "string" && id.length > 0).slice(0, 12);
+  try {
+    const resultado = await linksApp.atualizarFavicons(idsValidos);
+    revalidatePath("/links", "layout");
+    return { ok: true, ...resultado };
+  } catch (erro: unknown) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não foi possível atualizar os favicons." };
+  }
+}
+
 /** O arquivo `.html` no formato Netscape Bookmark, pra baixar — fecha o ciclo do "Importar favoritos". */
 export async function acaoExportarFavoritosHtml(): Promise<string> {
   return linksApp.exportarFavoritosHtml();

@@ -1,7 +1,7 @@
 "use client";
 
-import { Bookmark } from "lucide-react";
-import { useState } from "react";
+import { Bookmark, ChevronDown, ChevronRight, Folder } from "lucide-react";
+import { type MouseEvent, useState } from "react";
 
 import { acaoMarcarComoAberto } from "@/app/acoes-links";
 import type { Link as LinkSalvo, PastaLink } from "@/lib/tipos";
@@ -24,58 +24,65 @@ function IconeDoLink({ link }: { link: LinkSalvo }) {
   return <Bookmark size={12} className="shrink-0 text-tinta-3" />;
 }
 
-function LinhaLink({ link, onAbrir }: { link: LinkSalvo; onAbrir: (link: LinkSalvo) => void }) {
+function LinhaLink({ link, onAbrir }: { link: LinkSalvo; onAbrir: (evento: MouseEvent<HTMLAnchorElement>, link: LinkSalvo) => void }) {
   return (
     <a
       href={link.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => onAbrir(link)}
+      onClick={(evento) => onAbrir(evento, link)}
       title={`${link.titulo} — ${dominioDaUrl(link.url)}`}
-      className="flex items-center gap-2 rounded-md px-1.5 py-[3px] transition-colors hover:bg-realce-fraco"
+      className="flex h-7 min-w-0 items-center gap-2 rounded-sm pr-2 transition-colors hover:bg-realce-fraco focus-visible:bg-realce-fraco focus-visible:outline-none"
     >
       <IconeDoLink link={link} />
-      <span className="min-w-0 flex-1 truncate text-[11.5px] text-tinta">{link.titulo}</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] text-tinta">{link.titulo}</span>
     </a>
   );
 }
 
-/** Uma subpasta dentro do cartão: subtítulo e os links dela, recuados; as subpastas dela seguem abaixo, mais recuadas. */
-function Subpasta({ pasta, profundidade, onAbrir }: { pasta: PastaLink; profundidade: number; onAbrir: (link: LinkSalvo) => void }) {
-  return (
-    <div style={{ paddingLeft: profundidade * 10 }}>
-      <p className="mt-2 mb-0.5 flex items-center gap-1.5 px-1.5 text-[10.5px] font-semibold tracking-wide text-tinta-2 uppercase">
-        <span aria-hidden>{pasta.icone}</span>
-        <span className="truncate">{pasta.nome}</span>
-      </p>
-      {pasta.links.map((link) => (
-        <LinhaLink key={link.id} link={link} onAbrir={onAbrir} />
-      ))}
-      {pasta.links.length === 0 && pasta.pastas.length === 0 ? <p className="px-1.5 text-[11px] text-tinta-3">vazia</p> : null}
-      {pasta.pastas.map((sub) => (
-        <Subpasta key={sub.id} pasta={sub} profundidade={profundidade + 1} onAbrir={onAbrir} />
-      ))}
-    </div>
-  );
-}
-
-/** Um cartão por pasta de primeiro nível: os links dela e, abaixo, cada subpasta com os seus — tudo à vista. */
-function CartaoPasta({ pasta, onAbrir }: { pasta: PastaLink; onAbrir: (link: LinkSalvo) => void }) {
+/** Pasta recolhível no mesmo padrão compacto e hierárquico do menu de favoritos do navegador. */
+function GrupoPasta({
+  pasta,
+  profundidade,
+  onAbrir,
+}: {
+  pasta: PastaLink;
+  profundidade: number;
+  onAbrir: (evento: MouseEvent<HTMLAnchorElement>, link: LinkSalvo) => void;
+}) {
+  const [recolhida, definirRecolhida] = useState(false);
   const total = contarLinks(pasta);
+
   return (
-    <section className="cartao flex min-w-0 flex-col p-2.5" style={{ borderTop: `3px solid ${pasta.cor}` }}>
-      <h2 className="mb-1 flex items-center gap-1.5 px-1.5 text-[12.5px] font-bold tracking-[-0.01em] text-tinta">
-        <span aria-hidden>{pasta.icone}</span>
-        <span className="min-w-0 flex-1 truncate">{pasta.nome}</span>
-        <span className="text-[10px] font-normal text-tinta-3 tabular-nums">{total || ""}</span>
-      </h2>
-      {pasta.links.map((link) => (
-        <LinhaLink key={link.id} link={link} onAbrir={onAbrir} />
-      ))}
-      {pasta.pastas.map((sub) => (
-        <Subpasta key={sub.id} pasta={sub} profundidade={0} onAbrir={onAbrir} />
-      ))}
-      {total === 0 ? <p className="px-1.5 py-1 text-[11px] text-tinta-3">Nenhum link.</p> : null}
+    <section className="min-w-0">
+      <button
+        type="button"
+        onClick={() => definirRecolhida((atual) => !atual)}
+        aria-expanded={!recolhida}
+        className="flex h-8 w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left transition-colors hover:bg-realce-fraco focus-visible:bg-realce-fraco focus-visible:outline-none"
+        style={{ paddingLeft: 7 + profundidade * 14 }}
+      >
+        {recolhida ? <ChevronRight size={13} className="shrink-0 text-tinta-3" /> : <ChevronDown size={13} className="shrink-0 text-tinta-3" />}
+        <Folder size={15} className="shrink-0" fill={pasta.cor} color={pasta.cor} strokeWidth={1.5} />
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-tinta">{pasta.nome}</span>
+        <span className="shrink-0 text-[10px] text-tinta-3 tabular-nums">{total}</span>
+      </button>
+
+      {!recolhida ? (
+        <div>
+          {pasta.links.map((link) => (
+            <div key={link.id} style={{ paddingLeft: 36 + profundidade * 14 }}>
+              <LinhaLink link={link} onAbrir={onAbrir} />
+            </div>
+          ))}
+          {pasta.pastas.map((sub) => (
+            <GrupoPasta key={sub.id} pasta={sub} profundidade={profundidade + 1} onAbrir={onAbrir} />
+          ))}
+          {total === 0 ? (
+            <p className="h-7 truncate pr-2 text-[11px] leading-7 text-tinta-3" style={{ paddingLeft: 36 + profundidade * 14 }}>
+              Pasta vazia
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -85,43 +92,51 @@ function contarLinks(pasta: PastaLink): number {
 }
 
 /**
- * Janelinha larga de Links (o favorito "Abrir meus links" abre 820×520):
- * uma grade de cartões, um por pasta de primeiro nível, lado a lado e
- * quebrando pra linha de baixo quando não cabem; dentro de cada um, os
- * links da pasta e as subpastas com os seus, tudo visível de uma vez —
- * nada fechado, sem favoritos nem recentes. Os links soltos da raiz
- * ("Geral") são o primeiro cartão, quando existem. Clicar num link abre
- * numa aba nova e fecha a janelinha sozinha, porque ela só existe como
- * pop-up (igual a `/salvar-link`).
+ * Lista de Links usada no popup e no painel da extensão. Segue o padrão
+ * compacto dos favoritos do navegador: uma única coluna, pastas recolhíveis
+ * e linhas pequenas com favicon. O clique comum navega a aba atual; os
+ * modificadores do navegador continuam podendo abrir uma nova aba.
  */
 export function PopupLinks({ arvore }: { arvore: PastaLink }) {
   const [aberto, definirAberto] = useState<string | null>(null);
 
-  function abrir(link: LinkSalvo) {
+  function abrir(evento: MouseEvent<HTMLAnchorElement>, link: LinkSalvo) {
     definirAberto(link.id);
     if (!link.lido) acaoMarcarComoAberto(link.id);
-    setTimeout(() => window.close(), 350);
+
+    // Modificadores e clique do meio continuam com o comportamento nativo
+    // (nova aba). O clique comum pede à página da extensão para navegar a aba
+    // ativa; fora de um iframe, esta própria aba é usada.
+    if (evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
+    evento.preventDefault();
+    if (window.parent !== window) {
+      window.parent.postMessage({ tipo: "meu-bloco-abrir-link", url: link.url }, "*");
+    } else {
+      window.location.assign(link.url);
+    }
   }
 
-  const cartoes: PastaLink[] = [
+  const grupos: PastaLink[] = [
     ...(arvore.links.length ? [{ ...arvore, pastas: [] }] : []),
     ...arvore.pastas,
   ];
+  const total = contarLinks(arvore);
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-y-auto bg-papel px-3 py-2.5">
-      <div className="mb-2 flex items-center gap-1.5 px-0.5">
-        <Bookmark size={14} className="shrink-0 text-[var(--realce)]" />
-        <h1 className="truncate text-[12.5px] font-bold tracking-[-0.02em]">Links</h1>
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-papel">
+      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-linha px-3">
+        <Bookmark size={15} className="shrink-0 text-[var(--realce)]" fill="currentColor" />
+        <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em]">Favoritos</h1>
+        {!aberto ? <span className="text-[10px] text-tinta-3 tabular-nums">{total}</span> : null}
         {aberto ? <span className="ml-auto text-[11px] text-tinta-3">Abrindo…</span> : null}
-      </div>
+      </header>
 
-      {cartoes.length === 0 ? (
+      {grupos.length === 0 ? (
         <p className="px-2 py-6 text-center text-[12px] text-tinta-3">Nenhum link salvo ainda.</p>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] items-start gap-2.5 pb-2">
-          {cartoes.map((pasta) => (
-            <CartaoPasta key={pasta.id} pasta={pasta} onAbrir={abrir} />
+        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+          {grupos.map((pasta) => (
+            <GrupoPasta key={pasta.id} pasta={pasta} profundidade={0} onAbrir={abrir} />
           ))}
         </div>
       )}

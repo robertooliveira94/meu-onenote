@@ -13,6 +13,7 @@ import {
   List,
   ListChecks,
   Minus,
+  PenTool,
   Quote,
   Strikethrough,
   Table,
@@ -40,8 +41,8 @@ type Ferramenta = {
   icone: React.ReactNode;
   aplicar: (selecao: Selecao) => Selecao;
   separarAntes?: boolean;
-  /** "tabela" abre um popover pedindo linhas/colunas, "modelo" um popover com a lista de modelos — nenhum dos dois aplica direto no clique. */
-  id?: "tabela" | "modelo";
+  /** "tabela" abre um popover pedindo linhas/colunas, "modelo" um popover com a lista de modelos, "desenho" o editor de desenho — nenhum aplica direto no clique. */
+  id?: "tabela" | "modelo" | "desenho";
 };
 
 const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
@@ -73,6 +74,12 @@ const FERRAMENTAS_MARKDOWN: Ferramenta[] = [
     icone: <Table size={14} />,
     aplicar: (s) => inserirBloco(s, gerarTabela(3, 2)),
     id: "tabela",
+  },
+  {
+    rotulo: "Desenho",
+    icone: <PenTool size={14} />,
+    aplicar: (s) => s,
+    id: "desenho",
   },
   {
     rotulo: "Modelo",
@@ -125,6 +132,7 @@ export function BarraFormatacao({
   aoAplicar,
   modelos,
   aoInserirModelo,
+  aoNovoDesenho,
   extra,
 }: {
   formato: Formato;
@@ -135,14 +143,20 @@ export function BarraFormatacao({
   /** Sem modelo cadastrado, o botão "Modelo" nem aparece. */
   modelos?: Modelo[];
   aoInserirModelo?: (modelo: Modelo) => void;
+  /** Sem ele, o botão "Desenho" não aparece. */
+  aoNovoDesenho?: () => void;
   extra?: React.ReactNode;
 }) {
   const semModelos = !modelos || modelos.length === 0;
   const ferramentas = (formato === "md" ? FERRAMENTAS_MARKDOWN : FERRAMENTAS_TEXTO).filter(
-    (ferramenta) => ferramenta.id !== "modelo" || !semModelos,
+    (ferramenta) => (ferramenta.id !== "modelo" || !semModelos) && (ferramenta.id !== "desenho" || aoNovoDesenho),
   );
 
   function usar(ferramenta: Ferramenta) {
+    if (ferramenta.id === "desenho") {
+      aoNovoDesenho?.();
+      return;
+    }
     const area = campo.current;
     if (!area) return;
 

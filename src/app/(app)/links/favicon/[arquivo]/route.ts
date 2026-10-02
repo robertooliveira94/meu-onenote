@@ -31,7 +31,15 @@ export async function GET(_requisicao: Request, { params }: { params: Promise<{ 
   try {
     const dados = await fs.readFile(path.join(RAIZ, "_links", "favicons", arquivo));
     return new NextResponse(new Uint8Array(dados), {
-      headers: { "Content-Type": tipo, "Cache-Control": "public, max-age=604800, immutable" },
+      headers: {
+        "Content-Type": tipo,
+        "Cache-Control": "public, max-age=604800, immutable",
+        // O arquivo veio de um site de fora. Um SVG pode carregar <script>, e
+        // seria executado na origem do app se alguém abrisse a URL direto —
+        // com esta política nada roda, só o desenho aparece.
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   } catch {
     return new NextResponse(null, { status: 404 });

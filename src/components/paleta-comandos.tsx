@@ -160,6 +160,10 @@ export function PaletaComandos({
       return;
     }
     definirBuscando(true);
+    // Cancelar o timer não cancela uma busca já em voo — e a de notas lê todos
+    // os arquivos do disco, então a lentidão varia. Sem esta marca, a resposta
+    // de um termo anterior podia chegar depois e sobrescrever a do atual.
+    let cancelado = false;
     const espera = setTimeout(async () => {
       const quer = (s: Secao) => secaoForcada === null || secaoForcada === s;
       const [n, t, l, p, s] = await Promise.all([
@@ -169,6 +173,7 @@ export function PaletaComandos({
         quer("Compras") ? acaoBuscarProdutos(termoLimpo) : Promise.resolve([]),
         quer("Saúde") ? acaoBuscarEventosSaude(termoLimpo) : Promise.resolve([]),
       ]);
+      if (cancelado) return;
       definirNotas(n.slice(0, 8));
       definirTarefas(t);
       definirLinks(l.slice(0, 6));
@@ -177,7 +182,10 @@ export function PaletaComandos({
       definirSelecionado(0);
       definirBuscando(false);
     }, 220);
-    return () => clearTimeout(espera);
+    return () => {
+      cancelado = true;
+      clearTimeout(espera);
+    };
   }, [termoLimpo, buscaNoServidor, secaoForcada, aberta]);
 
   const itens = useMemo<Item[]>(() => {

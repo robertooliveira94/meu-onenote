@@ -17,8 +17,13 @@ sair da aba.
    ícone → "Opções", ou pela página `chrome://extensions`) e ajuste o
    endereço.
 
-O ícone na barra do navegador mostra se o cofre está destrancado,
-trancado, ou se o app não está aberto.
+O popup abre primeiro em **Links**. Na aba **Senhas**, o ícone mostra se o
+cofre está destrancado, trancado, ou se o app não está aberto. Depois de
+confirmar a senha mestra, a própria extensão permite pesquisar e navegar pelos
+grupos, copiar usuário ou senha, abrir o site na aba atual e criar uma entrada
+compacta. O seletor **Manter aberto por** preserva a autorização ao fechar o
+popup, de 5 minutos a 8 horas. Edição avançada, histórico, anexos e TOTP
+continuam no app completo.
 
 ### O aviso do Windows sobre "extensões de desenvolvedor"
 
@@ -47,12 +52,25 @@ Windows, não algo desta extensão. Duas saídas:
   autopreenchimento) e `salvar` (cria ou atualiza uma entrada). Todas
   exigem o cofre destrancado — se estiver trancado, a extensão oferece
   abrir o app.
+- A lista completa do cofre exige uma autorização temporária emitida somente
+  depois de a extensão provar que conhece a senha mestra. O token fica em
+  `chrome.storage.session`, nunca no armazenamento persistente, e é vinculado à
+  abertura atual do cofre: trancar, expirar ou reiniciar invalida o acesso.
 - A aba **Links** do popup e o **painel lateral** (`sidepanel.html`, clique
   direito no ícone → "Abrir painel lateral") mostram a mesma janelinha:
   `/links-popup` do próprio app, carregada num `<iframe>`. Não existe rota
   de extensão própria pra Links — o app já serve essa página pronta (é a
   mesma que o bookmarklet "Abrir meus links" abre), então a extensão só
   precisa embuti-la.
+- Com **“Sincronizar meus links com a barra de favoritos”** ativado nas opções, a
+  extensão cria uma pasta nativa **Meu Bloco** na barra do Chrome e espelha
+  nela a mesma árvore do app. A sincronização roda ao abrir a aba Links, ao
+  iniciar o navegador e a cada cinco minutos; se o app estiver fechado, a
+  última cópia permanece disponível. Itens adicionados manualmente pelo
+  usuário dentro dessa pasta não são apagados pela sincronização.
+- Um clique comum nos links do popup ou do painel lateral navega a aba atual.
+  Ctrl/Cmd+clique e clique do meio continuam disponíveis para abrir uma nova
+  aba, como nos favoritos nativos do navegador.
 - A aba **Compras** segue o mesmo esquema: embute `/salvar-produto` do app
   com a URL e o título da aba aberta (a permissão `activeTab` libera isso
   no clique no ícone). O formulário — nome e imagem já buscados da página,

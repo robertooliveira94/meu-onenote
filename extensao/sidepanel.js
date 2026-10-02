@@ -22,3 +22,11 @@ async function iniciar() {
 }
 
 iniciar();
+
+window.addEventListener("message", async (evento) => {
+  if (evento.source !== quadro.contentWindow || evento.data?.tipo !== "meu-bloco-abrir-link") return;
+  const { urlBase } = await chrome.storage.local.get("urlBase");
+  const origemPermitida = new URL(urlBase || URL_PADRAO).origin;
+  if (evento.origin !== origemPermitida) return;
+  await chrome.runtime.sendMessage({ tipo: "abrir-link-na-aba", url: evento.data.url });
+});

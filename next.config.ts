@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   // carregado direto pelo Node em tempo de execução, como o `argon2` do
   // cofre de senhas.
   serverExternalPackages: ["@huggingface/transformers"],
+  // Imagem colada no editor (até 15 MB), `.kdbx` importado e anexo de senha
+  // (até 25 MB) chegam em base64 por Server Action. O limite padrão do Next
+  // é 1 MB — um print Full HD já passava disso e a colagem falhava em
+  // silêncio. Base64 infla ~33%, então 40 MB cobre o maior caso com folga.
+  experimental: {
+    serverActions: { bodySizeLimit: "40mb" },
+  },
   // As anotações vivem em disco, fora do controle do bundler.
   //
   // `standalone` só liga dentro do build Docker (ver Dockerfile, que passa

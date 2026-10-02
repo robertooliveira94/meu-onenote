@@ -91,6 +91,7 @@ import type {
 
 import { DialogoConfirmar, DialogoConfirmarComTexto, DialogoCor, DialogoIcone, DialogoNome, DialogoNovoCaderno } from "./dialogos";
 import { Aviso, Botao, BotaoIcone, Campo, Dialogo, ItemMenu, Menu, Rotulo, SeparadorMenu, Vazio } from "./ui";
+import { GraficoLinhaDoTempo } from "./saude-grafico";
 import { VisualizadorMarkdown } from "./visualizador-markdown";
 
 type Selecao =
@@ -1633,6 +1634,14 @@ function VisaoLinhaDoTempo({
         {grupos.length === 0 ? (
           <Vazio icone={<History size={22} />} titulo="Nada registrado ainda" descricao="Tudo o que você registrar em qualquer especialidade aparece aqui, por mês." />
         ) : null}
+        <GraficoLinhaDoTempo
+          eventos={eventos}
+          especialidades={dados.especialidades}
+          pessoas={mostrarPessoa ? mapas.pessoas : null}
+          hoje={hojeIso()}
+          eventoAtivoId={eventoAtivoId}
+          onSelecionar={onSelecionar}
+        />
         {grupos.map((grupo) => (
           <SecaoDeLista key={grupo.chave} titulo={grupo.rotulo} contagem={grupo.eventos.length}>
             {grupo.eventos.map((evento) => (

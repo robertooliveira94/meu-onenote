@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
 import { STATUS_EVENTO, TIPOS_EVENTO } from "./saude-comum";
 import type {
@@ -77,8 +78,7 @@ async function lerDados(): Promise<DadosSaude> {
 }
 
 async function gravarDados(dados: DadosSaude): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_DADOS), { recursive: true });
-  await fs.writeFile(ARQUIVO_DADOS, JSON.stringify(dados, null, 2), "utf8");
+  await gravarJson(ARQUIVO_DADOS, dados);
 }
 
 let fila: Promise<unknown> = Promise.resolve();
@@ -521,8 +521,7 @@ async function lerLixeira(): Promise<RegistroLixeiraSaude[]> {
 }
 
 async function gravarLixeira(itens: RegistroLixeiraSaude[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_LIXEIRA), { recursive: true });
-  await fs.writeFile(ARQUIVO_LIXEIRA, JSON.stringify(itens, null, 2), "utf8");
+  await gravarJson(ARQUIVO_LIXEIRA, itens);
 }
 
 /** Chamado de dentro de `alterar` — a fila dos dados já serializa, não precisa de outra. */

@@ -13,6 +13,7 @@ import {
   segmentos,
   tituloDe,
 } from "./caminhos";
+import { gravarAtomico, gravarJson } from "./gravacao";
 import { enviarParaLixeira } from "./lixeira";
 import { atualizarIndice, entradaDaNota, lerIndice, reapontar } from "./indice";
 import { COLUNAS_KANBAN_PADRAO } from "./tipos";
@@ -77,8 +78,7 @@ async function existe(absoluto: string): Promise<boolean> {
 }
 
 async function salvarConfigQuadro(quadro: string, config: ConfigQuadro): Promise<void> {
-  await fs.mkdir(resolverCaminho(juntar(PASTA_KANBAN, quadro)), { recursive: true });
-  await fs.writeFile(resolverCaminho(caminhoConfig(quadro)), JSON.stringify(config, null, 2), "utf8");
+  await gravarJson(resolverCaminho(caminhoConfig(quadro)), config);
 }
 
 async function garantirPastasDasColunas(quadro: string, config: ConfigQuadro): Promise<void> {
@@ -449,7 +449,7 @@ export async function lerTarefa(caminho: string): Promise<{ titulo: string; cont
 
 export async function salvarTarefa(caminho: string, conteudo: string): Promise<void> {
   garantirForaDoSistema(caminho);
-  await fs.writeFile(resolverCaminho(caminho), conteudo, "utf8");
+  await gravarAtomico(resolverCaminho(caminho), conteudo);
   await atualizarIndice((indice) => {
     entradaDaNota(indice, caminho).atualizadoEm = new Date().toISOString();
   });

@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-09-29T01:22:30.036804+00:00",
+  "nodes": {
+    "src_components_nota_paginanota": {
+      "code_fingerprint": "d49493f461645344416069b0691d7ef63471c85ef16aa4dc7fe4a281c0b9481b",
+      "label": "PaginaNota()",
+      "last": "2026-09-29T00:52:36.761565+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-29T00:52:36.761565+00:00",
+          "outcome": "useful",
+          "q": "Quero que primeiro você entenda todo o projeto, leia o repositório todo"
+        }
+      ],
+      "score": 0.999520561,
+      "source_file": "src/components/nota.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_components_quadro_kanban_quadrokanban": {
+      "code_fingerprint": "9253e71dfee02b54dd65ee28c35003c920ba2e1d53e9edca02bd8b73e25561ea",
+      "label": "QuadroKanban()",
+      "last": "2026-09-29T00:52:36.761565+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-29T00:52:36.761565+00:00",
+          "outcome": "useful",
+          "q": "Quero que primeiro você entenda todo o projeto, leia o repositório todo"
+        }
+      ],
+      "score": 0.999520561,
+      "source_file": "src/components/quadro-kanban.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_caminhos_resolvercaminho": {
+      "code_fingerprint": "342b60aff11d4dddd2de9ebf70cd0e350e0a5d802edc19a978b237a5e93bd8ed",
+      "label": "resolverCaminho()",
+      "last": "2026-09-29T00:52:36.761565+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-29T00:52:36.761565+00:00",
+          "outcome": "useful",
+          "q": "Quero que primeiro você entenda todo o projeto, leia o repositório todo"
+        }
+      ],
+      "score": 0.999520561,
+      "source_file": "src/lib/caminhos.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_indice_atualizarindice": {
+      "code_fingerprint": "0b3ecb6c56d073cb34aa5f1b77e0b2186a943baa80505fae1c70c7e74346f69d",
+      "label": "atualizarIndice()",
+      "last": "2026-09-29T00:52:36.761565+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-29T00:52:36.761565+00:00",
+          "outcome": "useful",
+          "q": "Quero que primeiro você entenda todo o projeto, leia o repositório todo"
+        }
+      ],
+      "score": 0.999520561,
+      "source_file": "src/lib/indice.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

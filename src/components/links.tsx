@@ -23,6 +23,7 @@ import {
   Pencil,
   Plus,
   Rows3,
+  RefreshCw,
   ShieldQuestion,
   Star,
   Trash2,
@@ -35,6 +36,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   acaoAcharDuplicado,
   acaoAtualizarLink,
+  acaoAtualizarFavicons,
   acaoBuscarMetadadosUrl,
   acaoCriarLink,
   acaoCriarPastaLink,
@@ -141,6 +143,14 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     null,
   );
   const [importando, definirImportando] = useState(false);
+  const [atualizandoFavicons, definirAtualizandoFavicons] = useState(false);
+  const [statusFavicons, definirStatusFavicons] = useState<{
+    feitos: number;
+    total: number;
+    atualizados: number;
+    falhas: number;
+    erro?: string;
+  } | null>(null);
 
   const aplicarResposta = useCallback((resposta: RespostaLinks): boolean => {
     if (resposta.ok) {
@@ -196,6 +206,36 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
     a.click();
     URL.revokeObjectURL(url);
   }, []);
+  const atualizarTodosOsFavicons = useCallback(async () => {
+    const ids = todosOsLinks.map((link) => link.id);
+    if (ids.length === 0 || atualizandoFavicons) return;
+
+    definirAtualizandoFavicons(true);
+    definirStatusFavicons({ feitos: 0, total: ids.length, atualizados: 0, falhas: 0 });
+    let atualizados = 0;
+    let falhas = 0;
+    let feitos = 0;
+    let erro: string | undefined;
+
+    for (let inicio = 0; inicio < ids.length; inicio += 10) {
+      const lote = ids.slice(inicio, inicio + 10);
+      const resposta = await acaoAtualizarFavicons(lote);
+      if (!resposta.ok) {
+        erro = resposta.erro;
+        falhas += lote.length;
+        feitos += lote.length;
+        definirStatusFavicons({ feitos, total: ids.length, atualizados, falhas, erro });
+        break;
+      }
+      definirArvore(resposta.arvore);
+      atualizados += resposta.atualizados;
+      falhas += resposta.falhas;
+      feitos += lote.length;
+      definirStatusFavicons({ feitos, total: ids.length, atualizados, falhas });
+    }
+
+    definirAtualizandoFavicons(false);
+  }, [atualizandoFavicons, todosOsLinks]);
   useAtalho("n", { grupo: "Links", descricao: `Novo link em ${pastaAtiva.nome}`, acao: novoLink });
   const caminhoAtual = useMemo(() => caminhoAte(arvore, pastaAtiva.id) ?? [pastaAtiva], [arvore, pastaAtiva]);
   useAtalho("backspace", {
@@ -309,6 +349,29 @@ export function AppLinks({ arvoreInicial }: { arvoreInicial: PastaLink }) {
           <Download size={13} />
           Exportar favoritos
         </button>
+        <button
+          type="button"
+          onClick={atualizarTodosOsFavicons}
+          disabled={atualizandoFavicons || todosOsLinks.length === 0}
+          title="Buscar novamente o favicon de todos os links salvos"
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {atualizandoFavicons ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+          {atualizandoFavicons && statusFavicons
+            ? `Favicons ${statusFavicons.feitos}/${statusFavicons.total}`
+            : "Atualizar favicons"}
+        </button>
+        {statusFavicons && !atualizandoFavicons ? (
+          <span
+            role="status"
+            title={statusFavicons.erro}
+            className={clsx("shrink-0 text-[11px]", statusFavicons.erro ? "text-perigo" : "text-tinta-4")}
+          >
+            {statusFavicons.erro
+              ? `Falha após ${statusFavicons.feitos}/${statusFavicons.total}`
+              : `${statusFavicons.atualizados} atualizados · ${statusFavicons.falhas} sem ícone`}
+          </span>
+        ) : null}
         <Link
           href="/links/lixeira"
           className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-tinta-3 transition-colors hover:bg-realce-fraco hover:text-tinta"

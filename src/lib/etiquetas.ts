@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { CORES_ETIQUETA } from "./cores";
 import { atualizarIndice } from "./indice";
 import type { Etiqueta } from "./tipos";
@@ -31,8 +32,7 @@ async function lerBruto(): Promise<Etiqueta[]> {
 }
 
 async function gravar(etiquetas: Etiqueta[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_ETIQUETAS), { recursive: true });
-  await fs.writeFile(ARQUIVO_ETIQUETAS, JSON.stringify(etiquetas, null, 2), "utf8");
+  await gravarJson(ARQUIVO_ETIQUETAS, etiquetas);
 }
 
 async function alterar<T>(mudanca: (etiquetas: Etiqueta[]) => T | Promise<T>): Promise<T> {

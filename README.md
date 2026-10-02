@@ -29,6 +29,13 @@ barra de tarefas e no menu Iniciar, e pode ser fixado ali como qualquer
 programa. Continua sendo o mesmo serviço em `localhost:3100` — só muda a
 janela. Para desinstalar, botão direito no ícone → "Desinstalar".
 
+No Chrome, o mesmo botão direito no ícone fixado mostra **Nota rápida**. Esse
+atalho abre uma janela enxuta já em edição, no último destino usado. Na
+primeira vez o app pede a seção; depois ela continua visível e pode ser
+trocada na própria janela. Depois de atualizar uma instalação antiga, feche e
+abra o aplicativo; se o item ainda não aparecer, reinstale o PWA para o Chrome
+reler os atalhos do manifesto.
+
 ## Onde ficam as anotações
 
 Por padrão, em `C:\Users\rober\OneDrive\Documentos\notas` — **dentro do
@@ -42,8 +49,6 @@ notas/
     Financeiro/                  <- seção
       Orçamento 2026.md           <- página em markdown
       Lembretes.txt                <- página em texto simples
-  Entrada/                      <- caderno da captura rápida e da nota do dia
-    Geral/                        <- seção padrão, criada sozinha
   _sistema/                     <- uso interno do aplicativo
     indice.json                  <- etiquetas, favoritos, datas, ordem
     etiquetas.json                <- cadastro de etiquetas
@@ -87,7 +92,8 @@ mais abaixo).
 | Ação | Como |
 | --- | --- |
 | Buscar em todas as notas | Ctrl + K |
-| Anotar uma ideia solta | Ctrl + Shift + N (vai para a caixa de entrada) |
+| Anotar uma ideia solta | Botão **Nota rápida** no alto da coluna Anotações |
+| Abrir a captura fora do app | Botão direito no ícone fixado → **Nota rápida** (Chrome) |
 | Salvar agora | Ctrl + S (o salvamento automático já roda sozinho) |
 | Sair da edição | Esc ou o botão Concluir |
 | Trocar o tema | Botão de lua/sol no alto à direita |
@@ -98,6 +104,12 @@ nada para formatar. Dá para converter de um para o outro pelo menu da página.
 
 Etiquetas atravessam cadernos: cadastre em Etiquetas, aplique no alto de
 cada página e clique numa etiqueta para ver tudo que a usa.
+
+Desenho: na edição, o botão de caneta da barra (ou `/desenho`) abre um quadro
+do Excalidraw em tela cheia. Ao salvar, o desenho entra na página como uma
+imagem comum (`_anexos/Desenho.excalidraw.png`) que leva a cena embutida no
+próprio PNG: aparece em qualquer leitor de markdown e, aqui, "Editar desenho"
+(ou clique duplo na imagem) reabre para continuar de onde parou.
 
 Histórico: a cada poucos minutos de edição, a versão anterior da página é
 guardada. O ícone de relógio na página lista as últimas 20 e restaura qualquer

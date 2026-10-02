@@ -2,13 +2,14 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { AlertTriangle, Info, Lightbulb, OctagonAlert, StickyNote, Star } from "lucide-react";
+import { AlertTriangle, Info, Lightbulb, OctagonAlert, PenTool, StickyNote, Star } from "lucide-react";
 import { Children, isValidElement, memo, useMemo, useRef } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 import { juntar } from "@/lib/caminho-texto";
+import { ehDesenho } from "@/lib/desenho";
 import { rehypeCallouts, type TipoDeCallout } from "@/lib/rehype-callouts";
 import { converterWikilinks } from "@/lib/remark-wikilinks";
 import { identificadorDeTitulo } from "@/lib/sumario";
@@ -138,6 +139,8 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   aoAlternarTarefa,
   mapaDeLinks,
   aoClicarNaLinha,
+  aoEditarDesenho,
+  versaoDesenhos = 0,
 }: {
   conteudo: string;
   /** Pasta da nota, para resolver o caminho relativo de imagens coladas. */
@@ -148,6 +151,10 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
   mapaDeLinks?: Record<string, string | null>;
   /** Presente só na edição lado a lado — clicar num bloco da prévia move o cursor do editor até a linha de onde ele veio (estilo Overleaf). */
   aoClicarNaLinha?: (linha: number) => void;
+  /** Presente quando dá para editar desenhos daqui — recebe o caminho do desenho como está no markdown, já decodificado. */
+  aoEditarDesenho?: (caminho: string) => void;
+  /** Muda a cada desenho salvo: vai no endereço da imagem para o navegador não mostrar a versão antiga do cache. */
+  versaoDesenhos?: number;
 }) {
   // Conta "a N-ésima tarefa do documento" enquanto o markdown é montado.
   // Em desenvolvimento, o React invoca cada componente de checkbox duas
@@ -231,6 +238,38 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
         // serve o arquivo de dentro de dados/.
         const absoluta = /^(https?:)?\/\//.test(src) || src.startsWith("/");
         const url = absoluta ? src : urlDaMidia(juntar(pastaBase ?? "", decodificar(src)));
+        if (!absoluta && ehDesenho(src)) {
+          return (
+            <span className="desenho-na-pagina" data-editavel={aoEditarDesenho ? "1" : undefined}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={versaoDesenhos ? `${url}?v=${versaoDesenhos}` : url}
+                alt={alt || "Desenho"}
+                loading="lazy"
+                // O PNG sai em 2× para ficar nítido; na página vale o tamanho em que foi desenhado.
+                onLoad={(evento) => {
+                  const imagem = evento.currentTarget;
+                  imagem.style.width = `${imagem.naturalWidth / 2}px`;
+                }}
+                onDoubleClick={aoEditarDesenho ? () => aoEditarDesenho(decodificar(src)) : undefined}
+              />
+              {aoEditarDesenho ? (
+                <button
+                  type="button"
+                  className="desenho-editar"
+                  onClick={(evento) => {
+                    // Na prévia lado a lado, o clique também moveria o cursor do editor.
+                    evento.stopPropagation();
+                    aoEditarDesenho(decodificar(src));
+                  }}
+                >
+                  <PenTool size={12} />
+                  Editar desenho
+                </button>
+              ) : null}
+            </span>
+          );
+        }
         // eslint-disable-next-line @next/next/no-img-element
         return <img src={url} alt={alt ?? ""} loading="lazy" />;
       },
@@ -268,7 +307,7 @@ export const VisualizadorMarkdown = memo(function VisualizadorMarkdown({
       th: comLinha("th"),
       pre: comLinha("pre"),
     }),
-    [pastaBase, aoAlternarTarefa, mapaDeLinks],
+    [pastaBase, aoAlternarTarefa, mapaDeLinks, aoEditarDesenho, versaoDesenhos],
   );
 
   if (!conteudo.trim()) {

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
 import type { NoImportado } from "./importar-favoritos";
 import {
@@ -71,8 +72,7 @@ async function lerArvore(): Promise<PastaLink> {
 }
 
 async function gravarArvore(raiz: PastaLink): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_ARVORE), { recursive: true });
-  await fs.writeFile(ARQUIVO_ARVORE, JSON.stringify(raiz, null, 2), "utf8");
+  await gravarJson(ARQUIVO_ARVORE, raiz);
 }
 
 let fila: Promise<unknown> = Promise.resolve();
@@ -225,12 +225,14 @@ const EXTENSAO_POR_TIPO: Record<string, string> = {
 };
 
 /** Grava o favicon em disco e devolve o nome do arquivo (guardado em `Link.favicon`). */
-async function salvarFavicon(idLink: string, favicon: FaviconBuscado): Promise<string | null> {
+async function salvarFavicon(idLink: string, favicon: FaviconBuscado, versionar = false): Promise<string | null> {
   if (!favicon) return null;
   const extensao = EXTENSAO_POR_TIPO[favicon.tipo];
   if (!extensao) return null;
   await fs.mkdir(PASTA_FAVICONS, { recursive: true });
-  const arquivo = `${idLink}.${extensao}`;
+  // A rota serve imagens com cache imutável. Na atualização, um nome novo
+  // força o navegador a mostrar o conteúdo novo imediatamente.
+  const arquivo = versionar ? `${idLink}-${gerarId()}.${extensao}` : `${idLink}.${extensao}`;
   await fs.writeFile(path.join(PASTA_FAVICONS, arquivo), Buffer.from(favicon.base64, "base64"));
   return arquivo;
 }
@@ -425,6 +427,7 @@ function decodificarEntidadesHtml(texto: string): string {
  */
 export async function buscarMetadadosUrl(
   url: string,
+  opcoes?: { somenteFavicon?: boolean },
 ): Promise<{ titulo: string | null; descricao: string | null; favicon: FaviconBuscado; capa: FaviconBuscado }> {
   let base: URL;
   try {
@@ -477,7 +480,7 @@ export async function buscarMetadadosUrl(
   const [favicon, capa] = await Promise.all([
     baixarImagem(hrefFavicon, "/favicon.ico", 256 * 1024),
     // Sem padrão pra capa: só usa se o site tiver `og:image` de verdade — inventar um "favicon.ico" como capa ficaria estranho.
-    hrefCapa ? baixarImagem(hrefCapa, null, 512 * 1024) : Promise.resolve(null),
+    hrefCapa && !opcoes?.somenteFavicon ? baixarImagem(hrefCapa, null, 512 * 1024) : Promise.resolve(null),
   ]);
 
   return { titulo, descricao, favicon, capa };
@@ -522,6 +525,63 @@ async function comConcorrenciaLimitada<T>(itens: T[], limite: number, tarefa: (i
     while ((proximo = fila.shift()) !== undefined) await tarefa(proximo);
   }
   await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
+}
+
+export type ResultadoAtualizacaoFavicons = {
+  arvore: PastaLink;
+  atualizados: number;
+  falhas: number;
+};
+
+/**
+ * Busca novamente o favicon dos links indicados. A operação preserva o ícone
+ * atual quando o site não responde ou não oferece uma imagem válida; assim,
+ * uma atualização em massa nunca piora os links que já estavam completos.
+ */
+export async function atualizarFavicons(ids: string[]): Promise<ResultadoAtualizacaoFavicons> {
+  const raiz = await lerArvore();
+  const idsUnicos = new Set(ids);
+  const alvos = achatar(raiz).filter((link) => idsUnicos.has(link.id));
+  const novosFavicons = new Map<string, { arquivo: string; anterior: string | null }>();
+  let falhas = 0;
+
+  await comConcorrenciaLimitada(alvos, 5, async (link) => {
+    try {
+      const { favicon } = await buscarMetadadosUrl(link.url, { somenteFavicon: true });
+      if (!favicon) {
+        falhas += 1;
+        return;
+      }
+      const arquivo = await salvarFavicon(link.id, favicon, true);
+      if (!arquivo) {
+        falhas += 1;
+        return;
+      }
+      novosFavicons.set(link.id, { arquivo, anterior: link.favicon });
+    } catch {
+      falhas += 1;
+    }
+  });
+
+  if (novosFavicons.size === 0) return { arvore: await lerArvore(), atualizados: 0, falhas };
+
+  const arvore = await alterar((atual) => {
+    for (const [id, { arquivo }] of novosFavicons) {
+      const encontrado = encontrarLinkComPai(atual, id);
+      if (encontrado) encontrado.link.favicon = arquivo;
+    }
+    return atual;
+  });
+
+  // Só remove a versão anterior depois que a árvore aponta com sucesso para
+  // a nova. São arquivos derivados e podem ser buscados novamente a qualquer momento.
+  await Promise.all(
+    [...novosFavicons.values()].map(async ({ arquivo, anterior }) => {
+      if (!anterior || anterior === arquivo) return;
+      await fs.unlink(path.join(PASTA_FAVICONS, path.basename(anterior))).catch(() => undefined);
+    }),
+  );
+  return { arvore, atualizados: novosFavicons.size, falhas };
 }
 
 /**

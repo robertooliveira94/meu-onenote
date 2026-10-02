@@ -184,6 +184,13 @@ const COMANDOS: Comando[] = [
     // Quem abre o seletor de arquivo é o editor; aqui só limpa o `/imagem`.
     aplicar: (selecao) => selecao,
   },
+  {
+    id: "desenho",
+    rotulo: "Desenho",
+    detalhe: "quadro para rabiscar",
+    // Idem: quem abre o quadro é o editor.
+    aplicar: (selecao) => selecao,
+  },
 ];
 
 const PREFIXO_MODELO = "modelo:";
@@ -258,3 +265,4 @@ export function aplicarComando(selecao: Selecao, gatilho: Gatilho, id: string, m
 }
 
 export const COMANDO_IMAGEM = "imagem";
+export const COMANDO_DESENHO = "desenho";

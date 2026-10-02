@@ -10,6 +10,7 @@ import {
   criarNota,
   criarPasta,
   escreverNota,
+  lerArvore,
   lerNota,
   listarNotas,
   listarTitulos,
@@ -19,11 +20,13 @@ import {
   reordenarNotasPara,
   reordenarPasta,
   reordenarPastasPara,
+  regravarDesenho,
   salvarAnexo,
 } from "@/lib/arquivos";
-import { buscarSemanticaNoCaderno, indexarPagina, type ResultadoBuscaSemantica } from "@/lib/busca-semantica";
+import { agendarIndexacao, buscarSemanticaNoCaderno, type ResultadoBuscaSemantica } from "@/lib/busca-semantica";
 import { nomeDe, pastaDe } from "@/lib/caminhos";
-import { gravarConfig } from "@/lib/config";
+import { gravarConfig, lerConfig } from "@/lib/config";
+import { EXTENSAO_DESENHO } from "@/lib/desenho";
 import { criarEtiqueta, editarEtiqueta, excluirEtiqueta } from "@/lib/etiquetas";
 import { exportarSecao } from "@/lib/exportar";
 import { alternarTarefa } from "@/lib/formatacao";
@@ -42,6 +45,9 @@ import type { ResultadoBusca, ResumoNota, VersaoHistorico } from "@/lib/tipos";
  */
 
 export type Resposta = { ok: true; mensagem?: string } | { ok: false; erro: string };
+export type ResultadoNotaRapida =
+  | { ok: true; caminho: string; destino: string }
+  | { ok: false; erro: string; precisaDestino?: boolean };
 
 const caminhoValido = z.string().min(1).max(400);
 const formatoValido = z.enum(["md", "txt"]);
@@ -106,6 +112,98 @@ function carimboDeAgora(): string {
     .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
     .replace(/[/:]/g, "-")
     .replace(", ", " ");
+}
+
+/** "28-09 21-07" — curto porque o prefixo "Nota rápida" já explica o resto. */
+function carimboDeNotaRapida(): string {
+  return new Date()
+    .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .replace(/[/:]/g, "-")
+    .replace(", ", " ");
+}
+
+/** Confere no disco, e não só no config, se o destino ainda é uma seção válida. */
+async function destinoNotaRapidaValido(caminho: string | undefined): Promise<string | null> {
+  if (!caminho) return null;
+  const resultado = caminhoValido.safeParse(caminho);
+  if (!resultado.success) return null;
+  const validado = resultado.data;
+  const cadernos = await lerArvore();
+  return cadernos.some((caderno) => caderno.secoes.some((secao) => secao.caminho === validado))
+    ? validado
+    : null;
+}
+
+/**
+ * Cria a página da captura rápida sem navegar. O botão interno decide ir ao
+ * editor completo; o atalho do PWA decide ir ao editor enxuto.
+ */
+export async function acaoCriarNotaRapida(destino?: string): Promise<ResultadoNotaRapida> {
+  try {
+    const config = await lerConfig();
+    const pasta = await destinoNotaRapidaValido(destino ?? config.destinoNotaRapida);
+    if (!pasta) {
+      return { ok: false, erro: "Escolha onde guardar suas notas rápidas.", precisaDestino: true };
+    }
+    const caminho = await criarNota(pasta, `Nota rápida ${carimboDeNotaRapida()}`, "md", "");
+    await gravarConfig({ destinoNotaRapida: pasta });
+    atualizarTudo();
+    return { ok: true, caminho, destino: pasta };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+/** Cria caderno/seção sem sair da primeira captura e passa a usá-la como destino. */
+export async function acaoCriarDestinoNotaRapida(
+  cadernoExistente: string | null,
+  nomeDoCaderno: string,
+  nomeDaSecao: string,
+): Promise<Resposta> {
+  try {
+    let caderno: string;
+    if (cadernoExistente) {
+      const candidato = caminhoValido.parse(cadernoExistente);
+      const cadernos = await lerArvore();
+      if (!cadernos.some((item) => item.caminho === candidato)) throw new Error("Caderno não encontrado");
+      caderno = candidato;
+    } else {
+      caderno = await criarPasta("", z.string().min(1).max(120).parse(nomeDoCaderno));
+    }
+    const secao = await criarPasta(caderno, z.string().min(1).max(120).parse(nomeDaSecao));
+    await gravarConfig({ destinoNotaRapida: secao });
+    atualizarTudo();
+    return { ok: true, mensagem: secao };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+/** Move a nota aberta e lembra a nova seção para as próximas capturas. */
+export async function acaoMoverNotaRapida(caminho: string, destino: string): Promise<Resposta> {
+  try {
+    const pasta = await destinoNotaRapidaValido(destino);
+    if (!pasta) throw new Error("Essa seção não existe mais");
+    const alvo = await moverItem(caminhoValido.parse(caminho), pasta);
+    await gravarConfig({ destinoNotaRapida: pasta });
+    atualizarTudo();
+    return { ok: true, mensagem: alvo };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+/** O descarte rápido só aceita uma página cujo corpo continua vazio. */
+export async function acaoDescartarNotaRapida(caminho: string): Promise<Resposta> {
+  const resposta = await tentar(async () => {
+    const validado = caminhoValido.parse(caminho);
+    const nota = await lerNota(validado);
+    if (!nota) throw new Error("A página não existe mais");
+    if (nota.conteudo.trim()) throw new Error("Essa nota já tem conteúdo e não pode ser descartada como vazia");
+    await enviarParaLixeira(validado);
+  });
+  atualizarTudo();
+  return resposta;
 }
 
 /**
@@ -292,13 +390,13 @@ export async function acaoDefinirCorCaderno(caminho: string, cor: string): Promi
  * Atualiza o vetor da busca semântica em segundo plano — sem `await` no
  * chamador, pra não atrasar o salvamento automático nem quebrá-lo se o
  * modelo de embeddings falhar (offline, sem espaço em disco na primeira
- * vez que baixa o modelo, etc.). A busca de verdade reindexa o que faltar
- * na hora de procurar, então uma falha aqui só atrasa a próxima busca.
+ * vez que baixa o modelo, etc.). Adiado e agrupado (ver `agendarIndexacao`):
+ * uma sessão inteira de digitação vira uma indexação só. A busca de verdade
+ * reindexa o que faltar na hora de procurar, então uma falha aqui só atrasa
+ * a próxima busca.
  */
 function reindexarSemPressa(caminho: string): void {
-  lerNota(caminho)
-    .then((nota) => nota && indexarPagina(nota.caminho, nota.titulo, nota.conteudo, nota.atualizadoEm))
-    .catch(() => {});
+  agendarIndexacao(caminho, () => lerNota(caminho));
 }
 
 export async function acaoSalvarNota(caminho: string, conteudo: string): Promise<Resposta> {
@@ -369,6 +467,36 @@ export async function acaoSalvarAnexoDaNota(
   } catch (erro) {
     if (erro instanceof z.ZodError) return { ok: false, erro: "Esse tipo de arquivo não é aceito como anexo." };
     return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para anexar o arquivo" };
+  }
+}
+
+/** Assinatura de todo PNG — o desenho tem de ser um, senão nem abriria como imagem. */
+const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/**
+ * Salva o desenho do editor (PNG com a cena embutida, ver `lib/desenho.ts`).
+ * Sem `destino`, é desenho novo: vira um arquivo em `_anexos/` e o caminho
+ * relativo volta para o editor inserir `![Desenho](...)` no texto. Com
+ * `destino` (o caminho que já está no markdown), regrava o mesmo arquivo.
+ */
+export async function acaoSalvarDesenho(
+  caminhoDaNota: string,
+  destino: string | null,
+  dadosBase64: string,
+): Promise<Resposta> {
+  try {
+    const caminho = caminhoValido.parse(caminhoDaNota);
+    const bytes = Buffer.from(z.string().max(25_000_000).parse(dadosBase64), "base64");
+    if (!bytes.subarray(0, ASSINATURA_PNG.length).equals(ASSINATURA_PNG)) throw new Error("O desenho chegou corrompido");
+    if (bytes.byteLength > LIMITE_ANEXO_BYTES) throw new Error("Desenho grande demais (máximo 15 MB)");
+    if (destino === null) {
+      return { ok: true, mensagem: await salvarAnexo(caminho, EXTENSAO_DESENHO, bytes, "Desenho") };
+    }
+    const relativo = z.string().min(1).max(500).parse(destino);
+    await regravarDesenho(caminho, relativo, bytes);
+    return { ok: true, mensagem: relativo };
+  } catch (erro) {
+    return { ok: false, erro: erro instanceof Error ? erro.message : "Não deu para salvar o desenho" };
   }
 }
 

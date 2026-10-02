@@ -61,6 +61,7 @@ import {
 import { useAbas } from "@/lib/abas";
 import { useAtalho } from "@/lib/atalhos";
 import { CORES_CADERNO, ICONES_DISPONIVEIS } from "@/lib/cores";
+import { ouvirMudancasNasNotas } from "@/lib/eventos-notas";
 import { abrirJanelaFlutuante } from "@/lib/janela-flutuante";
 import { formatarDataCurta, urlDaNota, urlDaNotaFlutuante, urlDaSecao } from "@/lib/rotas";
 import type { Caderno, Modelo, ResumoNota, Secao } from "@/lib/tipos";
@@ -223,6 +224,16 @@ export function ArvoreNotas({ cadernos, modelos }: { cadernos: Caderno[]; modelo
     else pedidas.current.clear();
     definirRecarga((numero) => numero + 1);
   }, []);
+
+  // Uma captura feita na janela do PWA precisa aparecer na árvore que já
+  // estava aberta, sem depender de trocar de rota ou recarregar a página.
+  useEffect(
+    () => ouvirMudancasNasNotas(() => {
+      invalidar();
+      roteador.refresh();
+    }),
+    [invalidar, roteador],
+  );
 
   const secoesAbertas = useMemo(
     () => [...abertos].filter((caminho) => caminho.includes("/")),

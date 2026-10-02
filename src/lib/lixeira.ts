@@ -10,6 +10,7 @@ import {
   pastaDe,
   resolverCaminho,
 } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { atualizarIndice, esquecer } from "./indice";
 import type { EntradaNota, EntradaPasta, ItemLixeira } from "./tipos";
 
@@ -39,8 +40,7 @@ async function lerRegistro(): Promise<RegistroLixeira[]> {
 }
 
 async function gravarRegistro(itens: RegistroLixeira[]): Promise<void> {
-  await fs.mkdir(PASTA_LIXEIRA, { recursive: true });
-  await fs.writeFile(ARQUIVO_REGISTRO, JSON.stringify(itens, null, 2), "utf8");
+  await gravarJson(ARQUIVO_REGISTRO, itens);
 }
 
 async function alterar<T>(mudanca: (itens: RegistroLixeira[]) => T | Promise<T>): Promise<T> {

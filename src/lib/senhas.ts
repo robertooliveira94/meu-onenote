@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import argon2 from "argon2";
 import * as kdbxweb from "kdbxweb";
 
 import { RAIZ } from "./caminhos";
+import { gravarAtomico, gravarJson } from "./gravacao";
 import type {
   AnexoSenha,
   CampoExtraSenha,
@@ -52,8 +54,7 @@ export async function obterConfig(): Promise<ConfigSenhas> {
 export async function definirConfig(mudanca: Partial<ConfigSenhas>): Promise<ConfigSenhas> {
   const atual = await obterConfig();
   const nova: ConfigSenhas = { ...atual, ...mudanca };
-  await fs.mkdir(path.dirname(CAMINHO_CONFIG), { recursive: true });
-  await fs.writeFile(CAMINHO_CONFIG, JSON.stringify(nova, null, 2));
+  await gravarJson(CAMINHO_CONFIG, nova);
   const sessao = guardaGlobal.__cofreSessao;
   if (sessao) {
     sessao.esperaTravamentoMs = nova.minutosTrava === null ? null : nova.minutosTrava * 60_000;
@@ -111,6 +112,9 @@ ligarArgon2();
 const ESPERA_SALVAR_MS = 900;
 
 type Sessao = {
+  /** Assinaturas da extensão só valem enquanto esta abertura específica existir. */
+  id: string;
+  segredoExtensao: Buffer;
   db: kdbxweb.Kdbx;
   expiraEm: number;
   /** `null` = trava por inatividade desligada ("nunca") — fica na sessão porque mudar a config não deve exigir destrancar de novo. */
@@ -139,6 +143,8 @@ async function abrirSessao(db: kdbxweb.Kdbx): Promise<void> {
   const config = await obterConfig();
   const esperaTravamentoMs = config.minutosTrava === null ? null : config.minutosTrava * 60_000;
   guardaGlobal.__cofreSessao = {
+    id: randomUUID(),
+    segredoExtensao: randomBytes(32),
     db,
     expiraEm: esperaTravamentoMs === null ? Infinity : Date.now() + esperaTravamentoMs,
     esperaTravamentoMs,
@@ -168,10 +174,16 @@ async function descarregar(sessao: Sessao): Promise<void> {
   }
   if (sessao.salvando) await sessao.salvando;
   if (!sessao.sujo) return;
-  sessao.sujo = false;
-  sessao.salvando = salvarNoDisco(sessao.db).finally(() => {
-    sessao.salvando = null;
-  });
+  // `sujo` só cai depois da gravação dar certo: se ela falhar, a mudança
+  // continua marcada e a próxima tentativa (ou o trancar) grava de novo, em
+  // vez de a alteração em memória sumir sem aviso.
+  sessao.salvando = salvarNoDisco(sessao.db)
+    .then(() => {
+      sessao.sujo = false;
+    })
+    .finally(() => {
+      sessao.salvando = null;
+    });
   await sessao.salvando;
 }
 
@@ -193,8 +205,46 @@ export function estaDestrancado(): boolean {
   return sessaoAtiva() !== null;
 }
 
-/** Os tempos que o seletor "manter aberto" oferece, em minutos — de 15 min a 8 h. */
-export const OPCOES_MANTER_ABERTO = [15, 30, 60, 120, 240, 480] as const;
+/** Os tempos que o seletor "manter aberto" oferece, em minutos — de 5 min a 8 h. */
+export const OPCOES_MANTER_ABERTO = [5, 15, 30, 60, 120, 240, 480] as const;
+
+/**
+ * Emite uma autorização que vive exatamente junto da sessão destrancada.
+ * Assim ela sobrevive a fechar/reabrir o popup, mas desaparece ao trancar,
+ * expirar ou reiniciar o processo — sem persistir segredo no disco.
+ */
+export function emitirAutorizacaoDaExtensao(minutos: number): string {
+  const sessao = sessaoEmUso();
+  const conteudo = Buffer.from(JSON.stringify({
+    sessaoId: sessao.id,
+    expiraEm: Date.now() + minutos * 60_000,
+    nonce: randomBytes(16).toString("base64url"),
+  })).toString("base64url");
+  const assinatura = createHmac("sha256", sessao.segredoExtensao).update(conteudo).digest("base64url");
+  return `${conteudo}.${assinatura}`;
+}
+
+/** Devolve os minutos restantes de um token assinado válido, sem depender de mapas entre rotas. */
+export function minutosDaAutorizacaoDaExtensao(token: string): number {
+  const sessao = sessaoAtiva();
+  if (!sessao) return 0;
+  try {
+    const partes = token.split(".");
+    if (partes.length !== 2) return 0;
+    const [conteudo, assinatura] = partes;
+    const esperada = createHmac("sha256", sessao.segredoExtensao).update(conteudo).digest();
+    const recebida = Buffer.from(assinatura, "base64url");
+    if (recebida.length !== esperada.length || !timingSafeEqual(recebida, esperada)) return 0;
+    const dados = JSON.parse(Buffer.from(conteudo, "base64url").toString("utf8")) as {
+      sessaoId?: unknown;
+      expiraEm?: unknown;
+    };
+    if (dados.sessaoId !== sessao.id || typeof dados.expiraEm !== "number" || Date.now() >= dados.expiraEm) return 0;
+    return Math.max(1, Math.ceil((dados.expiraEm - Date.now()) / 60_000));
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * Estende a trava só nesta sessão, sem tocar na config: `null` volta ao
@@ -256,8 +306,7 @@ export async function excluirCofre(): Promise<void> {
  */
 async function salvarNoDisco(db: kdbxweb.Kdbx): Promise<void> {
   const bytes = await db.save();
-  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
-  await fs.writeFile(CAMINHO_COFRE, Buffer.from(bytes));
+  await gravarAtomico(CAMINHO_COFRE, new Uint8Array(bytes), { manterCopia: true });
 }
 
 /** Cria um cofre novo — nasce já com um grupo "Geral" para as primeiras senhas. */
@@ -290,8 +339,7 @@ export async function importarCofre(bytes: Buffer, senhaMestra: string): Promise
   } catch {
     return false;
   }
-  await fs.mkdir(path.dirname(CAMINHO_COFRE), { recursive: true });
-  await fs.writeFile(CAMINHO_COFRE, bytes);
+  await gravarAtomico(CAMINHO_COFRE, bytes, { manterCopia: true });
   await abrirSessao(db);
   return true;
 }
@@ -304,6 +352,19 @@ export async function destrancar(senhaMestra: string): Promise<boolean> {
     const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     const db = await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciais);
     await abrirSessao(db);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Confere a senha mestra sem substituir uma sessão já aberta e sem expor o banco carregado. */
+export async function conferirSenhaMestra(senhaMestra: string): Promise<boolean> {
+  const bytes = await fs.readFile(CAMINHO_COFRE);
+  const credenciais = new kdbxweb.Credentials(kdbxweb.ProtectedValue.fromString(senhaMestra));
+  try {
+    const dados = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    await kdbxweb.Kdbx.load(dados as ArrayBuffer, credenciais);
     return true;
   } catch {
     return false;
@@ -334,8 +395,8 @@ export async function trocarSenhaMestra(senhaAtual: string, senhaNova: string): 
   // save leva junto qualquer mudança de conteúdo que estivesse pendente.
   if (sessao.timerSalvar) clearTimeout(sessao.timerSalvar);
   sessao.timerSalvar = null;
-  sessao.sujo = false;
   await salvarNoDisco(sessao.db);
+  sessao.sujo = false;
   tocarSessao(sessao);
   return "ok";
 }

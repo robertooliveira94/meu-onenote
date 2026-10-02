@@ -24,6 +24,7 @@ import { useLarguraRedimensionavel } from "@/lib/redimensionar";
 import type { Caderno, Modelo } from "@/lib/tipos";
 
 import { ArvoreNotas } from "./arvore-notas";
+import { BotaoNotaRapida } from "./botao-nota-rapida";
 import { AlcaRedimensionar, Botao, BotaoIcone, Dialogo } from "./ui";
 
 /** A rota entrega o zip pronto (ver `exportar-tudo/route.ts`) — clicar um link basta, o navegador cuida do download. */
@@ -108,6 +109,8 @@ export function ColunaSecoes({
           <PanelLeftClose size={14} />
         </BotaoIcone>
       </div>
+
+      <BotaoNotaRapida cadernos={cadernos} />
 
       <ArvoreNotas cadernos={cadernos} modelos={modelos} />
 

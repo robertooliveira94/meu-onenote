@@ -528,6 +528,45 @@ textarea:focus {
   border-radius: 8px;
 }
 
+/* Desenho do Excalidraw na página (ver lib/desenho.ts). O PNG é sempre
+   claro — num tema escuro, ele aparece como uma folha de papel sobre a mesa,
+   com borda, em vez de um retângulo branco solto. O botão de editar só
+   aparece com o mouse em cima, para não poluir a leitura. */
+.prosa .desenho-na-pagina {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+.prosa .desenho-na-pagina img {
+  border: 1px solid var(--linha);
+  background: #fff;
+}
+.prosa .desenho-editar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--linha);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--tinta-2);
+  font-size: 11.5px;
+  box-shadow: var(--sombra);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.prosa .desenho-na-pagina:hover .desenho-editar,
+.prosa .desenho-editar:focus-visible {
+  opacity: 1;
+}
+.prosa .desenho-editar:hover {
+  color: var(--tinta);
+}
+
 /* Realce de sintaxe: sóbrio, só o suficiente para separar as partes. */
 .hljs-comment,
 .hljs-quote {

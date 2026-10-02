@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 
 /**
  * Preferências do app que não cabem no índice nem numa nota — hoje só o
@@ -16,6 +17,8 @@ export type Config = {
   destinoRecorte?: string;
   /** Última pasta de Links usada no atalho "salvar link" — só a pré-seleção, sempre trocável a cada clique. */
   destinoLink?: string;
+  /** Última seção usada pela captura rápida — aparece pré-selecionada e pode ser trocada na própria janela. */
+  destinoNotaRapida?: string;
 };
 
 export async function lerConfig(): Promise<Config> {
@@ -28,6 +31,5 @@ export async function lerConfig(): Promise<Config> {
 
 export async function gravarConfig(mudanca: Partial<Config>): Promise<void> {
   const atual = await lerConfig();
-  await fs.mkdir(path.dirname(ARQUIVO), { recursive: true });
-  await fs.writeFile(ARQUIVO, JSON.stringify({ ...atual, ...mudanca }, null, 2), "utf8");
+  await gravarJson(ARQUIVO, { ...atual, ...mudanca });
 }

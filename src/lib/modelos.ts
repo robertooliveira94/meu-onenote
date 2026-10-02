@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import type { Modelo } from "./tipos";
 
 /**
@@ -22,8 +23,7 @@ async function lerBruto(): Promise<Modelo[]> {
 }
 
 async function gravar(modelos: Modelo[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_MODELOS), { recursive: true });
-  await fs.writeFile(ARQUIVO_MODELOS, JSON.stringify(modelos, null, 2), "utf8");
+  await gravarJson(ARQUIVO_MODELOS, modelos);
 }
 
 async function alterar<T>(mudanca: (modelos: Modelo[]) => T | Promise<T>): Promise<T> {

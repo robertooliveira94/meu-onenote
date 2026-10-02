@@ -33,6 +33,26 @@
         padding: 9px 12px;
         color: #e9eef6;
       }
+      .opcao {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 18px;
+        color: #e9eef6;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .opcao input {
+        width: auto;
+        margin-top: 3px;
+      }
+      .opcao small {
+        display: block;
+        margin-top: 2px;
+        color: #7a8ba1;
+        font-size: 11px;
+        font-weight: 400;
+      }
       button {
         margin-top: 16px;
         font: inherit;
@@ -63,10 +83,20 @@
     </p>
     <label for="urlBase">Endereço do app</label>
     <input id="urlBase" type="text" placeholder="http://localhost:3100" />
+    <label class="opcao" for="sincronizarFavoritos">
+      <input id="sincronizarFavoritos" type="checkbox" />
+      <span>
+        Sincronizar meus links com a barra de favoritos
+        <small class="ajuda">Cria e mantém a pasta “Meu Bloco” no Chrome. Desativar pausa a sincronização sem apagar a pasta.</small>
+        <small class="ajuda">Se a barra estiver oculta, use Ctrl+Shift+B para mostrá-la.</small>
+      </span>
+    </label>
     <div>
       <button id="salvar">Salvar</button>
+      <button id="sincronizarAgora" type="button">Sincronizar agora</button>
       <span id="salvo" hidden>Salvo!</span>
     </div>
+    <p class="ajuda" id="statusSincronizacao"></p>
     <script src="opcoes.js"></script>
   </body>
 </html>

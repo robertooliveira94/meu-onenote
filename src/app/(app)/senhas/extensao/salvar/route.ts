@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import * as senhas from "@/lib/senhas";
 
-import { comCors } from "../cors";
+import { comCors, recusarOrigemEstranha } from "../cors";
 
 export { OPTIONS } from "../cors";
 
@@ -12,15 +12,17 @@ export { OPTIONS } from "../cors";
  * existente (mesmo site + usuário) ou cria uma nova em "Do navegador".
  */
 export async function POST(requisicao: Request) {
+  const recusa = recusarOrigemEstranha(requisicao);
+  if (recusa) return recusa;
   let corpo: unknown;
   try {
     corpo = await requisicao.json();
   } catch {
-    return comCors(NextResponse.json({ erro: "Corpo inválido." }, { status: 400 }));
+    return comCors(requisicao, NextResponse.json({ erro: "Corpo inválido." }, { status: 400 }));
   }
   const dados = corpo as Partial<{ url: string; usuario: string; senha: string; titulo: string }>;
   if (!dados.url || !dados.senha) {
-    return comCors(NextResponse.json({ erro: "Faltam url e senha." }, { status: 400 }));
+    return comCors(requisicao, NextResponse.json({ erro: "Faltam url e senha." }, { status: 400 }));
   }
   try {
     const resultado = await senhas.salvarDoNavegador({
@@ -29,9 +31,9 @@ export async function POST(requisicao: Request) {
       senha: dados.senha,
       titulo: dados.titulo,
     });
-    return comCors(NextResponse.json({ ok: true, ...resultado }));
+    return comCors(requisicao, NextResponse.json({ ok: true, ...resultado }));
   } catch (erro) {
-    if (erro instanceof senhas.CofreTrancado) return comCors(NextResponse.json({ ok: false, trancado: true }));
-    return comCors(NextResponse.json({ ok: false, erro: "Não deu para salvar." }, { status: 500 }));
+    if (erro instanceof senhas.CofreTrancado) return comCors(requisicao, NextResponse.json({ ok: false, trancado: true }));
+    return comCors(requisicao, NextResponse.json({ ok: false, erro: "Não deu para salvar." }, { status: 500 }));
   }
 }

@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 
 /**
  * Título que vira campo de texto com um duplo clique — usado no cabeçalho da
- * página aberta e no editor de tarefa do Kanban. Um clique simples não faz
- * nada: em cima de um cartão pequeno ele já significa "abrir", e disputar
- * esse clique com a renomeação só atrapalharia.
+ * página aberta, no editor de tarefa do Kanban e nas pastas de Links e do
+ * cofre. O clique simples não é dele: segue pra linha em volta, que numa
+ * pasta significa "entrar" — engolir esse clique deixava o nome como um
+ * buraco morto no meio da linha.
  */
 export function TituloEditavel({
   titulo,
@@ -85,7 +86,6 @@ export function TituloEditavel({
 
   return (
     <span
-      onClick={(evento) => evento.stopPropagation()}
       onDoubleClick={(evento) => {
         evento.stopPropagation();
         definirEditando(true);

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { lerArvore, lerNota, listarNotas, resumirConteudo } from "./arquivos";
 import { PASTA_SISTEMA, RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import type { Caderno } from "./tipos";
 
 /**
@@ -51,7 +52,16 @@ function carregarExtrator() {
 let extratorPromessa: ReturnType<typeof carregarExtrator> | null = null;
 
 async function extrator() {
-  if (!extratorPromessa) extratorPromessa = carregarExtrator();
+  if (!extratorPromessa) {
+    // Se o carregamento falhar (sem internet na primeira vez, por exemplo),
+    // a promessa rejeitada não pode ficar guardada — senão toda busca dali
+    // em diante falharia até reiniciar o serviço. Zera para a próxima
+    // chamada tentar de novo.
+    extratorPromessa = carregarExtrator().catch((erro) => {
+      extratorPromessa = null;
+      throw erro;
+    });
+  }
   return extratorPromessa;
 }
 
@@ -80,8 +90,7 @@ async function carregarIndice(): Promise<IndiceSemantico> {
 }
 
 async function salvarIndice(indice: IndiceSemantico): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_INDICE), { recursive: true });
-  await fs.writeFile(ARQUIVO_INDICE, JSON.stringify(indice), "utf8");
+  await gravarJson(ARQUIVO_INDICE, indice, true);
 }
 
 // Mesma fila de `indice.ts`: sem isso, duas páginas indexando ao mesmo
@@ -96,6 +105,49 @@ async function alterarIndice(alterar: (indice: IndiceSemantico) => void): Promis
   });
   fila = proxima.catch(() => {});
   await proxima;
+}
+
+/**
+ * Quanto esperar depois do último salvamento antes de reindexar a página.
+ * O autosave grava a cada pausa de menos de um segundo na digitação; gerar
+ * um embedding (modelo na CPU) e reescrever o índice inteiro a cada pausa
+ * mantinha o processo ocupado durante toda uma sessão de escrita. Com a
+ * espera, uma sessão de digitação vira uma indexação só, no fim — e a
+ * busca de verdade ainda reindexa na hora o que faltar (`garantirIndiceDoCaderno`).
+ */
+const ESPERA_REINDEXAR_MS = 15_000;
+const reindexacoesPendentes = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Agenda a reindexação de uma página, adiando de novo a cada chamada — para
+ * o gatilho do salvamento automático. `carregar` é chamado só na hora, para
+ * indexar o conteúdo final e não o do momento em que foi agendado.
+ */
+export function agendarIndexacao(
+  caminho: string,
+  carregar: () => Promise<{ titulo: string; conteudo: string; atualizadoEm: string } | null>,
+): void {
+  const pendente = reindexacoesPendentes.get(caminho);
+  if (pendente) clearTimeout(pendente);
+  reindexacoesPendentes.set(
+    caminho,
+    setTimeout(() => {
+      reindexacoesPendentes.delete(caminho);
+      carregar()
+        .then((nota) => nota && indexarPagina(caminho, nota.titulo, nota.conteudo, nota.atualizadoEm))
+        .catch(() => {
+          // Sem modelo ainda (primeira vez baixando, sem internet…): a busca
+          // de verdade reindexa o que faltar na hora de procurar.
+        });
+    }, ESPERA_REINDEXAR_MS),
+  );
+}
+
+/** Uma página que deixou de existir nesse caminho não precisa mais ser indexada nele. */
+export function cancelarIndexacao(caminho: string): void {
+  const pendente = reindexacoesPendentes.get(caminho);
+  if (pendente) clearTimeout(pendente);
+  reindexacoesPendentes.delete(caminho);
 }
 
 /** Reindexa uma página — chamado depois que ela é salva de verdade em disco. */

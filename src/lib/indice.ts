@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { PASTA_SISTEMA, RAIZ } from "./caminhos";
 import { CORES_CADERNO, ICONES_CADERNO } from "./cores";
+import { gravarJson } from "./gravacao";
 import type { EntradaNota, EntradaPasta, Indice } from "./tipos";
 
 export { CORES_CADERNO, ICONES_CADERNO };
@@ -76,8 +77,7 @@ export async function lerIndice(): Promise<Indice> {
 }
 
 async function gravar(indice: Indice): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_INDICE), { recursive: true });
-  await fs.writeFile(ARQUIVO_INDICE, JSON.stringify(indice, null, 2), "utf8");
+  await gravarJson(ARQUIVO_INDICE, indice);
 }
 
 /**

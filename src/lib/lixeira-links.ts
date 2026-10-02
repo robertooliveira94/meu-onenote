@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import type { ItemLixeiraLinks, Link, PastaLink } from "./tipos";
 
 /**
@@ -31,8 +32,7 @@ async function lerRegistro(): Promise<RegistroLixeiraLink[]> {
 }
 
 async function gravarRegistro(itens: RegistroLixeiraLink[]): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_LIXEIRA), { recursive: true });
-  await fs.writeFile(ARQUIVO_LIXEIRA, JSON.stringify(itens, null, 2), "utf8");
+  await gravarJson(ARQUIVO_LIXEIRA, itens);
 }
 
 async function alterar<T>(mudanca: (itens: RegistroLixeiraLink[]) => T | Promise<T>): Promise<T> {

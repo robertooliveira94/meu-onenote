@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RAIZ } from "./caminhos";
+import { gravarJson } from "./gravacao";
 import { lojaDaUrl } from "./compras-comum";
 import { CORES_ETIQUETA } from "./cores";
 import { buscarMetadadosUrl } from "./links-app";
@@ -33,8 +34,7 @@ async function lerDados(): Promise<DadosCompras> {
 }
 
 async function gravarDados(dados: DadosCompras): Promise<void> {
-  await fs.mkdir(path.dirname(ARQUIVO_DADOS), { recursive: true });
-  await fs.writeFile(ARQUIVO_DADOS, JSON.stringify(dados, null, 2), "utf8");
+  await gravarJson(ARQUIVO_DADOS, dados);
 }
 
 let fila: Promise<unknown> = Promise.resolve();

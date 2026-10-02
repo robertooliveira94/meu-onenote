@@ -19,6 +19,7 @@ import {
   resolverCaminho,
   tituloDe,
 } from "./caminhos";
+import { gravarAtomico } from "./gravacao";
 import { moverHistorico, registrarVersao } from "./historico";
 import {
   CORES_CADERNO,
@@ -53,13 +54,22 @@ async function existe(absoluto: string): Promise<boolean> {
   }
 }
 
-/** Percorre a árvore inteira recolhendo notas e pastas visíveis. */
+/**
+ * Percorre a árvore inteira recolhendo notas e pastas visíveis.
+ *
+ * Uma pasta que sumiu (ENOENT) é só isso: sumiu. Qualquer outro erro de
+ * leitura (EBUSY/EPERM do OneDrive sincronizando, antivírus segurando a
+ * pasta) sobe para quem chamou — tratar como "pasta vazia" fazia a
+ * reconciliação apagar do índice tudo que morava ali, inclusive prazos,
+ * subtarefas e comentários do Kanban, que não se reconstroem do disco.
+ */
 async function percorrer(relativo: string, notas: string[], pastas: string[]): Promise<void> {
   let entradas;
   try {
     entradas = await fs.readdir(resolverCaminho(relativo), { withFileTypes: true });
-  } catch {
-    return;
+  } catch (erro) {
+    if ((erro as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw erro;
   }
   for (const entrada of entradas) {
     const filho = juntar(relativo, entrada.name);
@@ -165,7 +175,14 @@ async function varrerEReconciliar(): Promise<void> {
   await migrarPaginasSoltas();
   const notas: string[] = [];
   const pastas: string[] = [];
-  await percorrer("", notas, pastas);
+  // Se a varredura não conseguiu ler alguma pasta, ainda adota o que achou,
+  // mas não descarta nada: não dá para saber o que existe atrás do erro.
+  let varreduraCompleta = true;
+  try {
+    await percorrer("", notas, pastas);
+  } catch {
+    varreduraCompleta = false;
+  }
 
   const notasNoDisco = new Set(notas);
   const pastasNoDisco = new Set(pastas);
@@ -219,15 +236,17 @@ async function varrerEReconciliar(): Promise<void> {
       }
     });
 
-    for (const caminho of Object.keys(indice.notas)) {
-      if (notasNoDisco.has(caminho)) continue;
-      delete indice.notas[caminho];
-      mudou = true;
-    }
-    for (const caminho of Object.keys(indice.pastas)) {
-      if (pastasNoDisco.has(caminho)) continue;
-      delete indice.pastas[caminho];
-      mudou = true;
+    if (varreduraCompleta) {
+      for (const caminho of Object.keys(indice.notas)) {
+        if (notasNoDisco.has(caminho)) continue;
+        delete indice.notas[caminho];
+        mudou = true;
+      }
+      for (const caminho of Object.keys(indice.pastas)) {
+        if (pastasNoDisco.has(caminho)) continue;
+        delete indice.pastas[caminho];
+        mudou = true;
+      }
     }
 
     // Sem mudança, não reescreve o arquivo à toa.
@@ -258,13 +277,34 @@ export function resumirConteudo(conteudo: string, limite = 120): string {
   return limpo.length > limite ? `${limpo.slice(0, limite).trimEnd()}…` : limpo;
 }
 
+/**
+ * Quanto de cada arquivo vale ler só para a prévia de 120 caracteres. A lista
+ * de páginas lia cada nota inteira — em seções com notas grandes (tabelas,
+ * logs colados) isso eram dezenas de MB a cada troca de página. 16 KB cobre
+ * qualquer prévia; a nota completa continua sendo lida só quando é aberta.
+ */
+const BYTES_PARA_PREVIA = 16 * 1024;
+
+async function lerInicio(absoluto: string, bytes: number): Promise<string> {
+  const arquivo = await fs.open(absoluto, "r");
+  try {
+    const buffer = Buffer.alloc(bytes);
+    const { bytesRead } = await arquivo.read(buffer, 0, bytes, 0);
+    // Um caractere UTF-8 cortado no fim vira "\uFFFD" — a prévia é truncada
+    // de qualquer jeito, então só se tira o sinal de substituição.
+    return buffer.toString("utf8", 0, bytesRead).replace(/\uFFFD$/, "");
+  } finally {
+    await arquivo.close();
+  }
+}
+
 async function montarResumo(
   caminho: string,
   indice: Indice,
   conteudo?: string,
 ): Promise<ResumoNota> {
   const entrada = indice.notas[caminho];
-  const texto = conteudo ?? (await fs.readFile(resolverCaminho(caminho), "utf8"));
+  const texto = conteudo ?? (await lerInicio(resolverCaminho(caminho), BYTES_PARA_PREVIA));
   return {
     caminho,
     titulo: tituloDe(caminho),
@@ -344,11 +384,13 @@ export async function listarNotas(pasta: string): Promise<ResumoNota[]> {
     return [];
   }
 
-  const notas: ResumoNota[] = [];
-  for (const entrada of entradas) {
-    if (!entrada.isFile() || !ehArquivoDeNota(entrada.name)) continue;
-    notas.push(await montarResumo(juntar(pasta, entrada.name), indice));
-  }
+  // Em paralelo, não um por um: a lista da seção espera a mais lenta das
+  // leituras, não a soma de todas.
+  const notas = await Promise.all(
+    entradas
+      .filter((entrada) => entrada.isFile() && ehArquivoDeNota(entrada.name))
+      .map((entrada) => montarResumo(juntar(pasta, entrada.name), indice)),
+  );
 
   // Fixadas primeiro, depois a ordem manual, depois o nome.
   notas.sort(
@@ -396,6 +438,26 @@ export async function salvarAnexo(
   return caminho.slice(pastaDaNota.length ? pastaDaNota.length + 1 : 0);
 }
 
+/**
+ * Regrava um desenho que já existe (ver `lib/desenho.ts`), no mesmo arquivo
+ * — o markdown da página continua apontando para ele, nada a mudar no texto.
+ * `relativo` é como o markdown o referencia (relativo à pasta da nota) e só
+ * vale dentro de `_anexos/` com a extensão de desenho: esta função não pode
+ * virar um jeito de sobrescrever qualquer arquivo por um caminho vindo da tela.
+ * Atômico: um PNG truncado perderia o desenho inteiro, cena e tudo.
+ */
+export async function regravarDesenho(caminhoDaNota: string, relativo: string, bytes: Buffer): Promise<void> {
+  const partes = relativo.split("/");
+  if (partes.length !== 2 || partes[0] !== "_anexos" || !partes[1].toLowerCase().endsWith(".excalidraw.png")) {
+    throw new Error("Esse arquivo não é um desenho desta página");
+  }
+  const caminho = juntar(pastaDe(caminhoDaNota), relativo);
+  garantirForaDoSistema(caminho);
+  const absoluto = resolverCaminho(caminho);
+  if (!(await existe(absoluto))) throw new Error("Desenho não encontrado");
+  await gravarAtomico(absoluto, bytes);
+}
+
 /** Grava a nota, guardando a versão anterior no histórico. */
 export async function escreverNota(caminho: string, conteudo: string): Promise<void> {
   garantirForaDoSistema(caminho);
@@ -405,7 +467,9 @@ export async function escreverNota(caminho: string, conteudo: string): Promise<v
   const anterior = await fs.readFile(absoluto, "utf8");
   if (anterior === conteudo) return;
   await registrarVersao(caminho, anterior);
-  await fs.writeFile(absoluto, conteudo, "utf8");
+  // Atômico: o histórico só guarda uma versão a cada 3 minutos, então uma
+  // gravação truncada aqui perderia texto de verdade.
+  await gravarAtomico(absoluto, conteudo);
 
   await atualizarIndice((indice) => {
     entradaDaNota(indice, caminho).atualizadoEm = new Date().toISOString();
@@ -694,6 +758,26 @@ function normalizar(texto: string): string {
     .toLowerCase();
 }
 
+/**
+ * Converte uma posição achada no texto normalizado de volta para a posição
+ * no texto original. Normalizar muda o tamanho da string ("é" vira "e" +
+ * acento, que depois sai), então um índice do normalizado não serve para
+ * fatiar o original — em texto em português, com muitos acentos, o trecho da
+ * busca aparecia deslocado e nem mostrava a palavra procurada. Só roda
+ * quando houve acerto, caractere a caractere até chegar lá.
+ */
+function posicaoNoOriginal(texto: string, posicaoNormalizada: number): number {
+  let percorrido = 0;
+  let posicao = 0;
+  // Por caractere de verdade (emoji e afins ocupam duas posições da string).
+  for (const caractere of texto) {
+    if (percorrido >= posicaoNormalizada) break;
+    percorrido += normalizar(caractere).length;
+    posicao += caractere.length;
+  }
+  return posicao;
+}
+
 /** Busca no título e no corpo de todas as notas. */
 export async function buscar(termo: string, etiqueta?: string): Promise<ResultadoBusca[]> {
   const procurado = normalizar(termo.trim());
@@ -716,11 +800,12 @@ export async function buscar(termo: string, etiqueta?: string): Promise<Resultad
     } catch {
       continue;
     }
-    const posicao = normalizar(conteudo).indexOf(procurado);
-    if (!achadoNoTitulo && posicao < 0) continue;
+    const posicaoNormalizada = normalizar(conteudo).indexOf(procurado);
+    if (!achadoNoTitulo && posicaoNormalizada < 0) continue;
 
     let trecho = resumirConteudo(conteudo, 110);
-    if (posicao >= 0) {
+    if (posicaoNormalizada >= 0) {
+      const posicao = posicaoNoOriginal(conteudo, posicaoNormalizada);
       const inicio = Math.max(0, posicao - 40);
       trecho = resumirConteudo(conteudo.slice(inicio, posicao + 110), 130);
       if (inicio > 0) trecho = `…${trecho}`;

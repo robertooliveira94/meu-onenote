@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copiar-fontes-excalidraw.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copiar-fontes-excalidraw.mjs",
     "build": "next build",
     "start": "next start -H 127.0.0.1",
     "lint": "eslint"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@huggingface/transformers": "^4.3.0",
     "argon2": "^0.45.1",
     "clsx": "^2.1.1",

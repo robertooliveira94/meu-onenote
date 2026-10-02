@@ -21,6 +21,11 @@ export function urlDaNotaFlutuante(caminho: string): string {
   return `/nota-flutuante/${codificar(caminho)}`;
 }
 
+/** Editor enxuto usado pelo atalho "Nota rápida" do aplicativo instalado. */
+export function urlDaNotaRapida(caminho: string): string {
+  return `/nota-rapida/${codificar(caminho)}`;
+}
+
 export function urlDaSecao(caminho: string): string {
   return `/secao/${codificar(caminho)}`;
 }
